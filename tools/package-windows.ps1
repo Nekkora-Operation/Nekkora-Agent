@@ -56,6 +56,15 @@ foreach ($d in $pkg, $dist) { if (Test-Path $d) { Remove-Item -Recurse -Force $d
 New-Item -ItemType Directory -Force (Join-Path $pkg 'input\lib'), $dist | Out-Null
 Copy-Item 'target\nekkora-agent.jar' (Join-Path $pkg 'input')
 Copy-Item 'target\lib\*.jar' (Join-Path $pkg 'input\lib')
+# DLL nativa do FlatLaf (bordas/título da janela no Windows) junto do app: sem extração para %TEMP% em tempo de execução
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$flatJar = Get-ChildItem 'target\lib\flatlaf-*.jar' | Select-Object -First 1
+$flatVersion = $flatJar.BaseName.Substring('flatlaf-'.Length)
+$zf = [System.IO.Compression.ZipFile]::OpenRead($flatJar.FullName)
+try {
+    $dll = $zf.GetEntry('com/formdev/flatlaf/natives/flatlaf-windows-x86_64.dll')
+    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($dll, (Join-Path $pkg "input\lib\flatlaf-$flatVersion-windows-x86_64.dll"), $true)
+} finally { $zf.Dispose() }
 
 Write-Host "[2/7] Ícone"
 Invoke-Checked 'IconExport' { & (Join-Path $jbin 'java.exe') '-Djava.awt.headless=true' -cp "target\lib\*" tools\IconExport.java (Join-Path $pkg 'nekkora-agent.ico') }
@@ -79,7 +88,7 @@ Invoke-Checked 'jpackage' { & (Join-Path $jbin 'jpackage.exe') --type app-image 
         --icon (Join-Path $pkg 'nekkora-agent.ico') --input (Join-Path $pkg 'input') --main-jar 'nekkora-agent.jar' `
         --main-class 'com.nekkora.agent.AgentMain' --runtime-image $runtime --dest $image `
         --java-options '-Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory' `
-        --java-options '-XX:+UseSerialGC' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' }
+        --java-options '-Dflatlaf.nativeLibraryPath=$APPDIR\lib' --java-options '-XX:+UseSerialGC' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' }
 $app = Join-Path $image 'Nekkora Agent'
 
 Write-Host "[6/7] Licenças, LEIA-ME e versões"
@@ -87,7 +96,6 @@ $legal = Join-Path $app 'legal'
 New-Item -ItemType Directory -Force $legal | Out-Null
 Copy-Item 'THIRD-PARTY-NOTICES.md' $legal
 Copy-Item 'tools\distribution\LEIA-ME.txt' $app
-Add-Type -AssemblyName System.IO.Compression.FileSystem
 function Export-Entry([string]$jar, [string]$entry, [string]$target) {
     $z = [System.IO.Compression.ZipFile]::OpenRead($jar)
     try {
@@ -109,7 +117,7 @@ $lines = @("Nekkora Agent $version - distribuição de laboratório (Windows x64
     "gerado em: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",
     "",
     "Bibliotecas (app\lib) com SHA-256:")
-foreach ($j in Get-ChildItem "$pkg\input\nekkora-agent.jar", "$pkg\input\lib\*.jar") {
+foreach ($j in Get-ChildItem "$pkg\input\nekkora-agent.jar", "$pkg\input\lib\*.jar", "$pkg\input\lib\*.dll") {
     $lines += "  $($j.Name)  $((Get-FileHash -Algorithm SHA256 $j.FullName).Hash.ToLowerInvariant())"
 }
 $lines += ""
@@ -119,7 +127,8 @@ $lines += ""
 $lines += "Runtime Java incluído (jlink):"
 $lines += ($release | ForEach-Object { "  $_" })
 $lines += ""
-$lines += "Opções da JVM: -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
+$lines += "Biblioteca nativa: app\lib\flatlaf-$flatVersion-windows-x86_64.dll (extraída do JAR do FlatLaf; -Dflatlaf.nativeLibraryPath=`$APPDIR\lib)"
+$lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
 [System.IO.File]::WriteAllLines((Join-Path $app 'VERSOES.txt'), [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "[7/7] ZIP e SHA-256"

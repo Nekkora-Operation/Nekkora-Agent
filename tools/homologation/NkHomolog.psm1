@@ -65,9 +65,11 @@ function Find-TrayButtons([string]$Name = 'Nekkora Agent') {
     foreach ($cls in 'Shell_TrayWnd', 'TopLevelWindowForOverflowXamlIsland', 'NotifyIconOverflowWindow') {
         $wc = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), $cls
         foreach ($w in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $wc)) {
+            # o estouro fechado continua na árvore com coordenadas antigas: só janelas visíveis contam
+            if (-not [NkUser32]::IsWindowVisible([IntPtr]$w.Current.NativeWindowHandle)) { continue }
             foreach ($e in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
                 # o Explorer prefixa o nome do ícone com espaço; compara sem espaços nas pontas
-                if ($null -eq $e.Current.Name -or $e.Current.Name.Trim() -ne $Name) { continue }
+                if ($null -eq $e.Current.Name -or $e.Current.Name.Trim() -ne $Name -or $e.Current.IsOffscreen) { continue }
                 $r = $e.Current.BoundingRectangle
                 if (-not $r.IsEmpty -and $r.Width -gt 0) { $found += [pscustomobject]@{ Host = $cls; Element = $e; Rect = $r } }
             }
@@ -92,6 +94,29 @@ function Open-TrayOverflow {
     return $false
 }
 
+# O Windows só remove o ícone de um processo encerrado à força quando o mouse passa sobre ele
+# ("ícone fantasma"). Passa o mouse sobre cada ícone com o nome dado; devolve quantos sobraram.
+function Clear-GhostTrayIcons([string]$Name = 'Nekkora Agent') {
+    for ($pass = 0; $pass -lt 3; $pass++) {
+        $b = @(Find-TrayButtons $Name)
+        if ($b.Count -eq 0) {
+            Open-TrayOverflow | Out-Null
+            Start-Sleep -Milliseconds 700
+            $b = @(Find-TrayButtons $Name)
+        }
+        foreach ($x in $b) {
+            [NkUser32]::SetCursorPos([int]($x.Rect.X + $x.Rect.Width / 2), [int]($x.Rect.Y + $x.Rect.Height / 2)) | Out-Null
+            Start-Sleep -Milliseconds 250
+            [NkUser32]::SetCursorPos([int]($x.Rect.X + 2), [int]($x.Rect.Y + 2)) | Out-Null
+            Start-Sleep -Milliseconds 150
+        }
+        Start-Sleep -Milliseconds 400
+        $after = @(Find-TrayButtons $Name).Count
+        if ($after -eq $b.Count) { return $after }
+    }
+    return @(Find-TrayButtons $Name).Count
+}
+
 # Clica (botão esquerdo ou direito) no ícone do Agent; abre o "Mostrar ícones ocultos" se preciso.
 function Invoke-TrayIcon([switch]$Right, [string]$Name = 'Nekkora Agent') {
     $b = @(Find-TrayButtons $Name)
@@ -99,6 +124,10 @@ function Invoke-TrayIcon([switch]$Right, [string]$Name = 'Nekkora Agent') {
     if ($b.Count -eq 0) {
         $opened = Open-TrayOverflow
         Start-Sleep -Milliseconds 700
+        $b = @(Find-TrayButtons $Name)
+    }
+    if ($b.Count -gt 1) {
+        Clear-GhostTrayIcons $Name | Out-Null
         $b = @(Find-TrayButtons $Name)
     }
     if ($b.Count -eq 0) { throw "ícone '$Name' não encontrado na bandeja" }

@@ -22,7 +22,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Zip = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip'),
+    [string]$Zip,
     [string]$Out = (Join-Path ([IO.Path]::GetTempPath()) ("nekkora-agent-homolog-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))),
     [int]$Cycles = 10,
     [int]$Rounds = 5,
@@ -33,6 +33,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
+# PowerShell 5.1: $PSScriptRoot não existe nos valores padrão de param()
+if (-not $Zip) { $Zip = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip' }
 Import-Module (Join-Path $PSScriptRoot 'NkHomolog.psm1') -Force
 $wincap = Join-Path $PSScriptRoot 'wincap.ps1'
 
@@ -127,6 +129,10 @@ function Exit-ViaTray([int]$Jvm) {
 }
 
 Stop-AllAgents
+# ícones fantasmas de execuções anteriores encerradas à força (o Windows só os remove quando o mouse passa)
+$ghostsAtStart = Clear-GhostTrayIcons
+if ($ghostsAtStart -ne 0) { throw "há $ghostsAtStart ícone(s) 'Nekkora Agent' na bandeja antes de começar" }
+[System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 $machine = Get-CimInstance Win32_ComputerSystem
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 $os = Get-CimInstance Win32_OperatingSystem
@@ -175,10 +181,7 @@ for ($i = 1; $i -le $Cycles; $i++) {
     Wait-Until { Test-WindowShown (Get-AgentWindow $w.Jvm) } 10 "restaurada $i" | Out-Null
     $restoreOk++
 }
-$trayCount = @(Find-TrayButtons).Count
-Open-TrayOverflow | Out-Null
-Start-Sleep -Milliseconds 900
-$trayCountOverflow = @(Find-TrayButtons).Count
+$trayCountOverflow = Clear-GhostTrayIcons  # passa o mouse sobre os ícones e conta os que sobram (vivos)
 Focus-AgentWindow (Get-AgentWindow $w.Jvm)  # fecha o estouro
 $cap3 = Capture $w.Jvm 'A03-restaurada-pela-bandeja' 'Nekkora Agent'
 $log = Read-Log $d
@@ -263,8 +266,10 @@ foreach ($mode in 'jvm', 'lancador', 'jvm') {
     Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'limpeza' | Out-Null
 }
 $log6 = Read-Log $d6
-$ok06 = ([regex]::Matches($log6, 'LOCK_ACQUIRED')).Count -eq 6 -and (Test-Path (Join-Path $d6 'agent.lock'))
-Add-Result 'A06' ($(if ($ok06) { 'APROVADO' } else { 'FALHOU' })) ("TerminateProcess (sem saída ordenada) e novo início: $($a06 -join '; '); trava adquirida em todos os inícios, arquivo da trava mantido") @()
+$ghosts = Clear-GhostTrayIcons
+[System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+$ok06 = ([regex]::Matches($log6, 'LOCK_ACQUIRED')).Count -eq 6 -and (Test-Path (Join-Path $d6 'agent.lock')) -and ($ghosts -eq 0)
+Add-Result 'A06' ($(if ($ok06) { 'APROVADO' } else { 'FALHOU' })) ("TerminateProcess (sem saída ordenada) e novo início: $($a06 -join '; '); trava adquirida em todos os 6 inícios, arquivo da trava mantido; ícones restantes após passar o mouse na bandeja: $ghosts (o Windows mantém o ícone de processo morto até o mouse passar)") @()
 
 # ---------- A07 ----------
 $d7 = Join-Path $Out 'dados-a07'
@@ -386,6 +391,8 @@ $agentPrefAfter = Test-Path 'HKCU:\Software\JavaSoft\Prefs\com\nekkora\agent'
 Add-Result 'D-05' ($(if ($prefBefore -eq $prefAfter -and -not $agentPrefAfter -and -not $agentPrefBefore) { 'APROVADO' } else { 'FALHOU' })) "registro HKCU\Software\JavaSoft\Prefs\com\nekkora\ui\theme igual antes e depois de toda a homologação (inclui troca de tema por configuração); nenhum nó do Agent criado" @()
 
 Stop-AllAgents
+Clear-GhostTrayIcons | Out-Null  # deixa a bandeja limpa dos processos encerrados à força nas métricas
+[System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 $summary = [ordered]@{ ambiente = $envInfo; resultados = $results; metricas = $m; gerado = (Get-Date).ToString('s') }
 $summary | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $Out 'resultados.json')
 $md = @("# Homologação do pacote — $(Get-Date -Format 'yyyy-MM-dd HH:mm')", '', '| Item | Valor |', '|---|---|')
