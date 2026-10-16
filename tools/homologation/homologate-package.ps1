@@ -118,11 +118,12 @@ function Focus-AgentWindow([IntPtr]$Handle) {
     # segundo clique depois do intervalo de duplo clique (para não maximizar).
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
     Start-Sleep -Milliseconds 400
-    $rect = [System.Windows.Automation.AutomationElement]::FromHandle($Handle).Current.BoundingRectangle
-    [NkUser32]::Click([int]($rect.X + 140), [int]($rect.Y + 16), $false)
-    Start-Sleep -Milliseconds 700
-    [NkUser32]::Click([int]($rect.X + 140), [int]($rect.Y + 16), $false)
-    Start-Sleep -Milliseconds 300
+    if (-not [NkUser32]::ForceForeground($Handle)) {
+        $rect = [System.Windows.Automation.AutomationElement]::FromHandle($Handle).Current.BoundingRectangle
+        [NkUser32]::Click([int]($rect.X + 140), [int]($rect.Y + 16), $false)
+    }
+    Start-Sleep -Milliseconds 400
+    if ([NkUser32]::GetForegroundWindow() -ne $Handle) { Write-Warning 'janela do Agent não ficou em primeiro plano' }
 }
 
 $script:exitPaths = @()

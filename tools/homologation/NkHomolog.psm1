@@ -20,6 +20,19 @@ public static class NkUser32 {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, UIntPtr e);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  // o Windows só deixa outro processo trazer uma janela para a frente logo após uma entrada de teclado
+  public static bool ForceForeground(IntPtr h) {
+    for (int i = 0; i < 10; i++) {
+      keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
+      ShowWindow(h, 9);
+      SetForegroundWindow(h);
+      System.Threading.Thread.Sleep(150);
+      if (GetForegroundWindow() == h) return true;
+    }
+    return false;
+  }
   public static List<IntPtr> Windows(uint pid, bool visibleOnly) {
     var list = new List<IntPtr>();
     EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && (!visibleOnly || IsWindowVisible(h))) list.Add(h); return true; }, IntPtr.Zero);
