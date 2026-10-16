@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   A13 (parte manual): suspensão e retorno do Windows com o Nekkora Agent aberto.
 
