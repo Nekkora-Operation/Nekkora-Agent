@@ -27,7 +27,11 @@ public static class NkUser32 {
   }
   public static string Title(IntPtr h) { var s = new StringBuilder(512); GetWindowText(h, s, 512); return s.ToString(); }
   public static void Click(int x, int y, bool right) {
+    // a bandeja do Windows 11 (XAML) ignora o clique se o ponteiro não "entrou" antes no botão
+    SetCursorPos(x - 6, y - 6);
+    System.Threading.Thread.Sleep(120);
     SetCursorPos(x, y);
+    System.Threading.Thread.Sleep(200);
     if (right) { mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero); mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero); }
     else { mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); }
   }
@@ -70,6 +74,8 @@ function Find-TrayButtons([string]$Name = 'Nekkora Agent') {
             foreach ($e in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
                 # o Explorer prefixa o nome do ícone com espaço; compara sem espaços nas pontas
                 if ($null -eq $e.Current.Name -or $e.Current.Name.Trim() -ne $Name -or $e.Current.IsOffscreen) { continue }
+                # só o botão do ícone: a dica flutuante com o mesmo nome também aparece na árvore
+                if ($e.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button) { continue }
                 $r = $e.Current.BoundingRectangle
                 if (-not $r.IsEmpty -and $r.Width -gt 0) { $found += [pscustomobject]@{ Host = $cls; Element = $e; Rect = $r } }
             }
@@ -134,6 +140,19 @@ function Invoke-TrayIcon([switch]$Right, [string]$Name = 'Nekkora Agent') {
     $r = $b[0].Rect
     [NkUser32]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2), [bool]$Right)
     return [pscustomobject]@{ Host = $b[0].Host; Count = $b.Count; OverflowOpened = $opened }
+}
+
+# Restaura pela bandeja: clique real do mouse; se o estouro XAML do Windows 11 não entregar o clique sintético
+# em 3 s, usa o Invoke da UI Automation (mesmo caminho do teclado/leitor de tela). Devolve 'mouse' ou 'invoke'.
+function Restore-ViaTray([scriptblock]$IsShown, [string]$Name = 'Nekkora Agent') {
+    Invoke-TrayIcon -Name $Name | Out-Null
+    try { Wait-Until $IsShown 3 'restaurar por clique' | Out-Null; return 'mouse' } catch { }
+    $b = @(Find-TrayButtons $Name)
+    if ($b.Count -eq 0) { Open-TrayOverflow | Out-Null; Start-Sleep -Milliseconds 800; $b = @(Find-TrayButtons $Name) }
+    if ($b.Count -eq 0) { throw "ícone '$Name' não encontrado na bandeja" }
+    $b[0].Element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    Wait-Until $IsShown 8 'restaurar por Invoke' | Out-Null
+    return 'invoke'
 }
 
 Export-ModuleMember -Function *

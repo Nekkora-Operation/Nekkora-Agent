@@ -119,13 +119,30 @@ function Focus-AgentWindow([IntPtr]$Handle) {
     Start-Sleep -Milliseconds 300
 }
 
+$script:exitPaths = @()
+# Sair pelo menu do ícone (clique direito real + ↑ + Enter). Se o Explorer não entregar o clique sintético,
+# sai pelo botão "Sair" da janela (Alt+S) e registra o caminho usado.
 function Exit-ViaTray([int]$Jvm) {
     Invoke-TrayIcon -Right | Out-Null
     Start-Sleep -Milliseconds 700
     [System.Windows.Forms.SendKeys]::SendWait('{UP}')
     Start-Sleep -Milliseconds 150
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-    Wait-Until { -not (Get-Process -Id $Jvm -ErrorAction SilentlyContinue) } 20 'saída pelo menu da bandeja' | Out-Null
+    try {
+        Wait-Until { -not (Get-Process -Id $Jvm -ErrorAction SilentlyContinue) } 6 'saída pelo menu da bandeja' | Out-Null
+        $script:exitPaths += 'menu'
+        return
+    } catch { }
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    $h = Get-AgentWindow $Jvm
+    if (-not (Test-WindowShown $h)) {
+        Restore-ViaTray { Test-WindowShown (Get-AgentWindow $Jvm) } | Out-Null
+        $h = Get-AgentWindow $Jvm
+    }
+    Focus-AgentWindow $h
+    [System.Windows.Forms.SendKeys]::SendWait('%s')
+    Wait-Until { -not (Get-Process -Id $Jvm -ErrorAction SilentlyContinue) } 15 'saída por Alt+S' | Out-Null
+    $script:exitPaths += 'alt+s'
 }
 
 Stop-AllAgents
@@ -173,12 +190,14 @@ Add-Result 'A02' ($(if ($ok02) { 'APROVADO' } else { 'FALHOU' })) ("janela em $(
 
 # ---------- A03 ----------
 $restoreOk = 0
+$viaMouse = 0
+$viaInvoke = 0
 for ($i = 1; $i -le $Cycles; $i++) {
     Close-Window (Get-AgentWindow $w.Jvm)
     Wait-Until { -not (Test-WindowShown (Get-AgentWindow $w.Jvm)) } 10 "oculta $i" | Out-Null
     if (-not (Get-Process -Id $w.Jvm -ErrorAction SilentlyContinue)) { break }
-    $t = Invoke-TrayIcon
-    Wait-Until { Test-WindowShown (Get-AgentWindow $w.Jvm) } 10 "restaurada $i" | Out-Null
+    $via = Restore-ViaTray { Test-WindowShown (Get-AgentWindow $w.Jvm) }
+    if ($via -eq 'mouse') { $viaMouse++ } else { $viaInvoke++ }
     $restoreOk++
 }
 $trayCountOverflow = Clear-GhostTrayIcons  # passa o mouse sobre os ícones e conta os que sobram (vivos)
@@ -188,7 +207,7 @@ $log = Read-Log $d
 $hidden = ([regex]::Matches($log, 'LIFE_WINDOW_HIDDEN to=tray')).Count
 $restored = ([regex]::Matches($log, 'LIFE_WINDOW_RESTORED')).Count
 $ok03 = ($restoreOk -eq $Cycles) -and ($trayCountOverflow -eq 1) -and ((Get-PackageProcesses).Count -eq 2)
-Add-Result 'A03' ($(if ($ok03) { 'APROVADO' } else { 'FALHOU' })) ("$restoreOk/$Cycles ciclos fechar (WM_CLOSE) → clique real no ícone → janela de volta; ícones do Agent na bandeja: $trayCountOverflow; log: $hidden ocultações, $restored restaurações; processos: $((Get-PackageProcesses).Count)") @($cap3)
+Add-Result 'A03' ($(if ($ok03) { 'APROVADO' } else { 'FALHOU' })) ("$restoreOk/$Cycles ciclos fechar (WM_CLOSE) → ícone da bandeja → janela de volta (clique real do mouse: $viaMouse; Invoke da UI Automation quando o Explorer não entregou o clique sintético: $viaInvoke); ícones do Agent na bandeja: $trayCountOverflow; log: $hidden ocultações, $restored restaurações; processos: $((Get-PackageProcesses).Count)") @($cap3)
 
 # ---------- A04 ----------
 $cfgDir = Join-Path $d 'config'
@@ -390,6 +409,8 @@ $prefAfter = Get-StudioThemePref
 $agentPrefAfter = Test-Path 'HKCU:\Software\JavaSoft\Prefs\com\nekkora\agent'
 Add-Result 'D-05' ($(if ($prefBefore -eq $prefAfter -and -not $agentPrefAfter -and -not $agentPrefBefore) { 'APROVADO' } else { 'FALHOU' })) "registro HKCU\Software\JavaSoft\Prefs\com\nekkora\ui\theme igual antes e depois de toda a homologação (inclui troca de tema por configuração); nenhum nó do Agent criado" @()
 
+$menuExits = @($script:exitPaths | Where-Object { $_ -eq 'menu' }).Count
+Add-Result 'SAIDAS' 'INFO' ("saídas ordenadas usadas pelo roteiro: $menuExits pelo menu da bandeja (clique direito real), $($script:exitPaths.Count - $menuExits) por Alt+S na janela quando o clique sintético não foi entregue") @()
 Stop-AllAgents
 Clear-GhostTrayIcons | Out-Null  # deixa a bandeja limpa dos processos encerrados à força nas métricas
 [System.Windows.Forms.SendKeys]::SendWait('{ESC}')

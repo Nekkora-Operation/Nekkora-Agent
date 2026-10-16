@@ -126,7 +126,9 @@ public final class TrayController {
             ti.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    if (e.getButton() == MouseEvent.BUTTON1 && e.getClickCount() == 1) actions.open();
+                    // qualquer clique esquerdo: um clique logo após outro chega como duplo clique (clickCount 2)
+                    // mesmo com a janela fechada no meio; abrir é idempotente
+                    if (e.getButton() == MouseEvent.BUTTON1) actions.open();
                 }
             });
             tray.add(ti);
