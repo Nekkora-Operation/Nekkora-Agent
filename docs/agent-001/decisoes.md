@@ -138,7 +138,9 @@ Sem upload. Os logs não entram no arquivo.
 `tools/package-windows.ps1`: `mvnw clean verify` → ícone gerado da marca (`tools/IconExport.java`) →
 `jlink` (java.base, java.desktop, java.prefs, java.logging, jdk.unsupported, jdk.accessibility;
 conferido com `jdeps`) → `jpackage --type app-image` → licenças, LEIA-ME, `VERSOES.txt` (SHA-256 das
-bibliotecas, origem do design system, runtime) → ZIP + `.sha256`. Opções da JVM: `UseSerialGC`,
+bibliotecas, origem do design system, runtime) → ZIP + `.sha256`. A DLL nativa do FlatLaf
+(`flatlaf-3.7.2-windows-x86_64.dll`) vai em `app\lib` com `-Dflatlaf.nativeLibraryPath=$APPDIR\lib`, para
+não ser extraída e carregada de `%TEMP%`. Opções da JVM: `UseSerialGC`,
 `-Xmx256m`, `TieredStopAtLevel=1`, fábrica de `Preferences` isolada. Windows x64; sem assinatura
 digital; não é instalador de produção. Observação: o lançador do jpackage (JDK 21) cria um processo
 filho — cada instância aparece como dois `Nekkora Agent.exe` (lançador ~8 MB + JVM).

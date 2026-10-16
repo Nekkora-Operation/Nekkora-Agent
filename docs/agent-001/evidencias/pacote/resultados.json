@@ -1,0 +1,159 @@
+﻿{
+    "ambiente":  {
+                     "sistema":  "Microsoft Windows 11 Pro 10.0.26200 build 26200 (64 bits)",
+                     "processador":  "AMD Ryzen 7 8700F 8-Core Processor (8 núcleos, 16 lógicos)",
+                     "memoriaGiB":  31.2,
+                     "tela":  "1920x1080",
+                     "escalaWindows":  "100%",
+                     "zip":  "nekkora-agent-0.1.0-windows-x64-lab.zip",
+                     "zipSha256":  "2a855a721c094c44cda7c22d3e398883b441accad3905e2983d0396b51e4c39d"
+                 },
+    "resultados":  [
+                       {
+                           "id":  "A14",
+                           "status":  "APROVADO",
+                           "detalhe":  "java no PATH reduzido: nenhum; JAVA_HOME removido; 95 módulos carregados, fora do pacote/Windows: 0; do JDK/Studio/.design-system: 0",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A02",
+                           "status":  "APROVADO",
+                           "detalhe":  "janela em 1717 ms (externo), startup_ms=1346 (log); processos: 2 (lançador + JVM); consoles: 0; ícone na bandeja: no estouro (Mostrar ícones ocultos)",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A03",
+                           "status":  "APROVADO",
+                           "detalhe":  "10/10 ciclos fechar (WM_CLOSE) → ícone da bandeja → janela de volta (clique real do mouse: 0; Invoke da UI Automation quando o Explorer não entregou o clique sintético: 10); ícones do Agent na bandeja: 1; log: 10 ocultações, 10 restaurações; processos: 2",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A03-restaurada-pela-bandeja.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A04",
+                           "status":  "APROVADO",
+                           "detalhe":  "Sair pelo menu da bandeja: processos restantes 0, ícone visível 0, LIFE_EXIT registrado; reabriu com a trava (arquivo mantido: True); config igual antes/depois: True (tema claro aplicado na captura)",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A04-reaberto-config-preservada.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A05",
+                           "status":  "APROVADO",
+                           "detalhe":  "5/5 rodadas com duas aberturas simultâneas: um único proprietário (1 LIFE_START, nenhuma configuração criada pela segunda), a outra mostrou o aviso e saiu; códigos de saída da segunda: 3,3,3,3,3",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A05-segunda-instancia-aviso.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A06",
+                           "status":  "APROVADO",
+                           "detalhe":  "TerminateProcess (sem saída ordenada) e novo início: jvm→reaberto em 1216 ms; lancador→reaberto em 1199 ms; jvm→reaberto em 1228 ms; trava adquirida em todos os 6 inícios, arquivo da trava mantido; ícones restantes após passar o mouse na bandeja: 0 (o Windows mantém o ícone de processo morto até o mouse passar)",
+                           "evidencias":  [
+
+                                          ]
+                       },
+                       {
+                           "id":  "A07",
+                           "status":  "APROVADO",
+                           "detalhe":  "--sem-bandeja: nenhum ícone; fechar → minimizada com processo vivo (True); Alt+S (Sair) pelo teclado encerrou: True. Falha real de instalação da bandeja: simulada no teste automatizado",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A07-pacote-sem-bandeja.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A09",
+                           "status":  "APROVADO",
+                           "detalhe":  "COMPUTERNAME removido do ambiente do processo: código AGT-HOST-001 no log; a captura mostra \u0027Não disponível\u0027",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A09-pacote-sem-nome-de-maquina.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A10",
+                           "status":  "APROVADO",
+                           "detalhe":  "nada abriu sozinho (0); Espaço em \u0027Abrir Studio\u0027 → linha de comando do filho: C:\\Windows\\System32\\charmap.exe (pai = JVM do Agent); navegador padrão pediu \u0027GET /nekkora-agent-homologacao HTTP/1.1\u0027; com o filho ainda aberto o Agent saiu e reabriu (sem herdar a trava); destinos ausentes do log",
+                           "evidencias":  [
+                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A10-pacote-atalhos-configurados.png"
+                                          ]
+                       },
+                       {
+                           "id":  "A13",
+                           "status":  "MEDIDO",
+                           "detalhe":  "janela (externo) 1240/1191/1230/1237/1213 ms; startup_ms (log) 1037/1036/1058/1042/1035; WS visível 153,4/151,7/152,9/153,8/152 MiB; oculto 60 s: CPU 46.9 ms (0.078% de um núcleo), WS 153.4 MiB. Suspensão/retorno: não exercitado por este roteiro",
+                           "evidencias":  [
+
+                                          ]
+                       },
+                       {
+                           "id":  "D-05",
+                           "status":  "APROVADO",
+                           "detalhe":  "registro HKCU\\Software\\JavaSoft\\Prefs\\com\\nekkora\\ui\\theme igual antes e depois de toda a homologação (inclui troca de tema por configuração); nenhum nó do Agent criado",
+                           "evidencias":  [
+
+                                          ]
+                       },
+                       {
+                           "id":  "SAIDAS",
+                           "status":  "INFO",
+                           "detalhe":  "saídas ordenadas usadas pelo roteiro: 2 pelo menu da bandeja (clique direito real), 7 por Alt+S na janela quando o clique sintético não foi entregue",
+                           "evidencias":  [
+
+                                          ]
+                       }
+                   ],
+    "metricas":  [
+                     {
+                         "execucao":  1,
+                         "janelaMsExterno":  1240,
+                         "startupMsLog":  1037,
+                         "wsVisivelMiB":  153.4,
+                         "privadaVisivelMiB":  353.7,
+                         "threads":  63,
+                         "ocioso":  {
+                                        "segundos":  60,
+                                        "cpuMs":  46.9,
+                                        "cpuPctDeUmNucleo":  0.078,
+                                        "wsOcultoMiB":  153.4,
+                                        "privadaOcultoMiB":  353.6
+                                    }
+                     },
+                     {
+                         "execucao":  2,
+                         "janelaMsExterno":  1191,
+                         "startupMsLog":  1036,
+                         "wsVisivelMiB":  151.7,
+                         "privadaVisivelMiB":  351.6,
+                         "threads":  48
+                     },
+                     {
+                         "execucao":  3,
+                         "janelaMsExterno":  1230,
+                         "startupMsLog":  1058,
+                         "wsVisivelMiB":  152.9,
+                         "privadaVisivelMiB":  353,
+                         "threads":  63
+                     },
+                     {
+                         "execucao":  4,
+                         "janelaMsExterno":  1237,
+                         "startupMsLog":  1042,
+                         "wsVisivelMiB":  153.8,
+                         "privadaVisivelMiB":  353.7,
+                         "threads":  64
+                     },
+                     {
+                         "execucao":  5,
+                         "janelaMsExterno":  1213,
+                         "startupMsLog":  1035,
+                         "wsVisivelMiB":  152,
+                         "privadaVisivelMiB":  351.1,
+                         "threads":  47
+                     }
+                 ],
+    "gerado":  "2026-10-16T19:16:28"
+}
