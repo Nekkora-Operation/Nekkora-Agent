@@ -56,8 +56,10 @@ if (Test-Path $ours) { Remove-Item -Recurse -Force $ours }
 New-Item -ItemType Directory -Force $m2 | Out-Null
 
 Write-Host "[1/4] Checkout de $commit"
-& git clone --quiet --no-checkout $repo $src
+# core.longpaths: em pastas profundas o Studio passa de 260 caracteres (fixtures de teste); sem isso o checkout fica incompleto
+& git -c core.longpaths=true clone --quiet --no-checkout $repo $src
 if ($LASTEXITCODE -ne 0) { throw "git clone falhou ($LASTEXITCODE)" }
+& git -C $src config core.longpaths true
 & git -C $src -c advice.detachedHead=false checkout --quiet --detach $commit
 if ($LASTEXITCODE -ne 0) { throw "commit $commit não encontrado em $repo" }
 $head = (& git -C $src rev-parse HEAD).Trim()
