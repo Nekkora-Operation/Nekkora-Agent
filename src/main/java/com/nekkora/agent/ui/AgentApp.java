@@ -64,6 +64,7 @@ public final class AgentApp {
     private MainWindow window;
     private TrayController tray;
     private JDialog activeDialog;
+    private int initialNotices = -1;
 
     public AgentApp(AgentContext ctx, TrayController.Port trayPort, Terminator terminator) {
         this.ctx = Objects.requireNonNull(ctx);
@@ -80,6 +81,7 @@ public final class AgentApp {
         window.setVisible(true);
         window.focusFirstAction();
 
+        initialNotices = initial.notices().size();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
         if (tray.state().code() == null) {
@@ -189,7 +191,11 @@ public final class AgentApp {
 
     private void refresh() {
         background(ctx::viewModel, vm -> {
-            if (window != null) window.render(vm);
+            if (window == null) return;
+            window.render(vm);
+            // o aviso da bandeja só é conhecido depois de a janela aparecer: reajusta a altura uma única vez
+            if (initialNotices >= 0 && vm.notices().size() != initialNotices) window.fitToScreen();
+            initialNotices = -1;
         });
     }
 

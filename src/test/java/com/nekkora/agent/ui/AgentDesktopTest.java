@@ -170,6 +170,9 @@ class AgentDesktopTest {
         List<String> t = h.edt(() -> texts(w.getRootPane()));
         assertTrue(t.stream().anyMatch(s -> s.contains("Bandeja desativada")), t.toString());
         assertTrue(t.stream().anyMatch(s -> s.contains("barra de tarefas")));
+        // regressão: o aviso chega depois do dimensionamento inicial; a janela se reajusta e não precisa rolar
+        h.waitFor(() -> w.scrollPane().getViewport().getView().getHeight() <= w.scrollPane().getViewport().getHeight(),
+                "janela reajustada ao aviso, sem rolagem");
         capture(w, "A07-sem-bandeja");
         h.run(() -> w.dispatchEvent(new WindowEvent(w, WindowEvent.WINDOW_CLOSING)));
         h.waitFor(() -> (w.getExtendedState() & Frame.ICONIFIED) != 0, "minimizada");
