@@ -87,7 +87,13 @@ function Find-TrayButtons([string]$Name = 'Nekkora Agent') {
 function Open-TrayOverflow {
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     $wc = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
-    $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $wc)
+    $tray = $null
+    for ($k = 0; $k -lt 20 -and $null -eq $tray; $k++) {
+        # a UI Automation às vezes não devolve a barra de tarefas por um instante
+        $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $wc)
+        if ($null -eq $tray) { Start-Sleep -Milliseconds 250 }
+    }
+    if ($null -eq $tray) { return $false }
     foreach ($e in $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
         $n = $e.Current.Name
         $aid = $e.Current.AutomationId
@@ -142,9 +148,25 @@ function Invoke-TrayIcon([switch]$Right, [string]$Name = 'Nekkora Agent') {
     return [pscustomobject]@{ Host = $b[0].Host; Count = $b.Count; OverflowOpened = $opened }
 }
 
+# Conta os ícones (vivos) com o nome dado, na área visível ou no estouro, deixando o estouro fechado.
+function Get-TrayIconCount([string]$Name = 'Nekkora Agent') {
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    Start-Sleep -Milliseconds 500
+    $n = @(Find-TrayButtons $Name).Count
+    if ($n -eq 0) {
+        Open-TrayOverflow | Out-Null
+        Start-Sleep -Milliseconds 900
+        $n = @(Find-TrayButtons $Name).Count
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+        Start-Sleep -Milliseconds 400
+    }
+    return $n
+}
+
 # Restaura pela bandeja: clique real do mouse; se o estouro XAML do Windows 11 não entregar o clique sintético
 # em 3 s, usa o Invoke da UI Automation (mesmo caminho do teclado/leitor de tela). Devolve 'mouse' ou 'invoke'.
 function Restore-ViaTray([scriptblock]$IsShown, [string]$Name = 'Nekkora Agent') {
+    Start-Sleep -Milliseconds 800  # ritmo humano: logo após ocultar, o estouro da bandeja descarta o clique
     Invoke-TrayIcon -Name $Name | Out-Null
     try { Wait-Until $IsShown 3 'restaurar por clique' | Out-Null; return 'mouse' } catch { }
     $b = @(Find-TrayButtons $Name)

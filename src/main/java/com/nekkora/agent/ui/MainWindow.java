@@ -94,6 +94,8 @@ final class MainWindow extends NekkoraFrame {
         settings.addActionListener(e -> listener.settings());
         diagnostics.addActionListener(e -> listener.diagnostics());
         exit.addActionListener(e -> listener.exit());
+        studio.setMnemonic(KeyEvent.VK_T);
+        platform.setMnemonic(KeyEvent.VK_P);
         settings.setMnemonic(KeyEvent.VK_C);
         diagnostics.setMnemonic(KeyEvent.VK_D);
         exit.setMnemonic(KeyEvent.VK_S);

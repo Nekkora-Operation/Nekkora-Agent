@@ -113,8 +113,14 @@ function Capture([int]$ProcessId, [string]$Name, [string]$Title = '*') {
 }
 
 function Focus-AgentWindow([IntPtr]$Handle) {
-    # clique real na barra de título (área neutra) para dar o foco do teclado à janela
+    # clique real na barra de título (área neutra) para dar o foco do teclado à janela.
+    # O estouro da bandeja, se aberto, "come" o primeiro clique de fora para se fechar: Esc antes e um
+    # segundo clique depois do intervalo de duplo clique (para não maximizar).
+    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+    Start-Sleep -Milliseconds 400
     $rect = [System.Windows.Automation.AutomationElement]::FromHandle($Handle).Current.BoundingRectangle
+    [NkUser32]::Click([int]($rect.X + 140), [int]($rect.Y + 16), $false)
+    Start-Sleep -Milliseconds 700
     [NkUser32]::Click([int]($rect.X + 140), [int]($rect.Y + 16), $false)
     Start-Sleep -Milliseconds 300
 }
@@ -173,7 +179,7 @@ $p = Start-Agent $d
 $w = Wait-AgentWindow $p.Id
 $sw.Stop()
 Start-Sleep -Seconds 2
-$procs = Get-PackageProcesses
+$procs = @(Get-PackageProcesses)
 $mods = (Get-Process -Id $w.Jvm).Modules | ForEach-Object { $_.FileName }
 $foreign = @($mods | Where-Object { $_ -notlike "$appDir\*" -and $_ -notlike "$env:windir\*" -and $_ -notlike 'C:\Windows\*' })
 $jdkMods = @($mods | Where-Object { $_ -like '*\jdk-*' -or $_ -like '*Microsoft\jdk*' -or $_ -like '*Nekkora-Studio*' -or $_ -like '*.design-system*' })
@@ -200,22 +206,21 @@ for ($i = 1; $i -le $Cycles; $i++) {
     if ($via -eq 'mouse') { $viaMouse++ } else { $viaInvoke++ }
     $restoreOk++
 }
-$trayCountOverflow = Clear-GhostTrayIcons  # passa o mouse sobre os ícones e conta os que sobram (vivos)
-Focus-AgentWindow (Get-AgentWindow $w.Jvm)  # fecha o estouro
+$trayCountOverflow = Get-TrayIconCount
 $cap3 = Capture $w.Jvm 'A03-restaurada-pela-bandeja' 'Nekkora Agent'
 $log = Read-Log $d
 $hidden = ([regex]::Matches($log, 'LIFE_WINDOW_HIDDEN to=tray')).Count
 $restored = ([regex]::Matches($log, 'LIFE_WINDOW_RESTORED')).Count
-$ok03 = ($restoreOk -eq $Cycles) -and ($trayCountOverflow -eq 1) -and ((Get-PackageProcesses).Count -eq 2)
-Add-Result 'A03' ($(if ($ok03) { 'APROVADO' } else { 'FALHOU' })) ("$restoreOk/$Cycles ciclos fechar (WM_CLOSE) → ícone da bandeja → janela de volta (clique real do mouse: $viaMouse; Invoke da UI Automation quando o Explorer não entregou o clique sintético: $viaInvoke); ícones do Agent na bandeja: $trayCountOverflow; log: $hidden ocultações, $restored restaurações; processos: $((Get-PackageProcesses).Count)") @($cap3)
+$ok03 = ($restoreOk -eq $Cycles) -and ($trayCountOverflow -eq 1) -and (@(Get-PackageProcesses).Count -eq 2)
+Add-Result 'A03' ($(if ($ok03) { 'APROVADO' } else { 'FALHOU' })) ("$restoreOk/$Cycles ciclos fechar (WM_CLOSE) → ícone da bandeja → janela de volta (clique real do mouse: $viaMouse; Invoke da UI Automation quando o Explorer não entregou o clique sintético: $viaInvoke); ícones do Agent na bandeja: $trayCountOverflow; log: $hidden ocultações, $restored restaurações; processos: $(@(Get-PackageProcesses).Count)") @($cap3)
 
 # ---------- A04 ----------
 $cfgDir = Join-Path $d 'config'
 $cfg = Join-Path $cfgDir 'agent-config.json'
 Exit-ViaTray $w.Jvm
-Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'processos encerrados' | Out-Null
-$afterExit = (Get-PackageProcesses).Count
-$trayAfter = @(Find-TrayButtons).Count
+Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'processos encerrados' | Out-Null
+$afterExit = @(Get-PackageProcesses).Count
+$trayAfter = Get-TrayIconCount
 $lockExists = Test-Path (Join-Path $d 'agent.lock')
 $exitLog = Read-Log $d
 # configuração escrita entre execuções (tema claro) deve sobreviver a sair/reabrir
@@ -227,7 +232,7 @@ $p = Start-Agent $d
 $w = Wait-AgentWindow $p.Id
 $cap4 = Capture $w.Jvm 'A04-reaberto-config-preservada' 'Nekkora Agent'
 Exit-ViaTray $w.Jvm
-Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'processos encerrados' | Out-Null
+Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'processos encerrados' | Out-Null
 $h2 = (Get-FileHash $cfg).Hash
 $starts = ([regex]::Matches((Read-Log $d), 'LIFE_START')).Count
 $ok04 = ($afterExit -eq 0) -and ($trayAfter -eq 0) -and $lockExists -and ($exitLog -match 'LIFE_EXIT status=0') -and ($h1 -eq $h2) -and ($starts -eq 2)
@@ -263,7 +268,7 @@ for ($r = 1; $r -le $Rounds; $r++) {
     $cfgUntouched = -not (Test-Path (Join-Path $dr 'config\agent-config.json'))
     if (($remaining.Count -eq 2) -and $oneStart -and $cfgUntouched) { $okRounds++ }
     Exit-ViaTray ([int]$owner.ProcessId)
-    Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'fim da rodada' | Out-Null
+    Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'fim da rodada' | Out-Null
 }
 $ok05 = ($okRounds -eq $Rounds) -and (@($codes | Where-Object { $_ -ne 3 }).Count -eq 0)
 Add-Result 'A05' ($(if ($ok05) { 'APROVADO' } else { 'FALHOU' })) ("$okRounds/$Rounds rodadas com duas aberturas simultâneas: um único proprietário (1 LIFE_START, nenhuma configuração criada pela segunda), a outra mostrou o aviso e saiu; códigos de saída da segunda: $($codes -join ',')") @($noticeCap)
@@ -275,14 +280,14 @@ foreach ($mode in 'jvm', 'lancador', 'jvm') {
     $p = Start-Agent $d6
     $w = Wait-AgentWindow $p.Id
     if ($mode -eq 'jvm') { Stop-Process -Id $w.Jvm -Force } else { Stop-Process -Id $p.Id -Force }
-    Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 "processos mortos ($mode)" | Out-Null
+    Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 "processos mortos ($mode)" | Out-Null
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $p2 = Start-Agent $d6
     $w2 = Wait-AgentWindow $p2.Id
     $sw.Stop()
     $a06 += "$mode→reaberto em $($sw.ElapsedMilliseconds) ms"
     Stop-Process -Id $w2.Jvm -Force
-    Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'limpeza' | Out-Null
+    Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'limpeza' | Out-Null
 }
 $log6 = Read-Log $d6
 $ghosts = Clear-GhostTrayIcons
@@ -295,7 +300,7 @@ $d7 = Join-Path $Out 'dados-a07'
 $p = Start-Agent $d7 @('--sem-bandeja')
 $w = Wait-AgentWindow $p.Id
 $cap7 = Capture $w.Jvm 'A07-pacote-sem-bandeja' 'Nekkora Agent'
-$trayNone = @(Find-TrayButtons).Count -eq 0
+$trayNone = (Get-TrayIconCount) -eq 0
 Close-Window $w.Handle
 $iconic = Wait-Until { [NkUser32]::IsIconic((Get-AgentWindow $w.Jvm)) } 10 'minimizada'
 $alive = [bool](Get-Process -Id $w.Jvm -ErrorAction SilentlyContinue)
@@ -304,7 +309,7 @@ Wait-Until { -not [NkUser32]::IsIconic((Get-AgentWindow $w.Jvm)) } 10 'restaurad
 Focus-AgentWindow (Get-AgentWindow $w.Jvm)
 [System.Windows.Forms.SendKeys]::SendWait('%s')
 $exited = $true
-try { Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'Alt+S' | Out-Null } catch { $exited = $false; Stop-AllAgents }
+try { Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'Alt+S' | Out-Null } catch { $exited = $false; Stop-AllAgents }
 $log7 = Read-Log $d7
 $ok07 = $trayNone -and $alive -and $exited -and ($log7 -match 'TRAY_UNAVAILABLE code=AGT-TRAY-003') -and ($log7 -match 'LIFE_EXIT status=0')
 Add-Result 'A07' ($(if ($ok07) { 'APROVADO' } else { 'FALHOU' })) ("--sem-bandeja: nenhum ícone; fechar → minimizada com processo vivo ($alive); Alt+S (Sair) pelo teclado encerrou: $exited. Falha real de instalação da bandeja: simulada no teste automatizado") @($cap7)
@@ -315,7 +320,7 @@ $p = Start-Agent $d9 @() $null
 $w = Wait-AgentWindow $p.Id
 $cap9 = Capture $w.Jvm 'A09-pacote-sem-nome-de-maquina' 'Nekkora Agent'
 $log9 = Read-Log $d9
-Stop-Process -Id $w.Jvm -Force; Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'fim A09' | Out-Null
+Stop-Process -Id $w.Jvm -Force; Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'fim A09' | Out-Null
 Add-Result 'A09' ($(if ($log9 -match 'MACHINE_NAME_UNAVAILABLE code=AGT-HOST-001') { 'APROVADO' } else { 'FALHOU' })) "COMPUTERNAME removido do ambiente do processo: código AGT-HOST-001 no log; a captura mostra 'Não disponível'" @($cap9)
 
 # ---------- A10 ----------
@@ -340,10 +345,11 @@ if (-not $SemNavegador) {
     $listener = New-Object System.Net.Sockets.TcpListener ([System.Net.IPAddress]::Loopback, $port)
     $listener.Start()
     try {
+        # o Mapa de Caracteres aberto pelo atalho fica por cima: minimiza (sem fechar) para o clique de foco cair no Agent
+        foreach ($ch in [NkUser32]::Windows([uint32]@($cm)[0].ProcessId, $true)) { [NkUser32]::ShowWindow($ch, 6) | Out-Null }
+        Start-Sleep -Milliseconds 400
         Focus-AgentWindow $w.Handle
-        [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
-        Start-Sleep -Milliseconds 200
-        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        [System.Windows.Forms.SendKeys]::SendWait('%p')  # Alt+P = "Abrir Platform"
         $accept = $listener.AcceptTcpClientAsync()
         if ($accept.Wait(20000)) {
             $client = $accept.Result
@@ -358,7 +364,7 @@ if (-not $SemNavegador) {
 }
 $cmRunning = @($cm)[0].ProcessId
 Exit-ViaTray $w.Jvm
-Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'saída A10' | Out-Null
+Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'saída A10' | Out-Null
 # o filho iniciado pelo Agent não pode herdar a trava: com o charmap ainda aberto, o Agent reabre
 $charmapAlive = [bool](Get-Process -Id $cmRunning -ErrorAction SilentlyContinue)
 $p = Start-Agent $d10
@@ -399,7 +405,7 @@ for ($k = 1; $k -le $MetricRuns; $k++) {
     }
     $m += [pscustomobject]$row
     Stop-Process -Id $w.Jvm -Force
-    Wait-Until { (Get-PackageProcesses).Count -eq 0 } 15 'fim métrica' | Out-Null
+    Wait-Until { @(Get-PackageProcesses).Count -eq 0 } 15 'fim métrica' | Out-Null
 }
 $idle = $m[0].ocioso
 Add-Result 'A13' 'MEDIDO' ("janela (externo) " + (($m | ForEach-Object { $_.janelaMsExterno }) -join '/') + " ms; startup_ms (log) " + (($m | ForEach-Object { $_.startupMsLog }) -join '/') + "; WS visível " + (($m | ForEach-Object { $_.wsVisivelMiB }) -join '/') + " MiB; oculto $($idle.segundos) s: CPU $($idle.cpuMs) ms ($($idle.cpuPctDeUmNucleo)% de um núcleo), WS $($idle.wsOcultoMiB) MiB. Suspensão/retorno: não exercitado por este roteiro") @()
