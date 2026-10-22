@@ -65,8 +65,7 @@ final class MainWindow extends NekkoraFrame {
     private final NekkoraCaption versionCaption = new NekkoraCaption("", TextTone.SECONDARY);
     private final NekkoraCard statusCard = new NekkoraCard("Esta máquina", null);
     private final NekkoraCard shortcutsCard = new NekkoraCard("Atalhos", null);
-    private final NekkoraCard executionCard = new NekkoraCard("Execução local", null);
-    private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma execução nesta sessão do Agent.", TextTone.SECONDARY);
+    private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma nesta sessão", TextTone.SECONDARY);
     private final NekkoraButton execution = NekkoraButton.secondary("Execução local…");
     private final NekkoraParagraph closeHint = new NekkoraParagraph("", TextTone.MUTED);
     private final NekkoraButton studio = NekkoraButton.secondary("Abrir Studio");
@@ -116,20 +115,13 @@ final class MainWindow extends NekkoraFrame {
         header.addAll(logo, titles);
 
         NekkoraStack actions = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-        actions.addAll(settings, diagnostics);
+        actions.addAll(execution, settings, diagnostics);
         actions.addGlue();
         actions.add(exit);
 
         body.setPadding(Spacing.SPACE_7);
-        JPanel execRow = new JPanel(new BorderLayout(Scale.px(Spacing.SPACE_5), 0));
-        execRow.setOpaque(false);
-        JPanel execWest = new JPanel(new BorderLayout());
-        execWest.setOpaque(false);
-        execWest.add(execution, BorderLayout.NORTH);
-        execRow.add(execWest, BorderLayout.WEST);
-        execRow.add(executionLine, BorderLayout.CENTER);
-        executionCard.setContent(execRow);
-        body.addAll(header, notices, statusCard, executionCard, shortcutsCard, actions, closeHint);
+        // DESKTOP-001: a execução local é uma linha em "Esta máquina" e um botão nas ações (a janela continua compacta)
+        body.addAll(header, notices, statusCard, shortcutsCard, actions, closeHint);
         scroll = NekkoraScrollPane.verticalOnly(body);
         scroll.setBorder(null);
         getContentPane().add(scroll, BorderLayout.CENTER);
@@ -153,6 +145,7 @@ final class MainWindow extends NekkoraFrame {
         NekkoraKeyValueView rows = new NekkoraKeyValueView();
         rows.add("Máquina", vm.machine());
         rows.add("Versão", vm.version());
+        rows.add("Execução local", executionLine);
         for (IntegrationStatus s : vm.integration()) {
             NekkoraStatusBadge badge = new NekkoraStatusBadge(s == IntegrationStatus.LICENSE ? Status.PENDING : Status.DISABLED, s.value());
             badge.getAccessibleContext().setAccessibleName(s.label() + ": " + s.value());

@@ -88,7 +88,7 @@ class ExecutionDesktopTest {
         Path out = Files.createDirectories(tmp.resolve("saida"));
         h = DesktopHarness.start(tmp.resolve("dados"), AgentDesktopTest.ENV, new String[0], TrayController.SYSTEM);
         MainWindow w = h.window();
-        assertTrue(h.edt(() -> texts(w.getRootPane())).contains("Nenhuma execução nesta sessão do Agent."));
+        assertTrue(h.edt(() -> texts(w.getRootPane())).contains("Nenhuma nesta sessão"));
         h.later(() -> w.executionButton().doClick());
         h.waitFor(() -> h.app.executionDialog() != null && h.app.executionDialog().isShowing(), "janela Execução local");
         ExecutionDialog d = dialog();

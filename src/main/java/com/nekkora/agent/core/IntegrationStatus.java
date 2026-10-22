@@ -14,8 +14,7 @@ public enum IntegrationStatus {
 
     /** Explicação exibida junto aos estados. */
     public static final String EXPLANATION = "A integração com a Platform ainda não está disponível nesta versão: "
-            + "o Agent não se conecta, não verifica licença e não recebe execuções da Platform. Automações locais aprovadas "
-            + "por você rodam pela janela Execução local.";
+            + "o Agent não se conecta, não verifica licença e não recebe execuções.";
 
     private final String label;
     private final String value;

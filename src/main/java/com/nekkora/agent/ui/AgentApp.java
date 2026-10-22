@@ -512,7 +512,7 @@ public final class AgentApp {
     }
 
     static String executionLine(java.util.Optional<ExecutionController.Snapshot> snap) {
-        if (snap.isEmpty()) return "Nenhuma execução nesta sessão do Agent.";
+        if (snap.isEmpty()) return "Nenhuma nesta sessão";
         ExecutionRecord r = snap.get().record();
         StringBuilder b = new StringBuilder(r.state().label());
         if (snap.get().running()) {
