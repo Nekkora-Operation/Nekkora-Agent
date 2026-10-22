@@ -15,8 +15,8 @@ import java.util.Map;
 
 /**
  * Aprovações locais de pacotes ({@code nekkora-agent/approvals} 1.0.0): a pessoa operadora aprova UM pacote pela sua
- * impressão digital. Arquivo mudado → outra impressão → sem aprovação. Guarda só a impressão, o tipo, um nome curto e a
- * data — nenhum caminho, entrada ou dado. Arquivo ilegível vale como "nenhuma aprovação" (nada é presumido aprovado).
+ * impressão digital. Arquivo mudado → outra impressão → sem aprovação. Guarda só a impressão, o tipo, um rótulo derivado
+ * da impressão e a data — nenhum nome de pasta, caminho, entrada ou dado. Arquivo ilegível vale como "nenhuma aprovação" (nada é presumido aprovado).
  */
 public final class ApprovalStore {
     public static final String SCHEMA = "nekkora-agent/approvals";
@@ -41,7 +41,8 @@ public final class ApprovalStore {
     public synchronized void approve(ExecutionPackage p, Instant at) throws ExecRefused {
         List<Approval> all = new ArrayList<>(load());
         all.removeIf(a -> a.fingerprint().equals(p.fingerprint()));
-        all.add(new Approval(p.fingerprint(), p.kind(), p.name(), at));
+        // nunca o nome da pasta (pode ser o nome de um cliente): só o resumo da impressão digital
+        all.add(new Approval(p.fingerprint(), p.kind(), "pacote " + p.shortFingerprint(), at));
         while (all.size() > MAX) all.remove(0);
         save(all);
     }

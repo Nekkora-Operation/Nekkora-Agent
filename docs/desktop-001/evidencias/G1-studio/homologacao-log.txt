@@ -1,0 +1,11 @@
+OK    nenhum Studio aberto nesta máquina
+OK    pacote do Studio reconhecido (manifesto LIST, nekkora-rpa 0.3.0)
+OK    pacote ainda não aprovado nesta máquina (abrir/escolher não autoriza)
+OK    Python do ambiente do projeto compatível (3.12.10 / nekkora-rpa 0.3.0)
+OK    Iniciar habilitado só com todas as escolhas
+  estado SUCCEEDED · código — · saída 0 · contagens {SUCCEEDED=2} · bytes da saída do processo 198
+OK    execução do pacote do Studio CONCLUÍDA com sucesso pelo protocolo (summary.json COMPLETED + planilha COMMITTED)
+OK    planilha gravada na pasta de saída escolhida (fora do Agent)
+OK    eventos do framework na pasta de saída da execução
+OK    registros do Agent sem o nome da pasta do pacote nem caminhos de entrada/saída
+RESULTADO: 9 verificações, 0 falha(s)

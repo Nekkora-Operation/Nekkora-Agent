@@ -136,6 +136,11 @@ class ExecutionDomainTest {
         ExecutionPackage changed = ExecutionPackage.inspect(ExecFixtures.labPackage(tmp.resolve("lab2"), "Laboratorio", "lab_falha.py"));
         assertNotEquals(p.fingerprint(), changed.fingerprint());
         assertFalse(store.approved(changed));
+        // achado na homologação (G1): o nome da PASTA de um pacote do Studio (pode ser o nome de um cliente) não vai ao arquivo
+        ExecutionPackage studio = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("Cliente-Confidencial-ACME"), "single", "\"output\": \"--output\"", ""));
+        store.approve(studio, Instant.parse("2026-10-22T00:00:00Z"));
+        assertTrue(store.approved(studio));
+        assertFalse(Files.readString(tmp.resolve("dados").resolve("aprovacoes.json"), StandardCharsets.UTF_8).contains("Cliente-Confidencial-ACME"));
         Files.writeString(tmp.resolve("dados").resolve("aprovacoes.json"), "{ quebrado");
         assertFalse(store.approved(p), "ilegível: nada é presumido aprovado");
     }
