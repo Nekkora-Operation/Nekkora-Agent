@@ -1,0 +1,4 @@
+{"at": "2026-10-22T03:54:05.647311700Z", "event": "RECONCILE", "state": "RUNNING"}
+{"at": "2026-10-22T03:54:05.681112600Z", "event": "ADOPTED", "pid": 400}
+{"at": "2026-10-22T03:54:11.667868100Z", "event": "TERMINATED", "processes": 5}
+{"at": "2026-10-22T03:54:11.677659300Z", "event": "CANCELLED", "exit": "none", "protocol": false, "output_bytes": 0, "code": "AGT-EXE-024"}

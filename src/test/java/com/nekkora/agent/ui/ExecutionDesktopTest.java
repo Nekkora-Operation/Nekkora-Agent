@@ -150,4 +150,51 @@ class ExecutionDesktopTest {
         ExecutionDialog last = dialog();
         h.run(last::dispose);
     }
+
+    @Test
+    @DisplayName("sair com execução ativa: confirmação com Voltar como padrão (nada muda); Encerrar execução e sair cancela só a árvore possuída")
+    void sairComExecucao() throws Exception {
+        Path py = python();
+        Assumptions.assumeTrue(py != null, "sem Python neste ambiente");
+        Path slow = labPackage(tmp.resolve("pacote-lento"), "lab_lento.py");
+        Path out = Files.createDirectories(tmp.resolve("saida"));
+        h = DesktopHarness.start(tmp.resolve("dados"), AgentDesktopTest.ENV, new String[0], TrayController.SYSTEM);
+        h.later(h.app::openExecution);
+        h.waitFor(() -> h.app.executionDialog() != null && h.app.executionDialog().isShowing(), "janela Execução local");
+        choose(() -> h.app.selectPackage(slow));
+        choose(h.app::approveConfirmed);
+        choose(() -> h.app.selectPython(py));
+        choose(() -> h.app.selectOutput(out));
+        ExecutionDialog d = dialog();
+        h.run(() -> d.startButton().doClick());
+        h.waitFor(() -> h.app.context().execution().running(), "em andamento");
+        h.run(d::dispose);
+        h.waitFor(() -> h.app.executionDialog() == null, "janela fechada");
+        long owner = h.app.context().execution().current().orElseThrow().record().owner().pid();
+
+        h.later(h.app::exit);
+        h.waitFor(() -> h.app.activeDialog() != null && AgentApp.EXIT_TITLE.equals(h.app.activeDialog().getTitle()) && h.app.activeDialog().isShowing(), "confirmação");
+        capture(h.edt(h.app::activeDialog), "D07-confirmacao-sair-com-execucao");
+        javax.swing.JRootPane rp = h.edt(() -> h.app.activeDialog().getRootPane());
+        assertEquals("Voltar", h.edt(() -> rp.getDefaultButton().getText()), "o padrão (Enter) é o caminho seguro");
+        com.nekkora.ui.button.NekkoraButton back = h.edt(() -> DesktopHarness.find(rp, com.nekkora.ui.button.NekkoraButton.class).stream()
+                .filter(b -> "Voltar".equals(b.getText())).findFirst().orElseThrow());
+        h.run(back::doClick);
+        h.waitFor(() -> h.app.activeDialog() == null, "voltou");
+        assertTrue(h.exits.isEmpty() && h.app.context().execution().running() && ProcessHandle.of(owner).map(ProcessHandle::isAlive).orElse(false),
+                "Voltar: nada muda");
+
+        h.later(h.app::exit);
+        h.waitFor(() -> h.app.activeDialog() != null && AgentApp.EXIT_TITLE.equals(h.app.activeDialog().getTitle()) && h.app.activeDialog().isShowing(), "confirmação 2");
+        javax.swing.JRootPane rp2 = h.edt(() -> h.app.activeDialog().getRootPane());
+        com.nekkora.ui.button.NekkoraButton go = h.edt(() -> DesktopHarness.find(rp2, com.nekkora.ui.button.NekkoraButton.class).stream()
+                .filter(b -> "Encerrar execução e sair".equals(b.getText())).findFirst().orElseThrow());
+        assertEquals(java.awt.event.KeyEvent.VK_E, (int) h.edt(go::getMnemonic), "atalho de teclado Alt+E");
+        h.run(go::doClick);
+        h.waitFor(() -> !h.exits.isEmpty(), "saiu");
+        assertFalse(ProcessHandle.of(owner).map(ProcessHandle::isAlive).orElse(false), "processo possuído encerrado");
+        java.util.List<String> log = Files.readAllLines(tmp.resolve("dados").resolve("logs").resolve("agent.log"));
+        assertTrue(log.stream().anyMatch(l -> l.contains("LIFE_EXIT")), "saída ordenada");
+        h = null; // já saiu
+    }
 }

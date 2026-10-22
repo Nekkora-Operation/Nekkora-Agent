@@ -47,6 +47,7 @@ public final class DesktopHomologation {
             switch (a[0]) {
                 case "studio" -> h.studio(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]));
                 case "sessao" -> h.sessao(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]));
+                case "semear" -> h.semear(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]));
                 default -> throw new IllegalArgumentException("modo");
             }
             code = h.failures == 0 ? 0 : 2;
@@ -173,6 +174,28 @@ public final class DesktopHomologation {
             check("efeito não idempotente aconteceu UMA vez", envios == 1);
             check("o Agent continuou o mesmo processo (sem novo LIFE_START depois da suspensão)", agentLog(data).split("LIFE_START", -1).length == 2);
         }
+    }
+
+    // ----------------------------------------------------------------------------------------- queda simulada
+
+    /**
+     * Simula o Agent que CAIU no meio de uma execução: lança o processo de laboratório lento (que continua vivo depois
+     * deste programa terminar) e grava o registro RUNNING dele em {@code <dados>/execucoes/}, como o Agent teria
+     * gravado. O Agent empacotado, aberto em seguida sobre o mesmo diretório, precisa adotá-lo (sem relançar nada).
+     */
+    void semear(Path data, Path labPkg, Path python, Path output) throws Exception {
+        ExecutionPackage p = ExecutionPackage.inspect(labPkg);
+        com.nekkora.agent.exec.ExecutionId id = com.nekkora.agent.exec.ExecutionId.random();
+        Path out = Files.createDirectories(output.resolve(id.value()));
+        Process orphan = new ProcessBuilder(python.toString(), "-E", "-s", "-B", p.entry(), "--output", out.toString()).directory(labPkg.toFile())
+                .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+        com.nekkora.agent.exec.RunStore store = new com.nekkora.agent.exec.RunStore(data.resolve("execucoes"), com.nekkora.agent.storage.AtomicWriter.DEFAULT);
+        com.nekkora.agent.exec.ProcessOwner owner = com.nekkora.agent.exec.ProcessOwner.of(orphan, python.toString());
+        store.save(new ExecutionRecord(id, p.kind(), "pacote " + p.shortFingerprint(), p.fingerprint(), ExecutionState.RUNNING, null, Instant.now(),
+                Instant.now(), null, owner, null, Map.of(), 0, 0, false, 0));
+        Files.writeString(store.dir(id).resolve("saida.ref"), out.toString(), StandardCharsets.UTF_8);
+        log("SEMEADO " + id.value() + " pid=" + owner.pid());
+        check("processo órfão vivo e registro RUNNING gravado (o Agent \"caiu\")", owner.alive());
     }
 
     private static String agentText(Path data) throws Exception {

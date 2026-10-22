@@ -530,10 +530,7 @@ public final class AgentApp {
     public void exit() {
         if (exiting.get()) return;
         // execução em andamento: sair a cancela (só a árvore possuída) — a pessoa confirma antes
-        if (ctx.execution().running() && !NekkoraConfirmationDialog.confirmDanger(window, "Sair do Nekkora Agent?", "Há uma execução local em "
-                + "andamento. Sair encerra o processo dela e a registra como cancelada; o que já foi feito no sistema não é desfeito.", "Cancelar e sair")) {
-            return;
-        }
+        if (ctx.execution().running() && !confirmExitWhileRunning()) return;
         if (!exiting.compareAndSet(false, true)) return;
         ctx.log().info(LogEvent.LIFE_EXIT_REQUESTED);
         if (tray != null) {
@@ -552,6 +549,28 @@ public final class AgentApp {
         ctx.close();
         terminator.terminate(0);
     }
+
+    /**
+     * Confirmação de sair com execução ativa. "Voltar" é o padrão (Enter/Esc não encerram nada); os dois botões têm atalho
+     * de teclado (Alt+V, Alt+E).
+     */
+    private boolean confirmExitWhileRunning() {
+        FittedDialog d = new FittedDialog(window != null && window.isShowing() ? window : null, EXIT_TITLE);
+        d.setDescription("Há uma execução local em andamento. Sair encerra o processo dela (e os que ele abriu) e a registra como "
+                + "cancelada; o que já foi feito no sistema não é desfeito.");
+        d.setDialogSize(com.nekkora.ui.dialog.NekkoraDialog.Size.SMALL);
+        com.nekkora.ui.button.NekkoraButton back = d.addSecondary("Voltar");
+        back.setMnemonic(java.awt.event.KeyEvent.VK_V);
+        com.nekkora.ui.button.NekkoraButton go = d.addDanger("Encerrar execução e sair", () -> true);
+        go.setMnemonic(java.awt.event.KeyEvent.VK_E);
+        d.getRootPane().setDefaultButton(back);
+        activeDialog = d;
+        boolean confirmed = d.showDialog() == com.nekkora.ui.dialog.NekkoraDialog.Result.CONFIRMED;
+        activeDialog = null;
+        return confirmed;
+    }
+
+    static final String EXIT_TITLE = "Sair do Nekkora Agent?";
 
     public boolean isExiting() {
         return exiting.get();
