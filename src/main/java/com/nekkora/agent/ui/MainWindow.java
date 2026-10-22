@@ -52,6 +52,8 @@ final class MainWindow extends NekkoraFrame {
 
         void diagnostics();
 
+        void execution();
+
         void exit();
     }
 
@@ -63,6 +65,9 @@ final class MainWindow extends NekkoraFrame {
     private final NekkoraCaption versionCaption = new NekkoraCaption("", TextTone.SECONDARY);
     private final NekkoraCard statusCard = new NekkoraCard("Esta máquina", null);
     private final NekkoraCard shortcutsCard = new NekkoraCard("Atalhos", null);
+    private final NekkoraCard executionCard = new NekkoraCard("Execução local", null);
+    private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma execução nesta sessão do Agent.", TextTone.SECONDARY);
+    private final NekkoraButton execution = NekkoraButton.secondary("Execução local…");
     private final NekkoraParagraph closeHint = new NekkoraParagraph("", TextTone.MUTED);
     private final NekkoraButton studio = NekkoraButton.secondary("Abrir Studio");
     private final NekkoraButton platform = NekkoraButton.secondary("Abrir Platform");
@@ -93,6 +98,9 @@ final class MainWindow extends NekkoraFrame {
         platform.addActionListener(e -> listener.openPlatform());
         settings.addActionListener(e -> listener.settings());
         diagnostics.addActionListener(e -> listener.diagnostics());
+        execution.addActionListener(e -> listener.execution());
+        execution.setMnemonic(KeyEvent.VK_E);
+        execution.getAccessibleContext().setAccessibleDescription("Escolher, aprovar, iniciar e acompanhar uma automação local");
         exit.addActionListener(e -> listener.exit());
         studio.setMnemonic(KeyEvent.VK_T);
         platform.setMnemonic(KeyEvent.VK_P);
@@ -113,7 +121,15 @@ final class MainWindow extends NekkoraFrame {
         actions.add(exit);
 
         body.setPadding(Spacing.SPACE_7);
-        body.addAll(header, notices, statusCard, shortcutsCard, actions, closeHint);
+        JPanel execRow = new JPanel(new BorderLayout(Scale.px(Spacing.SPACE_5), 0));
+        execRow.setOpaque(false);
+        JPanel execWest = new JPanel(new BorderLayout());
+        execWest.setOpaque(false);
+        execWest.add(execution, BorderLayout.NORTH);
+        execRow.add(execWest, BorderLayout.WEST);
+        execRow.add(executionLine, BorderLayout.CENTER);
+        executionCard.setContent(execRow);
+        body.addAll(header, notices, statusCard, executionCard, shortcutsCard, actions, closeHint);
         scroll = NekkoraScrollPane.verticalOnly(body);
         scroll.setBorder(null);
         getContentPane().add(scroll, BorderLayout.CENTER);
@@ -171,6 +187,23 @@ final class MainWindow extends NekkoraFrame {
 
     MainViewModel model() {
         return model;
+    }
+
+    /** Linha de estado da execução local (só estado, tempo e PID; nada da automação). */
+    void renderExecution(String line) {
+        if (line.equals(executionLine.getText())) return;
+        executionLine.setText(line);
+        executionLine.getAccessibleContext().setAccessibleName("Execução local: " + line);
+        body.revalidate();
+        body.repaint();
+    }
+
+    String executionText() {
+        return executionLine.getText();
+    }
+
+    NekkoraButton executionButton() {
+        return execution;
     }
 
     /** Dimensiona pelo conteúdo, limitado à área útil da tela, e centraliza. */

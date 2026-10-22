@@ -9,22 +9,34 @@ import java.util.Optional;
 /**
  * Posse de um processo lançado pelo Agent: PID + INSTANTE DE INÍCIO + executável. Um PID reutilizado pelo Windows (outro
  * início) não é posse; processo externo de mesmo nome nunca é tocado. Só se encerra o processo possuído e os seus
- * descendentes que começaram depois dele.
+ * descendentes que começaram depois dele. O executável fica como RESUMO ({@link #digest}) do caminho: o registro em disco
+ * não guarda o caminho (que tem o nome do usuário do Windows).
  */
-public record ProcessOwner(long pid, long startMillis, String executable) {
+public record ProcessOwner(long pid, long startMillis, String executableDigest) {
 
     /** Posse do processo recém-lançado. */
     public static ProcessOwner of(Process p, String executable) {
         ProcessHandle h = p.toHandle();
         long start = h.info().startInstant().map(Instant::toEpochMilli).orElse(-1L);
-        return new ProcessOwner(h.pid(), start, executable);
+        return new ProcessOwner(h.pid(), start, digest(executable));
+    }
+
+    /** Resumo do caminho do executável (sem diferença de maiúsculas nem de barras). */
+    public static String digest(String executable) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(executable.replace('/', '\\').toLowerCase(java.util.Locale.ROOT).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "sha256:" + java.util.HexFormat.of().formatHex(d);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** O processo com este PID ainda é o MESMO que o Agent lançou (mesmo início e mesmo executável)? */
     public Optional<ProcessHandle> handle() {
         if (startMillis < 0) return Optional.empty();
         return ProcessHandle.of(pid).filter(ProcessHandle::isAlive).filter(h -> h.info().startInstant().map(Instant::toEpochMilli).orElse(-2L) == startMillis)
-                .filter(h -> h.info().command().map(c -> sameExecutable(c, executable)).orElse(false));
+                .filter(h -> h.info().command().map(c -> digest(c).equals(executableDigest)).orElse(false));
     }
 
     public boolean alive() {

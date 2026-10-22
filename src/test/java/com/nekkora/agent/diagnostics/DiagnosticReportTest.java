@@ -33,7 +33,9 @@ class DiagnosticReportTest {
             "integracao", "vinculo", "agentWorkerOrganizacao", "conexao", "licenca", "execucao",
             "atalhos", "studio", "platform",
             "erros", "codigo", "ocorrencias", "ultima",
-            "sessao", "inicio", "duracaoSegundos", "inicializacaoMs");
+            "sessao", "inicio", "duracaoSegundos", "inicializacaoMs",
+            // DESKTOP-001 (estado, codigo e sessao já aparecem acima)
+            "execucaoLocal", "tipoPacote", "emAndamento", "duracaoMs", "suspensoes", "bloqueiosTela", "retomadaAposReinicio", "registrosGuardados");
 
     static DiagnosticReport.Facts facts(Optional<String> machine, List<ErrorJournal.Entry> errors) {
         Properties p = new Properties();

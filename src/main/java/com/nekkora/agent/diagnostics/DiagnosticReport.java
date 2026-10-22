@@ -34,6 +34,8 @@ public final class DiagnosticReport {
             "Estados de integração desta versão e situação dos atalhos (sem os destinos)",
             "Códigos de erro desta sessão, com contagem e horário",
             "Início da sessão, duração e tempo de inicialização",
+            "Execução local: estado e código da última, tipo do pacote, tempos e contagens (sem nome do pacote, caminhos, entradas "
+                    + "ou saída do processo)",
             "Nome da máquina somente se a opção abaixo estiver marcada");
 
     /** Fatos coletados pela aplicação. Valores textuais livres são filtrados aqui. */
@@ -54,13 +56,33 @@ public final class DiagnosticReport {
             ShortcutState platform,
             List<ErrorJournal.Entry> errors,
             Instant sessionStart,
-            Long startupMillis) {
+            Long startupMillis,
+            ExecFacts execution) {
 
         public Facts {
             Objects.requireNonNull(build);
             Objects.requireNonNull(machineName);
             errors = List.copyOf(errors);
+            execution = execution == null ? ExecFacts.NONE : execution;
         }
+
+        /** Sem dados de execução local (compatível com a AGENT-001). */
+        public Facts(BuildInfo build, String javaVersion, String javaVendor, String osName, String osVersion, String osArch, Optional<String> machineName,
+                TrayState tray, ConfigStore.State config, AgentLog.State logs, AgentDataDir.Kind dataDir, boolean lockHeld, ShortcutState studio,
+                ShortcutState platform, List<ErrorJournal.Entry> errors, Instant sessionStart, Long startupMillis) {
+            this(build, javaVersion, javaVendor, osName, osVersion, osArch, machineName, tray, config, logs, dataDir, lockHeld, studio, platform, errors,
+                    sessionStart, startupMillis, ExecFacts.NONE);
+        }
+    }
+
+    /**
+     * DESKTOP-001 — execução local, só valores enumerados e números: estado e código da última (ou da ativa), tipo do pacote,
+     * duração, suspensões, bloqueios de tela, se foi retomada depois de reinício, quantos registros estão guardados e o estado
+     * da sessão. Nunca o nome do pacote, caminhos, entradas, PID ou saída do processo.
+     */
+    public record ExecFacts(String state, String code, String packageKind, boolean running, Long elapsedMillis, int suspensions, int locks,
+                            boolean adopted, int records, String session) {
+        public static final ExecFacts NONE = new ExecFacts("NENHUMA", null, null, false, null, 0, 0, false, 0, "NAO_VERIFICADA");
     }
 
     private DiagnosticReport() {}
@@ -125,6 +147,19 @@ public final class DiagnosticReport {
         kv(j, 2, "inicio", q(f.sessionStart().toString()), true);
         kv(j, 2, "duracaoSegundos", String.valueOf(Math.max(0, Duration.between(f.sessionStart(), generatedAt).toSeconds())), true);
         kv(j, 2, "inicializacaoMs", f.startupMillis() == null ? "null" : String.valueOf(f.startupMillis()), false);
+        close(j, 1, true);
+        ExecFacts x = f.execution();
+        open(j, 1, "execucaoLocal");
+        kv(j, 2, "estado", q(SafeText.token(x.state(), 30)), true);
+        kv(j, 2, "codigo", x.code() == null ? "null" : q(SafeText.token(x.code(), 20)), true);
+        kv(j, 2, "tipoPacote", x.packageKind() == null ? "null" : q(SafeText.token(x.packageKind(), 30)), true);
+        kv(j, 2, "emAndamento", String.valueOf(x.running()), true);
+        kv(j, 2, "duracaoMs", x.elapsedMillis() == null ? "null" : String.valueOf(x.elapsedMillis()), true);
+        kv(j, 2, "suspensoes", String.valueOf(x.suspensions()), true);
+        kv(j, 2, "bloqueiosTela", String.valueOf(x.locks()), true);
+        kv(j, 2, "retomadaAposReinicio", String.valueOf(x.adopted()), true);
+        kv(j, 2, "registrosGuardados", String.valueOf(x.records()), true);
+        kv(j, 2, "sessao", q(SafeText.token(x.session(), 30)), false);
         close(j, 1, false);
         j.append("}\n");
         return j.toString();

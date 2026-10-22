@@ -8,6 +8,10 @@ import com.nekkora.agent.core.SafeText;
 import com.nekkora.agent.diagnostics.AgentLog;
 import com.nekkora.agent.diagnostics.AgentLog.Field;
 import com.nekkora.agent.diagnostics.LogEvent;
+import com.nekkora.agent.exec.ApprovalStore;
+import com.nekkora.agent.exec.ExecutionController;
+import com.nekkora.agent.exec.RunStore;
+import com.nekkora.agent.exec.SessionProbe;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.storage.AgentDataDir;
@@ -104,10 +108,19 @@ public final class AgentBootstrap {
         Optional<String> machine = MachineName.resolve(e.env());
         if (machine.isEmpty()) log.warn(LogEvent.MACHINE_NAME_UNAVAILABLE, ErrorCode.MACHINE_NAME_UNAVAILABLE);
 
+        // DESKTOP-001: execução local supervisionada. Depois de um reinício, execuções não terminadas são reconciliadas
+        // (adotadas se o processo ainda for o mesmo; senão fechadas sem inventar resultado) — nada é relançado
+        ExecutionController execution = new ExecutionController(new RunStore(dir.root().resolve("execucoes"), e.writer()),
+                new ApprovalStore(dir.root().resolve("execucao").resolve("aprovacoes.json"), e.writer()), SessionProbe.system(e.windows(), e.env()),
+                e.clock(), dir.root().resolve("execucao"));
+        int reconciled = execution.reconcile();
+        if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
+                Field.of("adopted", execution.running()));
+
         // a abertura do arquivo de log é assíncrona: espera o resultado para a primeira tela já mostrar o estado real
         log.flush(1000);
         return new Ready(new AgentContext(build, dir, lock, log, journal, config, machine, options, e.clock(),
-                e.processStart(), e.launcher(), e.probe(), e.windows()));
+                e.processStart(), e.launcher(), e.probe(), e.windows(), execution));
     }
 
     private static String shortHash(String h) {

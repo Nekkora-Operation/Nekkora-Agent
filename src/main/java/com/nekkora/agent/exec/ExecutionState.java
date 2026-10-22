@@ -10,7 +10,7 @@ import java.util.Set;
  */
 public enum ExecutionState {
     /** Pedido aceito, ainda não lançado. */
-    READY("Pronta para iniciar"),
+    READY("Aguardando início"),
     /** Conferências finais e lançamento do processo. */
     STARTING("Iniciando"),
     /** Processo lançado e supervisionado. */

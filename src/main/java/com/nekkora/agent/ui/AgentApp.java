@@ -7,6 +7,12 @@ import com.nekkora.agent.core.ShortcutState;
 import com.nekkora.agent.diagnostics.AgentLog.Field;
 import com.nekkora.agent.diagnostics.DiagnosticReport;
 import com.nekkora.agent.diagnostics.LogEvent;
+import com.nekkora.agent.exec.ExecRefused;
+import com.nekkora.agent.exec.ExecutionController;
+import com.nekkora.agent.exec.ExecutionPackage;
+import com.nekkora.agent.exec.ExecutionRecord;
+import com.nekkora.agent.exec.ExecutionSetup;
+import com.nekkora.agent.exec.PythonRuntime;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.os.TrayController;
@@ -18,6 +24,7 @@ import com.nekkora.tokens.NekkoraThemes;
 import com.nekkora.ui.Nekkora;
 import com.nekkora.ui.brand.NekkoraLogo;
 import com.nekkora.ui.core.Severity;
+import com.nekkora.ui.dialog.NekkoraConfirmationDialog;
 import com.nekkora.ui.feedback.NekkoraToast;
 import com.nekkora.ui.file.NekkoraFileDialogs;
 import com.nekkora.ui.theme.ThemeManager;
@@ -65,6 +72,11 @@ public final class AgentApp {
     private TrayController tray;
     private JDialog activeDialog;
     private int initialNotices = -1;
+    // DESKTOP-001: escolhas da próxima execução (só em memória) e o diálogo aberto
+    private ExecutionSetup setup = ExecutionSetup.empty();
+    private ExecutionDialog execDialog;
+    private boolean execBusy;
+    private String lastFinished;
 
     public AgentApp(AgentContext ctx, TrayController.Port trayPort, Terminator terminator) {
         this.ctx = Objects.requireNonNull(ctx);
@@ -82,6 +94,8 @@ public final class AgentApp {
         window.focusFirstAction();
 
         initialNotices = initial.notices().size();
+        ctx.execution().addListener(snap -> SwingUtilities.invokeLater(this::renderExecution));
+        renderExecution();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
         if (tray.state().code() == null) {
@@ -127,6 +141,11 @@ public final class AgentApp {
             @Override
             public void diagnostics() {
                 openDiagnostics();
+            }
+
+            @Override
+            public void execution() {
+                openExecution();
             }
 
             @Override
@@ -323,10 +342,198 @@ public final class AgentApp {
         });
     }
 
+    // ----- execução local (DESKTOP-001) -----
+
+    void openExecution() {
+        if (exiting.get() || bringActiveDialogToFront()) return;
+        execDialog = new ExecutionDialog(window, executionActions());
+        activeDialog = execDialog;
+        refreshSession();
+        renderExecution();
+        execDialog.showDialog();
+        activeDialog = null;
+        execDialog = null;
+    }
+
+    private ExecutionDialog.Actions executionActions() {
+        return new ExecutionDialog.Actions() {
+            @Override
+            public void choosePackage() {
+                NekkoraFileDialogs.selectFolder(execDialog, "Pasta do pacote da automação").ifPresent(AgentApp.this::selectPackage);
+            }
+
+            @Override
+            public void approve() {
+                ExecutionPackage pk = setup.pkg();
+                if (pk == null) return;
+                String what = ExecutionSetup.kindLabel(pk) + " “" + pk.name() + "” · " + ExecutionSetup.modeLabel(pk) + " · impressão digital "
+                        + pk.shortFingerprint() + (pk.origins().isEmpty() ? "" : " · sites declarados: " + String.join(", ", pk.origins()));
+                if (!NekkoraConfirmationDialog.confirm(execDialog, "Aprovar este pacote?", what + ". Ao aprovar, ESTE conteúdo exato poderá ser "
+                        + "executado por você nesta máquina; qualquer mudança nos arquivos exige nova aprovação. Aprovar não inicia nada.", "Aprovar")) {
+                    return;
+                }
+                approveConfirmed();
+            }
+
+            @Override
+            public void choosePython() {
+                NekkoraFileDialogs.openFile(execDialog, "Python do ambiente do projeto", "Python", ctx.windows() ? new String[] {"exe"} : new String[0])
+                        .ifPresent(AgentApp.this::selectPython);
+            }
+
+            @Override
+            public void chooseInput() {
+                NekkoraFileDialogs.openFile(execDialog, "Entrada da automação", "Lista ou entrada", "csv", "xlsx", "json")
+                        .ifPresent(AgentApp.this::selectInput);
+            }
+
+            @Override
+            public void chooseOutput() {
+                NekkoraFileDialogs.selectFolder(execDialog, "Pasta de saída (uma subpasta por execução)").ifPresent(AgentApp.this::selectOutput);
+            }
+
+            @Override
+            public void start() {
+                busy(() -> {
+                    ExecutionSetup s = refreshedSession(setup);
+                    s.request(ExecutionController.DEFAULT_TIMEOUT).ifPresent(req -> {
+                        try {
+                            ExecutionController.Snapshot snap = ctx.execution().start(req);
+                            ctx.log().info(LogEvent.EXEC_STARTED, Field.of("kind", snap.record().kind()), Field.of("pid", snap.record().owner().pid()));
+                        } catch (ExecRefused e) {
+                            ctx.log().warn(LogEvent.EXEC_BLOCKED, e.code());
+                        }
+                    });
+                    return s;
+                });
+            }
+
+            @Override
+            public void cancelRun() {
+                if (!ctx.execution().running()) return;
+                if (!NekkoraConfirmationDialog.confirmDanger(execDialog, "Cancelar a execução?", "O processo e os que ele abriu são encerrados. "
+                        + "O que já foi feito no sistema não é desfeito; a execução fica registrada como cancelada.", "Cancelar execução")) {
+                    return;
+                }
+                if (ctx.execution().cancel()) ctx.log().info(LogEvent.EXEC_CANCEL_REQUESTED);
+            }
+        };
+    }
+
+    /** Pacote escolhido: inspecionado (hashes) fora da EDT; mostra se já está aprovado nesta máquina. */
+    void selectPackage(Path dir) {
+        busy(() -> {
+            try {
+                ExecutionPackage pk = ExecutionPackage.inspect(dir);
+                ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
+                return setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
+            } catch (ExecRefused e) {
+                ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
+                return setup.withPackage(null, e.code(), false);
+            }
+        });
+    }
+
+    /** Aprovação já confirmada pela pessoa (o diálogo de confirmação fica em {@code approve}). */
+    void approveConfirmed() {
+        ExecutionPackage pk = setup.pkg();
+        if (pk == null) return;
+        busy(() -> {
+            try {
+                ctx.execution().approvals().approve(pk, ctx.clock().instant());
+                ctx.log().info(LogEvent.EXEC_PACKAGE_APPROVED, Field.of("kind", pk.kind()));
+                return setup.withApproved(true);
+            } catch (ExecRefused e) {
+                ctx.log().error(LogEvent.EXEC_PACKAGE_APPROVED, e.code());
+                return setup;
+            }
+        });
+    }
+
+    void selectPython(Path py) {
+        busy(() -> {
+            try {
+                PythonRuntime.Probe probe = PythonRuntime.probe(py, ctx.dataDir().root().resolve("execucao").resolve("sonda"));
+                ctx.log().info(LogEvent.EXEC_PYTHON_CHECKED, Field.of("python", probe.pythonVersion()), Field.of("framework", probe.framework().orElse("none")));
+                return setup.withPython(probe, null);
+            } catch (ExecRefused e) {
+                ctx.log().warn(LogEvent.EXEC_PYTHON_CHECKED, e.code());
+                return setup.withPython(null, e.code());
+            }
+        });
+    }
+
+    void selectInput(Path in) {
+        busy(() -> setup.withInput(in));
+    }
+
+    void selectOutput(Path out) {
+        busy(() -> setup.withOutput(out));
+    }
+
+    boolean executionBusy() {
+        return execBusy;
+    }
+
+    /** Ação de preparação fora da EDT; o diálogo fica ocupado até o resultado voltar. */
+    private void busy(Supplier<ExecutionSetup> work) {
+        execBusy = true;
+        renderExecution();
+        background(work, next -> {
+            execBusy = false;
+            setup = next;
+            renderExecution();
+        });
+    }
+
+    private void refreshSession() {
+        background(() -> refreshedSession(setup), next -> {
+            setup = next;
+            renderExecution();
+        });
+    }
+
+    private ExecutionSetup refreshedSession(ExecutionSetup s) {
+        return s.withSession(ctx.execution().session().probe());
+    }
+
+    /** Janela principal (linha de estado) e diálogo, a partir do controlador. Na EDT. */
+    void renderExecution() {
+        java.util.Optional<ExecutionController.Snapshot> snap = ctx.execution().current();
+        if (window != null) window.renderExecution(executionLine(snap));
+        if (execDialog != null && execDialog.isDisplayable()) execDialog.render(setup, snap, execBusy);
+        snap.filter(x -> !x.running() && x.record().state().terminal()).ifPresent(x -> {
+            ExecutionRecord r = x.record();
+            if (r.id().value().equals(lastFinished) || r.owner() == null) return;
+            lastFinished = r.id().value();
+            ctx.log().info(LogEvent.EXEC_FINISHED, Field.of("state", r.state()), Field.of("code", r.code() == null ? "none" : r.code().code()),
+                    Field.of("suspensions", r.suspensions()), Field.of("adopted", r.adopted()));
+        });
+    }
+
+    static String executionLine(java.util.Optional<ExecutionController.Snapshot> snap) {
+        if (snap.isEmpty()) return "Nenhuma execução nesta sessão do Agent.";
+        ExecutionRecord r = snap.get().record();
+        StringBuilder b = new StringBuilder(r.state().label());
+        if (snap.get().running()) {
+            b.append(" · ").append(ExecutionSetup.duration(snap.get().elapsedMillis()));
+            if (r.owner() != null) b.append(" · PID ").append(r.owner().pid());
+        } else if (r.code() != null) {
+            b.append(" · ").append(r.code().code());
+        }
+        return b.toString();
+    }
+
     // ----- saída -----
 
     /** Encerra: remove o ícone, fecha janelas e recursos, libera a trava e termina o processo. Idempotente. */
     public void exit() {
+        if (exiting.get()) return;
+        // execução em andamento: sair a cancela (só a árvore possuída) — a pessoa confirma antes
+        if (ctx.execution().running() && !NekkoraConfirmationDialog.confirmDanger(window, "Sair do Nekkora Agent?", "Há uma execução local em "
+                + "andamento. Sair encerra o processo dela e a registra como cancelada; o que já foi feito no sistema não é desfeito.", "Cancelar e sair")) {
+            return;
+        }
         if (!exiting.compareAndSet(false, true)) return;
         ctx.log().info(LogEvent.LIFE_EXIT_REQUESTED);
         if (tray != null) {
@@ -395,6 +602,14 @@ public final class AgentApp {
 
     JDialog activeDialog() {
         return activeDialog;
+    }
+
+    ExecutionDialog executionDialog() {
+        return execDialog;
+    }
+
+    ExecutionSetup executionSetup() {
+        return setup;
     }
 
     AgentContext context() {

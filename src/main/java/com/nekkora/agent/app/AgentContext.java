@@ -7,6 +7,7 @@ import com.nekkora.agent.core.ShortcutState;
 import com.nekkora.agent.core.TrayState;
 import com.nekkora.agent.diagnostics.AgentLog;
 import com.nekkora.agent.diagnostics.DiagnosticReport;
+import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.storage.AgentConfig;
@@ -39,13 +40,14 @@ public final class AgentContext implements AutoCloseable {
     private final ShortcutLauncher launcher;
     private final ShortcutPolicy.FileProbe probe;
     private final boolean windows;
+    private final ExecutionController execution;
     private volatile TrayState tray = TrayState.PENDING;
     private volatile Long startupMillis;
     private boolean closed;
 
     AgentContext(BuildInfo build, AgentDataDir dataDir, InstanceLock lock, AgentLog log, ErrorJournal journal, ConfigStore config,
             Optional<String> machineName, AgentOptions options, Clock clock, Optional<Instant> processStart,
-            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows) {
+            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows, ExecutionController execution) {
         this.build = build;
         this.dataDir = dataDir;
         this.lock = lock;
@@ -60,6 +62,12 @@ public final class AgentContext implements AutoCloseable {
         this.launcher = launcher;
         this.probe = probe;
         this.windows = windows;
+        this.execution = execution;
+    }
+
+    /** Execução local supervisionada (DESKTOP-001). */
+    public ExecutionController execution() {
+        return execution;
     }
 
     public BuildInfo build() {
@@ -151,7 +159,19 @@ public final class AgentContext implements AutoCloseable {
                 System.getProperty("java.version", ""), System.getProperty("java.vendor", ""),
                 System.getProperty("os.name", ""), System.getProperty("os.version", ""), System.getProperty("os.arch", ""),
                 machineName, tray, config.state(), log.state(), dataDir.kind(), lock.isHeld(),
-                studioView(c).state(), platformView(c).state(), journal.snapshot(), sessionStart, startupMillis);
+                studioView(c).state(), platformView(c).state(), journal.snapshot(), sessionStart, startupMillis, executionFacts());
+    }
+
+    /** Fatos da execução local para o diagnóstico (lista fechada; fora da EDT: consulta a sessão). */
+    private DiagnosticReport.ExecFacts executionFacts() {
+        com.nekkora.agent.exec.SessionProbe.Session s = execution.session().probe();
+        String session = s.usable() ? "INTERATIVA" : s.problem() == com.nekkora.agent.core.ErrorCode.EXEC_SESSION_LOCKED ? "BLOQUEADA" : "INDISPONIVEL";
+        int records = execution.store().all().size();
+        return execution.current().map(snap -> {
+            com.nekkora.agent.exec.ExecutionRecord r = snap.record();
+            return new DiagnosticReport.ExecFacts(r.state().name(), r.code() == null ? null : r.code().code(), r.kind() == null ? null : r.kind().name(),
+                    snap.running(), snap.elapsedMillis(), r.suspensions(), r.locks(), r.adopted(), records, session);
+        }).orElse(new DiagnosticReport.ExecFacts("NENHUMA", null, null, false, null, 0, 0, false, records, session));
     }
 
     /** Fecha o log e libera a trava (idempotente). O arquivo da trava permanece. */
@@ -159,6 +179,7 @@ public final class AgentContext implements AutoCloseable {
     public synchronized void close() {
         if (closed) return;
         closed = true;
+        execution.close(); // uma execução ainda ativa é cancelada (só a árvore possuída) antes de liberar a trava
         log.close();
         lock.close();
     }

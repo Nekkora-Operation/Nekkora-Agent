@@ -160,8 +160,9 @@ public final class ExecutionController implements AutoCloseable {
                 throw blocked(new ExecutionRecord(id, null, "pacote", "sha256:" + "0".repeat(64), ExecutionState.READY, null, now, null, null, null, null,
                         Map.of(), 0, 0, false, 0), e.code());
             }
-            ExecutionRecord r = new ExecutionRecord(id, pkg.kind(), pkg.name(), pkg.fingerprint(), ExecutionState.READY, null, now, null, null, null, null,
-                    Map.of(), 0, 0, false, 0);
+            // no registro, o pacote é identificado só pelo tipo e pela impressão digital (o nome da pasta pode ser de um cliente)
+            ExecutionRecord r = new ExecutionRecord(id, pkg.kind(), "pacote " + pkg.shortFingerprint(), pkg.fingerprint(), ExecutionState.READY, null, now,
+                    null, null, null, null, Map.of(), 0, 0, false, 0);
             // a impressão digital conferida AGORA precisa ser a que a pessoa escolheu e aprovou
             if (!pkg.fingerprint().equals(req.fingerprint())) throw blocked(r, ErrorCode.EXEC_PACKAGE_CHANGED);
             if (!approvals.approved(pkg)) throw blocked(r, ErrorCode.EXEC_NOT_APPROVED);

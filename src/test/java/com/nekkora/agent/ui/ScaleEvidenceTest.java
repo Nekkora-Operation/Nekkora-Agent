@@ -59,6 +59,17 @@ class ScaleEvidenceTest {
             check(h, d, "Diagnóstico");
             capture(d, "A12-diagnostico-" + pct);
             h.run(d::dispose);
+            h.waitFor(() -> h.app.activeDialog() == null, "fechado");
+
+            // DESKTOP-001: janela Execução local
+            h.later(h.app::openExecution);
+            h.waitFor(() -> h.app.activeDialog() instanceof ExecutionDialog x && x.isShowing(), "Execução local");
+            JDialog x = h.edt(h.app::activeDialog);
+            h.waitFor(() -> h.app.executionSetup().session() != null, "sessão verificada");
+            h.settle();
+            check(h, x, "Execução local");
+            capture(x, "D12-execucao-local-" + pct);
+            h.run(x::dispose);
         }
     }
 

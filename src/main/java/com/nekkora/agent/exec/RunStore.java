@@ -108,7 +108,7 @@ public final class RunStore {
             if (!ExecutionRecord.SCHEMA.equals(m.get("schema")) || !ExecutionRecord.VERSION.equals(m.get("version"))) return Optional.empty();
             ProcessOwner owner = null;
             if (m.get("process") instanceof Map<?, ?> p && p.get("pid") instanceof Long pid && p.get("start") instanceof Long start
-                    && p.get("executable") instanceof String exe) {
+                    && p.get("executableDigest") instanceof String exe && exe.matches("sha256:[0-9a-f]{64}")) {
                 owner = new ProcessOwner(pid, start, exe);
             }
             Map<String, Long> counts = new LinkedHashMap<>();
@@ -149,8 +149,8 @@ public final class RunStore {
         field(b, "started", r.started() == null ? null : r.started().toString());
         field(b, "ended", r.ended() == null ? null : r.ended().toString());
         if (r.owner() != null) {
-            b.append("  \"process\": {\"pid\": ").append(r.owner().pid()).append(", \"start\": ").append(r.owner().startMillis()).append(", \"executable\": ")
-                    .append(StrictJson.quote(r.owner().executable())).append("},\n");
+            b.append("  \"process\": {\"pid\": ").append(r.owner().pid()).append(", \"start\": ").append(r.owner().startMillis()).append(", \"executableDigest\": ")
+                    .append(StrictJson.quote(r.owner().executableDigest())).append("},\n");
         }
         b.append("  \"exitCode\": ").append(r.exitCode() == null ? "null" : r.exitCode()).append(",\n");
         b.append("  \"counts\": {");

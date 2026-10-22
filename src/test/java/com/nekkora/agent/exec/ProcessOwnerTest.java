@@ -82,8 +82,8 @@ class ProcessOwnerTest {
     void pidReutilizado() throws Exception {
         Process p = track(start(false));
         ProcessOwner real = ProcessOwner.of(p, java());
-        ProcessOwner reused = new ProcessOwner(real.pid(), real.startMillis() - 60_000, real.executable());
-        ProcessOwner other = new ProcessOwner(real.pid(), real.startMillis(), "C:\\Outro\\programa.exe");
+        ProcessOwner reused = new ProcessOwner(real.pid(), real.startMillis() - 60_000, real.executableDigest());
+        ProcessOwner other = new ProcessOwner(real.pid(), real.startMillis(), ProcessOwner.digest("C:\\Outro\\programa.exe"));
         assertFalse(reused.alive());
         assertFalse(other.alive());
         assertEquals(0, reused.terminate(Duration.ofSeconds(1)));
