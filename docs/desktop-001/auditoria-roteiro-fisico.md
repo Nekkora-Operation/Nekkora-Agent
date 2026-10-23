@@ -7,18 +7,18 @@ fontes para conferência independente é gerado pelo comando da §5.
 
 ## 1. Arquivos executados (no commit que introduziu esta auditoria)
 
-| Arquivo | Papel | Linhas | SHA-256 (checkout Windows) |
+| Arquivo | Papel | Linhas | SHA-256 (conteúdo no `git archive`, igual em qualquer sistema) |
 |---|---|---|---|
 | `tools/homologation/fisica-g2-a13.ps1` | roteiro | 383 | `b438e4bba1b586e4bfbf1fe46ffae2a2888ca3514d01c5f85d0d9577742b4751` |
 | `tools/homologation/NkHomolog.psm1` | janelas, bandeja, teclado e mouse | 193 | `1caac1f179e7e3bc97ce423eaa7bfedbc63583169b05c5f4abd9f1c1e949054f` |
 | `tools/homologation/wincap.ps1` | captura das janelas P-* | 51 | `2f79a46256c9155d0cb098b31ebb334f609e3de7db1904e69706e268d43180ff` |
-| `src/test/java/com/nekkora/agent/ui/DesktopHomologation.java` | semear-obs e sessao-cenario | 619 | `bfcfccba33d384c73ef98510eda853a47273664fa7071a5f921491304871deff` |
-| `src/test/java/com/nekkora/agent/ui/DesktopHarness.java` | abre o Agent real na JVM do cenário | 237 | `cd51254fe7a64c6e81fb844ee1f620752156e669b54308c433cc47039c31370a` |
-| `tools/lab/scripts/lab_comum.py` | apoio dos laboratórios | 39 | `042034a4c2bd537616036afc3ac0b501d2382abecf3d5700d12c73da0691c718` |
-| `tools/lab/scripts/lab_sessao_sucesso.py` | S1 | 11 | `03ff21226bec06c69433809990b6cf33a24f2b6910c2dfafa48cd9c123e9949d` |
-| `tools/lab/scripts/lab_sessao_sem_protocolo.py` | S2 | 11 | `a8149257ed91a4264d62553d6e8000c0ebd4737d56225a616cc619a3f975fc42` |
-| `tools/lab/scripts/lab_sessao_falha.py` | S3 | 14 | `372ac2b313a79ec7cc1d872228ef0026b8aa34cacc211358b03c979f1efb5364` |
-| `tools/lab/scripts/obs_studio_main.py` | P (eventos reais do nekkora_rpa) | 109 | `9d6982cfed7d8c7c421fa5ff825a55580abd0e448407a456707cf163f8563e92` |
+| `src/test/java/com/nekkora/agent/ui/DesktopHomologation.java` | semear-obs e sessao-cenario | 619 | `f6cdc7a22230327ff32825d7f8c23e279f76617010a683e06a32dee26309a021` |
+| `src/test/java/com/nekkora/agent/ui/DesktopHarness.java` | abre o Agent real na JVM do cenário | 237 | `ac6bf6066e1f8c9048a6958804dab0d3badeee7d47d3e4c9bb26e2fdbcfec6c5` |
+| `tools/lab/scripts/lab_comum.py` | apoio dos laboratórios | 39 | `3f811281835647cfab5d9e50477ee02ea6b544e952047799d76742f276fcd9a2` |
+| `tools/lab/scripts/lab_sessao_sucesso.py` | S1 | 11 | `fe3c095b18d764f25276760b4ae3ca1fc5a1538d6f55d42eac061afd65cfba7c` |
+| `tools/lab/scripts/lab_sessao_sem_protocolo.py` | S2 | 11 | `e693166be18de80d72de73fe07c4d5909d8f25303fdd796c4c2216722d87bb53` |
+| `tools/lab/scripts/lab_sessao_falha.py` | S3 | 14 | `1df4e5b0d892de8aae0fbe9f51aba232a436edc0048325cd9cdd9c01b22dcb37` |
+| `tools/lab/scripts/obs_studio_main.py` | P (eventos reais do nekkora_rpa) | 109 | `784ebdbb56ec7a3137c058fdb6639baa5d4ab5534b53ae1dd0fb3b67be8fc609` |
 
 Nenhum outro arquivo do repositório é executado pelo roteiro. O executável do Agent vem do ZIP de `target\dist`, que o
 roteiro confere pelo `.sha256` antes de extrair (primeira verificação).
