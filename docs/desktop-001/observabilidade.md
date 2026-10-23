@@ -82,7 +82,8 @@ Opcionais ausentes são omitidos. Não existe campo livre (`message`, `detail`, 
 ### 3.2 Códigos do coletor (telemetria; nunca mudam o desfecho)
 `COLLECTION_STARTED`, `COLLECTION_RESUMED` (reinício), `COLLECTION_COMPLETED` (com `counts`: `events`,
 `framework_events`, `dropped`, `invalid`, `excluded_fields`, `unknown_fields`, `unknown_codes`, `restarts`),
-`EVENT_GAP` (`AGT-OBS-005` limite do histórico; `AGT-OBS-006` limite de 500 do supervisor), `EVENT_INVALID`
+`EVENT_GAP` (`AGT-OBS-005` limite do histórico; `AGT-OBS-006` limite de 500 do supervisor; `AGT-OBS-009` eventos
+que não puderam ser gravados e foram descartados, com `counts.lost` — ver §4.1), `EVENT_INVALID`
 (`MALFORMED_JSON`, `LINE_TOO_LONG`, `ENCODING_INVALID`, `PARTIAL_LINE`, `SCHEMA_MISMATCH`, `SCHEMA_UNSUPPORTED`,
 `FIELD_INVALID`, `NESTING_TOO_DEEP`, `STALE_EVENT`, `CORRELATION_INVALID`, `CORRELATION_CONFLICT`),
 `SOURCE_UNAVAILABLE` (`AGT-OBS-001`), `SOURCE_AVAILABLE`, `SOURCE_UNSAFE` (`AGT-OBS-003`), `SOURCE_REPLACED`
@@ -124,6 +125,24 @@ oferece "Ordem de observação" (padrão) e "Ordem de ocorrência"; um evento cu
 | Execuções guardadas | 50 terminadas (retenção existente do `RunStore`) | a pasta inteira (incluindo `atividade.jsonl`) é apagada |
 | `eventos.jsonl` do supervisor | 500 linhas (inalterado) | a 500ª linha passa a ser o marcador `EVENTS_LIMIT_REACHED` → `EVENT_GAP/AGT-OBS-006` (a perda deixa de ser silenciosa) |
 
+### 4.1 Gravação que falha (OBS-PERSISTENCE-HARDENING, 23/10)
+
+Motivo: num ensaio intermediário do roteiro físico, uma leitura com compartilhamento restritivo (`ReadAllLines`)
+fez o acréscimo do `atividade.jsonl` falhar e 4 linhas faltaram no disco (a tela mostrou a lacuna corretamente).
+
+| Item | Valor | Comportamento |
+|---|---|---|
+| Linhas aceitas e ainda não gravadas | fila em ordem, com a `sequence` já atribuída; até 4.096 linhas **ou** 2 MiB | a tela mostra os eventos (memória) e o aviso "Gravação do histórico pendente" (`AGT-OBS-009`); a linha do tempo fica INCOMPLETA (`STORE_PENDING`) até a prova no disco |
+| Novas tentativas | até 12, com intervalo crescente 200 ms → 5 s (teto), só na linha da coleta | nunca na interface, nunca em laço; uma última tentativa ao fechar o Agent |
+| Conferência antes de regravar | o que está no arquivo depois da última gravação confirmada tem de ser o COMEÇO exato das pendentes | linhas inteiras já gravadas saem da fila (confirmação perdida não duplica); linha gravada pela metade é completada; fim que não confere (outro programa escreveu) → nada é colado |
+| Desistência (tentativas esgotadas, fila cheia ou fim que não confere) | pendentes descartadas do disco e contadas | `EVENT_GAP` com `AGT-OBS-009` e `counts.lost` entra na fila; a lacuna de `sequence` fica no disco; a linha do tempo continua INCOMPLETA (`STORE_FAILED` e `SEQUENCE_GAP`) inclusive depois de um reinício |
+| Queda do Agent com pendentes | — | na reabertura, a próxima `sequence` e as posições das origens saem do DISCO: o que estava só na memória é relido das origens, sem lacuna e sem repetição |
+| Log do Agent | `ACTIVITY_STORE_DELAYED` (`AGT-OBS-009`, `pending`), `ACTIVITY_STORE_RECOVERED`, `ACTIVITY_STORE_LOST` (`AGT-OBS-009`, `lost`) | só transições e contagens (com o identificador da execução); nunca caminho, conteúdo de evento ou exceção com texto; uma falha do log não volta para a coleta |
+
+A automação nunca é tocada: o registro do supervisor (`estado.json`, `eventos.jsonl`) e o desfecho continuam os do
+`ExecutionController`, que não foi alterado; nenhuma nova tentativa vale para eventos de negócio, processos ou
+execuções. O envelope 1.0.0 não mudou (`EVENT_GAP` e `AGT-OBS-009` já existiam; `counts` é aberto).
+
 **Entrega futura**: com armazenamento limitado, NÃO há garantia de entrega sem perdas. Um intervalo descartado
 (`EVENT_GAP`) ou purgado (`HISTORY_PURGED`) não poderá ser reenviado; o transportador futuro precisa de ACK por
 `sequence` e de retenção que considere o que ainda não foi confirmado (§8).
@@ -162,6 +181,7 @@ oferece "Ordem de observação" (padrão) e "Ordem de ocorrência"; um evento cu
   sem retransmitir eventos e sem relançar o processo (OBS-G5). Execuções anteriores à OBS-001 (sem `atividade.jsonl`)
   são coletadas uma vez a partir das mesmas origens.
 - Fechar a janela não interrompe execução nem coleta.
+- Gravação que falha: fila limitada e conferida, novas tentativas espaçadas na linha da coleta (§4.1).
 
 ## 7. Interface (aba "Atividade")
 
@@ -187,7 +207,8 @@ como "Falha ao ler a atividade" e é repetida em 5 s (antes a aba ficava esperan
 **Completude da linha do tempo (revisão 23/10).** `ActivityView.completeness(saúde, eventos)` — sem Swing — devolve
 `COMPLETE`, `IN_PROGRESS`, `PENDING` ou `INCOMPLETE` com os motivos (cada um com código): limite de eventos
 (`AGT-OBS-005`), limite de 500 do supervisor (`AGT-OBS-006`), linhas recusadas (`AGT-OBS-002`), lacuna de sequência ou
-linha ilegível (`AGT-OBS-013`), histórico não gravado (`AGT-OBS-009`), atividade removida (`AGT-OBS-010`), etapas do
+linha ilegível (`AGT-OBS-013`), histórico não gravado e descartado (`AGT-OBS-009`), gravação ainda pendente
+(`AGT-OBS-009`, `STORE_PENDING`), atividade removida (`AGT-OBS-010`), etapas do
 Framework interrompidas (`AGT-OBS-004`) ou indisponíveis (`AGT-OBS-001`), registro do supervisor deixou de ser lido
 (`AGT-OBS-001`). "Completa" só com a coleta encerrada e nenhum motivo; coleta não encerrada é `PENDING`, nunca completa.
 Na tela: aviso "Linha do tempo incompleta" (primeiro aviso, com todos os motivos), linha "Linha do tempo" no resumo,

@@ -24,6 +24,8 @@ Windows real, exceto G2/A13/OBS-G6 com a titular presente** (bloqueio real da te
 | `27b0b64` | OBS-001: capturas da regressão de desktop |
 | `c4f360b` | **Revisão da titular (23/10)**: lista vazia × falha de leitura (`AGT-OBS-014`), completude explícita da linha do tempo, resposta sempre entregue à aba, roteiro físico `fisica-g2-a13.ps1` + `sessao-cenario` + laboratórios de sessão |
 | `a59aad3` | Teste `a03` da AGENT-001: toque de Alt antes do clique real (foreground lock) |
+| `02c1a8c`, `a38ab4a` | Auditoria do roteiro físico: 4 defeitos do roteiro corrigidos; SHA-256 dos arquivos executados |
+| `5c3fd6e` | **OBS-PERSISTENCE-HARDENING** (autorizada pela titular em 23/10): gravação do `atividade.jsonl` que falha fica pendente, é conferida e gravada uma vez |
 | (este)   | Revisão: documentação, ensaio do roteiro físico, regressões |
 
 Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
@@ -143,7 +145,32 @@ Ocorrências desta rodada, registradas em vez de escondidas:
   `atividade.jsonl` e o `estado.json` travando a escrita do Agent. Nenhum código do produto mudou; as suítes do `a59aad3`
   continuam valendo. Ensaio refeito: 25/25.
 
-### 8.2 Entrega anterior (OBS-001)
+### 8.2 OBS-PERSISTENCE-HARDENING (23/10, commit `5c3fd6e`)
+
+| Suíte | Executados | Falhas | Pulados (identificados) |
+|---|---|---|---|
+| Windows `./mvnw -o clean verify` (dentro de `tools/package-windows.ps1`; ZIP SHA-256 `720112b5176f0d67fc3e3a55d4113893f0ce7a0fec723f4d89041bbad8d42b1b`) | 184 (175 + 9 novos) | 0 | 1 — `SourceFileTest.symbolicLinksAreRefused` (o mesmo de antes) |
+| Windows `./mvnw -o -Pdesktop clean verify` + `ScaleEvidenceTest` 150% e 200% | 205 + 1 + 1 | 0 | o mesmo 1 |
+| Linux `eclipse-temurin:21-jdk-noble`, `docker run --init` | 184 | 15 (= as 15 da base) | 18 = os 16 anteriores + os 2 testes novos só do Windows (leitor real que impede escrita) — `evidencias/OBS-linux/resumo-hardening.txt` |
+| Ensaio do roteiro físico (sem bloqueio/suspensão), comando exato do guia | 25 verificações | 0 | bloqueio/suspensão NÃO EXERCIDOS — `evidencias/G2-A13-ensaio` |
+
+Testes novos (`ActivityPersistenceTest`, 9, e `ActivityDesktopTest.gravacaoPendenteFicaAVista`): leitor real do Windows
+com `ExtendedOpenOption.NOSHARE_WRITE` — (a) o acréscimo falha de verdade, (b) pendência visível na saúde, na
+completude (`STORE_PENDING`), na tela (`O13-gravacao-pendente.png`) e no diagnóstico (uma transição, não cada
+tentativa), (c) o leitor libera, (d) as pendentes entram na ordem, uma vez, com a mesma sequência, linha do tempo
+COMPLETA só depois disso, (e) `estado.json` e `eventos.jsonl` do supervisor idênticos durante todo o bloqueio;
+queda do Agent com pendentes (relidas das origens, sem lacuna nem repetição); falha persistente (desiste em 12
+tentativas, perda contada, `EVENT_GAP`/`AGT-OBS-009` gravado e lacuna mantida depois de reabrir); intervalo entre
+tentativas (sem laço); fila cheia (limite, perda contada); escrita parcial (completada, não repetida); confirmação
+perdida (nada regravado); arquivo alterado por outro (nada colado; resto alheio vira linha ilegível). Os testes acharam
+2 defeitos do próprio desenho antes do commit, corrigidos: lote grande e saudável descartado como "fila cheia"; ordem
+da memória quebrada por um descarte no meio do lote.
+
+Risco residual registrado: se o arquivo ficar sem escrita por mais tempo do que as 12 tentativas (~41 s) ou a fila
+encher, os eventos dessa janela ficam só na memória da sessão e faltam no disco; isso é contado, gravado como
+`EVENT_GAP`/`AGT-OBS-009` e a linha do tempo fica INCOMPLETA — nunca escondido.
+
+### 8.3 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
 |---|---|---|---|---|---|

@@ -90,11 +90,10 @@ Pré-condições que IMPEDEM o roteiro de começar (sai com código 2 sem abrir 
    (incompleta)", com "119 iniciadas · 119 concluídas" (a transação perdida não foi inventada). A captura está guardada
    fora do repositório; o ensaio inteiro foi substituído pelo da §4.
 
-   **Observação para decisão da titular (não alterado; fora do gate):** quando o acréscimo do `atividade.jsonl` falha,
-   o `ActivityLog` mantém os eventos em memória e a lacuna é sinalizada, mas não tenta gravá-los de novo, e a falha não
-   vai para o `agent.log`. Um leitor externo comum no Windows (antivírus, indexador, editor) pode provocar isso.
-   Gravar de novo o pendente no lote seguinte e registrar `AGT-OBS-009` no log seria uma melhoria pequena, mas muda
-   código do produto com o gate físico aberto; fica para a sua decisão.
+   **Decisão da titular (23/10): correção AUTORIZADA como OBS-PERSISTENCE-HARDENING**, implementada no commit
+   `5c3fd6e` (só a persistência da telemetria local: `ActivityLog`, saúde/completude, aviso na tela e diagnóstico no
+   log; `ExecutionController`, envelope, Framework, Studio e Platform intactos). Descrição em `observabilidade.md`
+   §4.1; resultados em `relatorio.md` §8.1.
 
 Ensaio completo do roteiro corrigido: ver `homologacao-fisica.md` §4.
 

@@ -73,10 +73,11 @@ Ensaio sem a pessoa (confere a automação; bloqueio/suspensão ficam "NÃO EXER
 
 ## 4. Resultados
 
-### Ensaio sem a pessoa (23/10, Agent do commit `a59aad3`, ZIP SHA-256 `ff5fa8be…5e07`, roteiro corrigido pela auditoria) — `evidencias/G2-A13-ensaio`
+### Ensaio sem a pessoa (23/10, Agent do commit `5c3fd6e` com OBS-PERSISTENCE-HARDENING, ZIP SHA-256 `720112b5…2b1b`, roteiro corrigido pela auditoria) — `evidencias/G2-A13-ensaio`
 
 Refeito depois da [auditoria do roteiro](auditoria-roteiro-fisico.md), com o comando exato da §3 (`$py` relativo).
-Os dois ensaios intermediários da auditoria reprovaram por defeitos do roteiro (defeitos 3 e 4 da auditoria) e
+Refeito de novo no build com a correção da gravação do histórico (`5c3fd6e`): 25/25, nenhum aviso de gravação no
+`agent.log`. Os dois ensaios intermediários da auditoria reprovaram por defeitos do roteiro (defeitos 3 e 4 da auditoria) e
 não são evidência de aceite.
 
 **25/25 verificações, 0 falhas; bloqueio e suspensão NÃO EXERCIDOS** (não é a homologação física; só prova que o
