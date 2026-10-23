@@ -516,7 +516,14 @@ class AgentDesktopTest {
             h.run(() -> w.dispatchEvent(new WindowEvent(w, WindowEvent.WINDOW_CLOSING)));
             return false;
         }
+        // o Windows só entrega o primeiro plano a quem recebeu entrada: um toque de Alt libera o "foreground lock"
+        // (sem isso, outra janela por cima — ex.: o terminal — recebe o clique real)
+        Robot alt = new Robot();
+        alt.keyPress(java.awt.event.KeyEvent.VK_ALT);
+        alt.keyRelease(java.awt.event.KeyEvent.VK_ALT);
         h.run(w::toFront);
+        h.run(w::requestFocus);
+        h.waitFor(w::isActive, "janela em primeiro plano");
         Point p = h.edt(() -> {
             Point s = close.getLocationOnScreen();
             return new Point(s.x + close.getWidth() / 2, s.y + close.getHeight() / 2);
