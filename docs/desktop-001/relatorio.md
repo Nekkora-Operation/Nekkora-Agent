@@ -137,6 +137,12 @@ Ocorrências desta rodada, registradas em vez de escondidas:
   cenário. Este último explicou as duas falhas intermitentes de "coleta encerrada"; a aba não tinha defeito. Mesmo
   assim, a aba ganhou proteção contra resposta perdida (`ActivityDesktopTest.leituraPerdidaNaoCongelaAAba`).
 
+- Auditoria do roteiro físico pedida na revisão de 23/10 (`auditoria-roteiro-fisico.md`): mais 4 defeitos do PRÓPRIO
+  roteiro, todos corrigidos. São eles: a limpeza em caso de erro não encerrava os laboratórios Python; as capturas
+  `P-*.png` podiam pegar uma janela sobreposta; o `$py` relativo do guia impedia a adoção; e o roteiro lia o
+  `atividade.jsonl` e o `estado.json` travando a escrita do Agent. Nenhum código do produto mudou; as suítes do `a59aad3`
+  continuam valendo. Ensaio refeito: 25/25.
+
 ### 8.2 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |

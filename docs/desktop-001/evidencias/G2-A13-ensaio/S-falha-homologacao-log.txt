@@ -1,9 +1,9 @@
 OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
-  estado [antes] {"momento":"antes","quando_utc":"2026-10-23T15:40:55.761603100Z","execucao":"ex-8b16ee88889d4cf9f3ea591024b84906","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
-EM_ANDAMENTO falha ex-8b16ee88889d4cf9f3ea591024b84906
+  estado [antes] {"momento":"antes","quando_utc":"2026-10-23T17:26:32.490652500Z","execucao":"ex-e29c89687ac12987ad777f4a8e73da1c","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
+EM_ANDAMENTO falha ex-e29c89687ac12987ad777f4a8e73da1c
 OK    falha: a janela de execução continuou aberta do início ao fim (nada a fechou)
 OK    falha: aba Atividade mostra a coleta encerrada
-  estado [fim] {"momento":"fim","quando_utc":"2026-10-23T15:46:56.450722900Z","execucao":"ex-8b16ee88889d4cf9f3ea591024b84906","estado":"FAILED","codigo":"AGT-EXE-022","bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
+  estado [fim] {"momento":"fim","quando_utc":"2026-10-23T17:32:33.620449300Z","execucao":"ex-e29c89687ac12987ad777f4a8e73da1c","estado":"FAILED","codigo":"AGT-EXE-022","bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
   falha: estado FAILED · código AGT-EXE-022 · bloqueios 0 · suspensões 0 · saída 1
   NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
 OK    falha: classificação FAILED = esperada FAILED

@@ -43,11 +43,14 @@ em `<Out>\bruto`, fora do repositório.
 
 ## 3. Como rodar (titular presente)
 
+Antes: ler [`auditoria-roteiro-fisico.md`](auditoria-roteiro-fisico.md), que lista cada efeito do roteiro na máquina e traz o
+SHA-256 dos arquivos executados.
+
 Preparação (uma vez, na raiz do repositório):
 
 ```powershell
 .\tools\package-windows.ps1                     # clean verify + ZIP do Agent (target\dist)
-.\mvnw -o -q dependency:build-classpath "-Dmdep.outputFile=target\cp.txt"
+.\mvnw -o -q test-compile dependency:build-classpath "-Dmdep.outputFile=target\cp.txt"
 $cp = "target\test-classes;target\classes;" + (Get-Content target\cp.txt)
 $py = "..\Nekkora-RPA-Framework\.venv\Scripts\python.exe"
 ```
@@ -70,7 +73,11 @@ Ensaio sem a pessoa (confere a automação; bloqueio/suspensão ficam "NÃO EXER
 
 ## 4. Resultados
 
-### Ensaio sem a pessoa (23/10, commit `a59aad3`, ZIP SHA-256 `ff5fa8be…5e07`) — `evidencias/G2-A13-ensaio`
+### Ensaio sem a pessoa (23/10, Agent do commit `a59aad3`, ZIP SHA-256 `ff5fa8be…5e07`, roteiro corrigido pela auditoria) — `evidencias/G2-A13-ensaio`
+
+Refeito depois da [auditoria do roteiro](auditoria-roteiro-fisico.md), com o comando exato da §3 (`$py` relativo).
+Os dois ensaios intermediários da auditoria reprovaram por defeitos do roteiro (defeitos 3 e 4 da auditoria) e
+não são evidência de aceite.
 
 **25/25 verificações, 0 falhas; bloqueio e suspensão NÃO EXERCIDOS** (não é a homologação física; só prova que o
 roteiro funciona de ponta a ponta).
@@ -87,7 +94,7 @@ mostrou "O Nekkora Agent já está aberto" e saiu com código 3 (`P-3-segunda-ab
 usuário, máquina ou caminho nos textos. No instantâneo `antes` dos cenários, `eventos_atividade` é 0 porque é tirado
 antes da primeira atualização da aba (400 ms).
 
-Defeitos do roteiro encontrados pelos ensaios e corrigidos: ver `relatorio.md` §8.1.
+Defeitos do roteiro encontrados pelos ensaios e corrigidos: ver `relatorio.md` §8.1 e `auditoria-roteiro-fisico.md` §4.
 
 ### Rodada física com a titular
 

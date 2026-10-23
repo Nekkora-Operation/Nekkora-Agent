@@ -5,14 +5,14 @@ OK    Python do venv do Framework existe
      energia (powercfg /a, início): Os seguintes estados de suspensão estão disponíveis neste sistema: | Espera (S3) | Hibernar
 OK    P: execução sintética com eventos do Framework em andamento (registro RUNNING; o Agent vai adotá-la)
 OK    P: Agent empacotado abriu sem Java no PATH
-OK    P: execução ADOTADA, processo vivo (PIDs da execução: 43220,42876), nada relançado
+OK    P: execução ADOTADA, processo vivo (PIDs da execução: 42132,44004), nada relançado
 OK    P: aba Atividade aberta pelo teclado (Alt+E, Alt+T)
-     P [antes] estado RUNNING · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 21 (16 do Framework)
+     P [antes] estado RUNNING · Agent 2 processo(s) [41296,44756] · ícones 1 · LIFE_START 1 · atividade 21 (16 do Framework)
 OK    P antes: 2 processos do Agent (lançador + JVM), 1 ícone na bandeja, 1 LIFE_START
 OK    S sucesso: execução lançada pelo botão Iniciar e em andamento
 OK    S sem_protocolo: execução lançada pelo botão Iniciar e em andamento
 OK    S falha: execução lançada pelo botão Iniciar e em andamento
-     P [execucoes-iniciadas] estado RUNNING · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 53 (48 do Framework)
+     P [execucoes-iniciadas] estado RUNNING · Agent 2 processo(s) [41296,44756] · ícones 1 · LIFE_START 1 · atividade 53 (48 do Framework)
 OK    S sucesso: roteiro da janela real sem falhas (RESULTADO: 10 verificações, 0 falha(s))
         [sucesso] OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
         [sucesso] OK    sucesso: a janela de execução continuou aberta do início ao fim (nada a fechou)
@@ -49,11 +49,11 @@ OK    S falha: roteiro da janela real sem falhas (RESULTADO: 10 verificações, 
         [falha] OK    falha: o Agent continuou o mesmo processo (um único LIFE_START)
         [falha] OK    falha: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (FAILED) na linha do tempo
         [falha] OK    falha: linha do tempo COMPLETE [] (genérico: completa)
-     P [depois] estado SUCCEEDED · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
-OK    P A13: mesmos processos do Agent antes e depois ([10408,32672] = [10408,32672])
+     P [depois] estado SUCCEEDED · Agent 2 processo(s) [41296,44756] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
+OK    P A13: mesmos processos do Agent antes e depois ([41296,44756] = [41296,44756])
 OK    P A13: um único ícone na bandeja depois da retomada (1)
 OK    P A13: nenhum novo LIFE_START (1)
-     P [depois-da-segunda-abertura] estado SUCCEEDED · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
+     P [depois-da-segunda-abertura] estado SUCCEEDED · Agent 2 processo(s) [41296,44756] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
 OK    P A13: segunda abertura mostrou o aviso e saiu (código 3); continuam os mesmos 2 processos, 1 ícone, 1 LIFE_START
 OK    P: execução adotada terminou pelo protocolo: SUCCEEDED
 OK    P OBS-G6: sequência contínua 1..975; Framework 968 eventos = 968 linhas originais, sem repetição

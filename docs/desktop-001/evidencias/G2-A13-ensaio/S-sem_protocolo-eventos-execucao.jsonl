@@ -1,3 +1,3 @@
-{"at": "2026-10-23T15:40:55.365338500Z", "event": "STARTING", "session": 1, "mode": "LAB", "kind": "LAB_GENERIC"}
-{"at": "2026-10-23T15:40:55.395142200Z", "event": "RUNNING", "pid": 43660}
-{"at": "2026-10-23T15:46:55.655219300Z", "event": "OUTCOME_UNKNOWN", "exit": 0, "protocol": false, "output_bytes": 30, "code": "AGT-EXE-021"}
+{"at": "2026-10-23T17:26:32.158783Z", "event": "STARTING", "mode": "LAB", "kind": "LAB_GENERIC", "session": 1}
+{"at": "2026-10-23T17:26:32.185729800Z", "event": "RUNNING", "pid": 38476}
+{"at": "2026-10-23T17:32:32.471887500Z", "event": "OUTCOME_UNKNOWN", "exit": 0, "protocol": false, "output_bytes": 30, "code": "AGT-EXE-021"}
