@@ -406,7 +406,9 @@ final class ActivityPanel extends JPanel {
             Instant start = r.started() != null ? r.started() : r.created();
             kv.add("Início", WHEN.format(start));
             kv.add("Tempo decorrido", ExecutionSetup.duration(elapsed(r)));
-            if (r.code() != null) kv.add("Motivo técnico", r.code().description() + " (" + r.code().code() + ")");
+            // sucesso com código (ex.: adotada depois de reinício) é uma observação, não o motivo de uma falha
+            if (r.code() != null) kv.add(r.state() == com.nekkora.agent.exec.ExecutionState.SUCCEEDED ? "Observação" : "Motivo técnico",
+                    r.code().description() + " (" + r.code().code() + ")");
         }
         if (health != null && health.frameworkExecutionId() != null) kv.addMono("Execução do Framework (correlação)", health.frameworkExecutionId());
         ActivityView.Progress p = ActivityView.progress(all);

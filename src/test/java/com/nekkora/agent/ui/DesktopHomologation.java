@@ -153,6 +153,7 @@ public final class DesktopHomologation {
             choose(h, () -> h.app.selectPython(python));
             choose(h, () -> h.app.selectOutput(output));
             ExecutionDialog d = h.edt(h.app::executionDialog);
+            h.run(() -> d.tabs().setSelectedIndex(1)); // OBS-G6: a aba Atividade acompanha bloqueio/suspensão
             h.run(() -> d.startButton().doClick());
             h.waitFor(() -> h.app.context().execution().running(), "em andamento");
             log("");
@@ -162,7 +163,18 @@ public final class DesktopHomologation {
             log(">>> Não precisa fazer mais nada: o Agent registra e a execução termina sozinha (nada é repetido).");
             log("");
             Instant t0 = Instant.now();
-            while (h.app.context().execution().running() && Instant.now().isBefore(t0.plusSeconds(15 * 60))) Thread.sleep(1000);
+            java.util.Set<String> shot = new java.util.HashSet<>();
+            while (h.app.context().execution().running() && Instant.now().isBefore(t0.plusSeconds(15 * 60))) {
+                Thread.sleep(1000);
+                // uma captura da aba quando cada fato da sessão aparece na linha do tempo (depois de desbloquear/retomar)
+                for (com.nekkora.agent.obs.ActivityEvent e : h.edt(() -> d.activityPanel().events())) {
+                    if (List.of("SESSION_LOCKED", "SESSION_UNLOCKED", "SUSPENSION_DETECTED").contains(e.code()) && shot.add(e.code())) {
+                        log("  atividade: " + e.code() + " (seq " + e.sequence() + ", ocorrido " + e.occurred() + ", observado " + e.observed() + ")");
+                        h.run(() -> d.activityPanel().revealTimeline());
+                        DesktopHarness.capture(d, "G6-atividade-" + e.code().toLowerCase());
+                    }
+                }
+            }
             h.settle();
             ExecutionRecord r = h.app.context().execution().current().orElseThrow().record();
             List<String> ev = h.app.context().execution().store().events(r.id());
@@ -181,6 +193,20 @@ public final class DesktopHomologation {
             }
             check("efeito não idempotente aconteceu UMA vez", envios == 1);
             check("o Agent continuou o mesmo processo (sem novo LIFE_START depois da suspensão)", agentLog(data).split("LIFE_START", -1).length == 2);
+            // OBS-G6: a linha do tempo mostra os mesmos fatos, sem duplicar, e fecha pelo supervisor
+            h.waitFor(() -> d.activityPanel().health() != null && d.activityPanel().health().completed(), "coleta encerrada");
+            List<com.nekkora.agent.obs.ActivityEvent> act = h.edt(() -> d.activityPanel().events());
+            boolean contiguous = true;
+            for (int i = 0; i < act.size(); i++) contiguous &= act.get(i).sequence() == i + 1;
+            check("OBS-G6: linha do tempo com SESSION_LOCKED, SESSION_UNLOCKED e SUSPENSION_DETECTED", List.of("SESSION_LOCKED", "SESSION_UNLOCKED",
+                    "SUSPENSION_DETECTED").stream().allMatch(c -> act.stream().anyMatch(e -> c.equals(e.code()))));
+            check("OBS-G6: sequência contínua 1.." + act.size() + ", desfecho do supervisor (" + r.state() + ") e coleta encerrada", contiguous
+                    && act.stream().anyMatch(e -> e.source() == com.nekkora.agent.obs.ActivityEvent.Source.AGENT && r.state().name().equals(e.code())));
+            check("OBS-G6: nenhum sucesso fictício (estado = protocolo ou desconhecido)", r.state() != ExecutionState.SUCCEEDED
+                    || Files.isRegularFile(output.resolve(r.id().value()).resolve("agent-result.json")));
+            h.run(() -> d.activityPanel().revealSummary());
+            DesktopHarness.capture(d, "G6-atividade-fim");
+            Files.write(evidence.resolve("atividade-exportada.jsonl"), com.nekkora.agent.obs.ActivityExport.jsonl(act));
         }
     }
 
