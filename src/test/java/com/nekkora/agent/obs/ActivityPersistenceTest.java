@@ -426,6 +426,111 @@ class ActivityPersistenceTest {
         assertEquals(List.of(5L, 1L), lostCounts);
     }
 
+    /** Saúde como a coleta a entrega à tela (só os campos de gravação variam aqui). */
+    private static ActivityView.Health health(ActivityLog log, boolean completed) {
+        return new ActivityView.Health(!completed, completed, false, ActivityView.FrameworkState.NOT_APPLICABLE, log.dropped(), 0, 0, 0, 0, log.capped(),
+                log.sequenceGap(), log.unreadable(), false, log.storeFailed(), log.pendingCount(), 0, null, false);
+    }
+
+    @Test
+    void longOutageWithAFullQueueKeepsOneAccumulatedNoticeBoundedMemoryAndAnIncompleteTimeline() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 2), T0);
+        log.writer(FAILING);
+        Instant t = T0;
+        long fed = 0;
+        long pos = 3;
+        int maxMemory = 0;
+        // indisponibilidade longa: muitos ciclos completos de 12 falhas, com eventos chegando e a fila enchendo
+        for (int round = 0; round < 10 * (ActivityLog.MAX_ATTEMPTS + 1); round++) {
+            t = t.plus(ActivityLog.MAX_RETRY);
+            if (round % 7 == 0) {
+                int n = round == 14 ? ActivityLog.MAX_PENDING + 50 : 3; // numa rodada, mais do que a fila comporta
+                log.append(fws(id, pos, n), t);
+                pos += n;
+                fed += n;
+            } else {
+                log.flush(t);
+            }
+            assertTrue(log.pendingCount() <= ActivityLog.MAX_PENDING + 1, "fila limitada");
+            assertTrue(log.unwrittenGapNotices() <= 1, "no máximo um aviso não gravado");
+            assertTrue(log.all().stream().filter(e -> "EVENT_GAP".equals(e.code())).count() <= 1, "a memória não acumula avisos");
+            maxMemory = Math.max(maxMemory, log.size());
+            // a tela durante a falha: nunca completa
+            ActivityView.Completeness c = ActivityView.completeness(health(log, true), log.all());
+            assertEquals(Integrity.INCOMPLETE, c.integrity());
+            assertTrue(c.gaps().contains(Gap.STORE_PENDING) || c.gaps().contains(Gap.STORE_FAILED), c.gaps().toString());
+        }
+        for (int i = 0; i <= ActivityLog.MAX_ATTEMPTS; i++) { // mais um ciclo completo sem eventos novos: o último lote também cai
+            t = t.plus(ActivityLog.MAX_RETRY);
+            log.flush(t);
+        }
+        assertEquals(1, log.pendingCount(), "só o aviso único espera o disco");
+        assertTrue(log.writeFailures() >= 8L * ActivityLog.MAX_ATTEMPTS, "vários ciclos completos: " + log.writeFailures());
+        assertTrue(maxMemory <= 2 + fed + 1, "memória = eventos aceitos + no máximo 1 aviso: " + maxMemory);
+        assertEquals(fed, log.lost(), "todos os aceitos durante a indisponibilidade foram perdidos e contados, nem mais nem menos");
+        assertTrue(log.storeFailed());
+        ActivityEvent notice = log.all().stream().filter(e -> "EVENT_GAP".equals(e.code())).findFirst().orElseThrow();
+        assertEquals(fed, notice.counts().get("lost"), "o aviso único cobre a perda ACUMULADA");
+
+        log.writer(ActivityLog.DISK); // o disco volta
+        log.flush(t.plus(ActivityLog.MAX_RETRY));
+        assertEquals(0, log.pendingCount());
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        List<ActivityEvent> onDisk = reopened.all();
+        assertEquals(3, onDisk.size(), "1, 2 e o aviso");
+        assertEquals("AGT-OBS-009", onDisk.get(2).errorCode());
+        assertEquals(fed, onDisk.get(2).counts().get("lost"));
+        assertTrue(onDisk.get(2).sequence() > 2, "sequência monotônica, lacuna à vista");
+        assertTrue(reopened.sequenceGap());
+        assertTrue(reopened.storeFailed());
+        ActivityView.Completeness after = ActivityView.completeness(health(reopened, true), onDisk);
+        assertEquals(Integrity.INCOMPLETE, after.integrity());
+        assertTrue(after.gaps().containsAll(List.of(Gap.STORE_FAILED, Gap.SEQUENCE_GAP)), after.gaps().toString());
+    }
+
+    @Test
+    void partialWriteThenFailedSyncIsCompletedThenSyncedOnceWithoutRewriting() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 1), T0);
+        Path file = tmp.resolve(ActivityLog.FILE);
+        long base = Files.size(file);
+        log.writer((f, data) -> { // 1ª tentativa: só parte entra
+            Files.write(f, Arrays.copyOf(data, data.length / 3), StandardOpenOption.APPEND);
+            throw new IOException("escrita interrompida");
+        });
+        log.append(fws(id, 2, 3), T0);
+        long partial = Files.size(file) - base;
+        List<Integer> sizes = new ArrayList<>();
+        log.writer((f, data) -> { // 2ª: o restante entra, a sincronização falha
+            sizes.add(data.length);
+            Files.write(f, data, StandardOpenOption.APPEND);
+            throw new IOException("fsync");
+        });
+        log.flush(T0.plus(ActivityLog.FIRST_RETRY));
+        assertEquals(range(1, 4), diskSequences(tmp, id), "conteúdo completo visível");
+        assertEquals(3, log.pendingCount(), "visível, mas sem sincronização confirmada: pendente");
+        ActivityView.Completeness c = ActivityView.completeness(health(log, true), log.all());
+        assertEquals(Integrity.INCOMPLETE, c.integrity());
+        assertTrue(c.gaps().contains(Gap.STORE_PENDING));
+        long full = Files.size(file) - base;
+        assertEquals(List.of((int) (full - partial)), sizes, "só o que faltava foi escrito (a parte conciliada não)");
+        log.writer(recording(sizes, true)); // 3ª: sincronização falha de novo
+        log.flush(T0.plus(ActivityLog.MAX_RETRY));
+        assertEquals(3, log.pendingCount());
+        log.writer(recording(sizes, false)); // 4ª: sincroniza
+        log.flush(T0.plus(ActivityLog.MAX_RETRY).plus(ActivityLog.MAX_RETRY));
+        assertEquals(List.of((int) (full - partial), 0, 0), sizes, "depois de tudo visível, só sincronização: nada regravado");
+        assertEquals(0, log.pendingCount());
+        assertEquals(range(1, 4), diskSequences(tmp, id));
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        assertFalse(reopened.sequenceGap());
+        assertEquals(0, reopened.unreadable());
+        assertEquals(Integrity.COMPLETE, ActivityView.completeness(health(reopened, true), reopened.all()).integrity());
+    }
+
     @Test
     void tornLineLeftByAFailedWriteIsSeparatedAndOnlyWhatIsMissingIsLost() throws Exception {
         String id = ExecutionId.random().value();
