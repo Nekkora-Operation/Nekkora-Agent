@@ -11,7 +11,8 @@ janela real) · **Real** (roteiro na janela real do Agent, `DesktopHomologation`
 
 ## Suítes
 
-OBS-PERSISTENCE-HARDENING (`5c3fd6e`): Windows **184/0/1**; `-Pdesktop` **205 + escalas, 0 falhas, 1 pulado**; Linux
+Após a revisão de fontes (`05f7a48`): Windows **189/0/1**; `-Pdesktop` **210 + escalas, 0/1**; Linux **189, 15 (= base), 18**;
+ensaio 25/25 (`relatorio.md` §8.3). Antes, OBS-PERSISTENCE-HARDENING (`5c3fd6e`): Windows **184/0/1**; `-Pdesktop` **205 + escalas, 0 falhas, 1 pulado**; Linux
 `--init` **184, 15 falhas (= base), 18 pulados** (16 + 2 só Windows); ensaio do roteiro físico 25/25
 (`relatorio.md` §8.2).
 
@@ -51,7 +52,7 @@ recusada (`windowsJunctionInThePathIsRefused`).
 | OBS-R1 | Lista de execuções: "Carregando…", "Nenhuma execução registrada" (com explicação) e "Histórico indisponível" (`AGT-OBS-014`, ACL real negada) são distintos; registros ilegíveis contados; nunca seletor em branco | **Aprovado** | Auto + Desktop | `ExecutionDomainTest.historicoDistingueVazioDeFalha`, `ActivityDesktopTest.historicoVazioEFalhaDeLeitura` (`O06`, `O07`) |
 | OBS-R2 | Linha do tempo parcial nunca parece completa: `COMPLETE`/`IN_PROGRESS`/`PENDING`/`INCOMPLETE` com motivos e códigos (limites, recusas, lacuna, gravação, retenção, origem do Framework ou do supervisor interrompida); aviso, título, rodapé e prévia da exportação | **Aprovado** | Auto + Desktop | `CompletenessTest` (9), `ActivityTextTest`, `ActivityDesktopTest` (`O03` incompleta, `O02` completa) |
 | OBS-R3 | Leitura sem resposta não congela a aba (aviso + nova tentativa) | **Aprovado** | Desktop | `ActivityDesktopTest.leituraPerdidaNaoCongelaAAba` |
-| OBS-R4 | OBS-PERSISTENCE-HARDENING: gravação do histórico que falha fica pendente (limitada, em ordem), visível (`AGT-OBS-009`), conferida contra o fim do arquivo e gravada uma vez; desistência/fila cheia/arquivo alterado → perda contada e lacuna mantida após reinício; automação intocada | **Aprovado** (automático; ensaio 25/25) | Auto + Desktop (leitor real do Windows) | `ActivityPersistenceTest` (9), `ActivityDesktopTest.gravacaoPendenteFicaAVista` (`O13`); `relatorio.md` §8.2 |
+| OBS-R4 | OBS-PERSISTENCE-HARDENING: gravação do histórico que falha fica pendente (limitada, em ordem), visível (`AGT-OBS-009`), conferida contra o fim do arquivo e só concluída com `fsync` confirmado, sem regravar; desistência/fila cheia/arquivo alterado → UM aviso com a perda acumulada (memória limitada) e lacuna mantida após reinício depois de gravado; automação intocada | **Corrigido (B-OBS-01/02) — aguarda nova revisão de fontes** | Auto + Desktop (leitor real do Windows) | `ActivityPersistenceTest` (14; vermelho/verde em `evidencias/OBS-persistence`), `ActivityDesktopTest.gravacaoPendenteFicaAVista` (`O13`); `relatorio.md` §8.2–8.3 |
 | OBS-G7 | Mesma execução analisada pela linha do tempo e pelo `events.jsonl` original: 231/231 eventos batem na mesma posição (código, fase, `step_id`, execução do Framework); Agent `ex-…(32)` ↔ Framework `ex-…(20)` distintos e correlacionados; `step_id` → `studioStepId` só pelo manifesto conferido, nenhum passo fora do manifesto recebe correspondência | **Aprovado** | Real + Auto | `OBS-G1-studio/homologacao-log.txt`, `ObservabilityProcessTest.sentinelasNaoVazam` |
 | OBS-G8 | Testes de parser/adaptador/retenção/controlador; UI real Windows empacotada sem Java no PATH; regressões | **Aprovado** (exceto físicos) | Auto + Desktop + Pacote | §Suítes, §Regressão final |
 

@@ -1,9 +1,9 @@
 OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
-  estado [antes] {"momento":"antes","quando_utc":"2026-10-23T19:59:14.629856200Z","execucao":"ex-9508b8dfd9de4629b60af561a9fbf8d8","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
-EM_ANDAMENTO sem_protocolo ex-9508b8dfd9de4629b60af561a9fbf8d8
+  estado [antes] {"momento":"antes","quando_utc":"2026-10-23T20:46:45.625738100Z","execucao":"ex-a7af4b2c2cdd9c72fed0b6656221248c","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
+EM_ANDAMENTO sem_protocolo ex-a7af4b2c2cdd9c72fed0b6656221248c
 OK    sem_protocolo: a janela de execução continuou aberta do início ao fim (nada a fechou)
 OK    sem_protocolo: aba Atividade mostra a coleta encerrada
-  estado [fim] {"momento":"fim","quando_utc":"2026-10-23T20:05:15.473203400Z","execucao":"ex-9508b8dfd9de4629b60af561a9fbf8d8","estado":"OUTCOME_UNKNOWN","codigo":"AGT-EXE-021","bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
+  estado [fim] {"momento":"fim","quando_utc":"2026-10-23T20:52:46.607344900Z","execucao":"ex-a7af4b2c2cdd9c72fed0b6656221248c","estado":"OUTCOME_UNKNOWN","codigo":"AGT-EXE-021","bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
   sem_protocolo: estado OUTCOME_UNKNOWN · código AGT-EXE-021 · bloqueios 0 · suspensões 0 · saída 0
   NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
 OK    sem_protocolo: classificação OUTCOME_UNKNOWN = esperada OUTCOME_UNKNOWN

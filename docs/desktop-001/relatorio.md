@@ -26,6 +26,8 @@ Windows real, exceto G2/A13/OBS-G6 com a titular presente** (bloqueio real da te
 | `a59aad3` | Teste `a03` da AGENT-001: toque de Alt antes do clique real (foreground lock) |
 | `02c1a8c`, `a38ab4a` | Auditoria do roteiro físico: 4 defeitos do roteiro corrigidos; SHA-256 dos arquivos executados |
 | `5c3fd6e` | **OBS-PERSISTENCE-HARDENING** (autorizada pela titular em 23/10): gravação do `atividade.jsonl` que falha fica pendente, é conferida e gravada uma vez |
+| `ae13e22` | Documentação, regressões e ensaio da OBS-PERSISTENCE-HARDENING |
+| `37d5a72`, `05f7a48` | Revisão de fontes (B-OBS-01, B-OBS-02): aviso de perda único e acumulado; pendência só sai com `fsync` confirmado; testes de aceitação e prova vermelho/verde |
 | (este)   | Revisão: documentação, ensaio do roteiro físico, regressões |
 
 Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
@@ -179,7 +181,41 @@ contada e, quando o arquivo voltar a aceitar escrita, gravada como UM `EVENT_GAP
 a linha do tempo fica INCOMPLETA. Se o Agent terminar antes disso, o aviso não chega ao disco: os eventos das origens
 são relidos na reabertura (enquanto as origens existirem), mas os avisos do coletor desse intervalo se perdem.
 
-### 8.3 Entrega anterior (OBS-001)
+### 8.3 Revisão de fontes da OBS-PERSISTENCE-HARDENING (23/10, commits `37d5a72` + `05f7a48`)
+
+Parecer: REQUIRES_FIXES_BEFORE_PHYSICAL_HOMOLOGATION (B-OBS-01, B-OBS-02). Corrigido só o `ActivityLog` (e os testes);
+`ExecutionController`, Framework, Studio, Platform e o envelope 1.0.0 intactos.
+
+- **B-OBS-01** — o aviso de perda ia para a mesma fila descartável: um novo ciclo de falha o trocava por outro com
+  contagem menor, e cada ciclo acrescentava um aviso à memória. Agora: só o que NÃO está no arquivo é perdido; UM
+  `EVENT_GAP`/`AGT-OBS-009` com a perda ACUMULADA ainda não registrada no disco, SUBSTITUÍDO (nunca acumulado) a cada
+  ciclo — no máximo um aviso não gravado na memória; a lista de eventos fica limitada pelos limites de `append()`
+  (os perdidos já tinham sido aceitos dentro deles) + 1 aviso.
+- **B-OBS-02** — a conferência tirava da fila linhas apenas VISÍVEIS no arquivo, sem sincronização confirmada. Agora a
+  conferência não mexe na fila: toda gravação termina com `fsync` confirmado (dados vazios = só sincroniza, sem
+  regravar); se só a sincronização falha, a pendência continua (tela INCOMPLETA) e é tentada de novo dentro dos
+  limites. Garantia limitada ao que o sistema operacional e o sistema de arquivos asseguram para `fsync`.
+- **Garantia após reinício (precisão pedida):** o `EVENT_GAP` só sobrevive a um reinício depois de gravado; se o Agent
+  terminar antes, os eventos das origens são relidos das posições gravadas (enquanto existirem), os avisos do coletor
+  desse intervalo não (ver `observabilidade.md` §4.1).
+
+Vermelho/verde (`evidencias/OBS-persistence/vermelho-verde.txt`): os 14 testes de `ActivityPersistenceTest` contra a
+implementação anterior `5c3fd6e` → **5 falham** (B-OBS-01: `severalFailureCycles…`, `longOutageWithAFullQueue…`;
+B-OBS-02: `visibleBytesAreNotDurable…`, `partialWriteThenFailedSync…`, `linesThatReachedTheFile…`); na correção → 14/14.
+Testes novos de aceitação: vários ciclos completos de 12 falhas intercalados com eventos e com a fila cheia, depois
+recuperação real e reabertura (perda acumulada exata, um único aviso, memória limitada, sequência monotônica com
+lacuna detectada, tela INCOMPLETA durante a falha, `EVENT_GAP`/`AGT-OBS-009` legível depois de reabrir); escrita
+parcial + `fsync` falho (só o que faltava é escrito, depois só sincronização, conclusão única, reabertura COMPLETA);
+`fsync` falho repetido sem regravar; linhas no arquivo não contadas como perdidas; linha cortada separada.
+
+| Suíte (commit `05f7a48`) | Executados | Falhas | Pulados (identificados) |
+|---|---|---|---|
+| Windows `clean verify` (em `tools/package-windows.ps1`; ZIP SHA-256 `645c67174e6d2ef342b4744be1dfb31c5b6acc8aef1f9407d23b92b24e4513e7`) | 189 | 0 | 1 — `SourceFileTest.symbolicLinksAreRefused` |
+| Windows `-Pdesktop clean verify` + `ScaleEvidenceTest` 150% e 200% | 210 + 1 + 1 | 0 | o mesmo 1 |
+| Linux `--init` | 189 | 15 (= base) | 18 = 16 anteriores + 2 só Windows — `evidencias/OBS-linux/resumo-hardening-revisao.txt` |
+| Ensaio do roteiro físico (sem bloqueio/suspensão) | 25 verificações | 0 | bloqueio/suspensão NÃO EXERCIDOS; capturas `P-*` revisadas (só janelas do Agent) |
+
+### 8.4 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
 |---|---|---|---|---|---|

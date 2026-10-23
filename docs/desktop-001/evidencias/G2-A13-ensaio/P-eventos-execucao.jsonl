@@ -1,5 +1,5 @@
-{"at": "2026-10-23T19:58:56.883243400Z", "event": "STARTING", "mode": "TABULAR", "kind": "STUDIO_PYTHON", "session": 1}
-{"at": "2026-10-23T19:58:56.933089800Z", "event": "RUNNING", "pid": 26020}
-{"at": "2026-10-23T19:58:57.549513300Z", "event": "RECONCILE", "state": "RUNNING"}
-{"at": "2026-10-23T19:58:57.636529900Z", "event": "ADOPTED", "pid": 26020}
-{"at": "2026-10-23T20:04:57.661369100Z", "event": "SUCCEEDED", "exit": "none", "protocol": true, "output_bytes": 0, "code": "AGT-EXE-025"}
+{"at": "2026-10-23T20:46:28.763857400Z", "event": "STARTING", "mode": "TABULAR", "kind": "STUDIO_PYTHON", "session": 1}
+{"at": "2026-10-23T20:46:28.814279Z", "event": "RUNNING", "pid": 18620}
+{"at": "2026-10-23T20:46:29.377268100Z", "event": "RECONCILE", "state": "RUNNING"}
+{"at": "2026-10-23T20:46:29.455443600Z", "event": "ADOPTED", "pid": 18620}
+{"at": "2026-10-23T20:52:30.900211500Z", "event": "SUCCEEDED", "exit": "none", "protocol": true, "output_bytes": 0, "code": "AGT-EXE-025"}

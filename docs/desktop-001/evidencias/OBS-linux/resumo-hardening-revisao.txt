@@ -1,0 +1,32 @@
+Regressão Linux — OBS-PERSISTENCE-HARDENING após a revisão de fontes (commit 05f7a48), eclipse-temurin:21-jdk-noble, docker run --init, ./mvnw -o -B clean verify
+
+[ERROR] Tests run: 189, Failures: 15, Errors: 0, Skipped: 18
+
+Falhas (as mesmas 15 da base de2170f; nenhuma nova):
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized
+
+Pulados (16 de antes + 2 só Windows: leitor real que impede escrita, ExtendedOpenOption.NOSHARE_WRITE):
+   1 ActivityPersistenceTest.agentKilledWhileWritesArePendingRecollectsFromTheSourcesWithoutGapsOrRepeats
+   1 ActivityPersistenceTest.readerThatDeniesWritingOnWindowsDelaysTheHistoryWhichIsWrittenOnceInOrderWhenReleased
+   1 ConfigStoreTest.realWriteFailureOnReadOnlyFileOnWindows
+   1 ExecutionControllerTest.bloqueioESuspensao
+   1 ExecutionControllerTest.bloqueios
+   1 ExecutionControllerTest.concorrenciaECancelamento
+   1 ExecutionControllerTest.falhaESemProtocolo
+   1 ExecutionControllerTest.prazo
+   1 ExecutionControllerTest.reinicio
+   1 ExecutionControllerTest.sucesso
+   1 ExecutionControllerTest.volume
+   1 InstanceLockTest.activeLockFileCannotBeDeletedOnWindows
+   1 LaunchTest.sonda
+   1 ObservabilityProcessTest.genericoVolumoso
+   1 ObservabilityProcessTest.quedaAdocaoERetomada
+   1 ObservabilityProcessTest.sentinelasNaoVazam
+   1 SourceFileTest.permissionFailureIsReportedAndRecovers
+   1 SourceFileTest.windowsJunctionInThePathIsRefused
