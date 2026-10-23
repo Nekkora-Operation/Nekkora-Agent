@@ -4,6 +4,7 @@ import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.ExecutionId;
 import com.nekkora.agent.exec.ExecutionRecord;
 import com.nekkora.agent.exec.ExecutionSetup;
+import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.obs.ActivityEvent;
 import com.nekkora.agent.obs.ActivityView;
 import com.nekkora.tokens.Spacing;
@@ -25,6 +26,7 @@ import com.nekkora.ui.input.NekkoraSearchField;
 import com.nekkora.ui.theme.Scale;
 import com.nekkora.ui.typography.NekkoraCaption;
 import com.nekkora.ui.typography.NekkoraParagraph;
+import com.nekkora.ui.typography.NekkoraText;
 import com.nekkora.ui.typography.TextTone;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -61,14 +63,33 @@ final class ActivityPanel extends JPanel {
 
     /** Dados da atividade (implementado pelo {@link AgentApp} com uma linha de fundo). Respostas chegam na EDT. */
     interface Data {
-        void history(Consumer<List<ExecutionRecord>> onEdt);
+        /** O histórico; {@link RunStore.Listing#failed()} quando a leitura falhou (nunca confundido com "nenhuma execução"). */
+        void history(Consumer<RunStore.Listing> onEdt);
 
-        void view(ExecutionId id, long after, Consumer<Optional<ActivityView>> onEdt);
+        void view(ExecutionId id, long after, Consumer<Loaded> onEdt);
 
-        void export(ExecutionId id, List<ActivityEvent> events);
+        void export(ExecutionId id, List<ActivityEvent> events, ActivityView.Completeness completeness);
     }
 
+    /** Resposta de uma leitura: a atividade, "sem registro" (vazio) ou falha de leitura (tenta de novo sozinho). */
+    record Loaded(Optional<ActivityView> view, boolean failed) {
+        static Loaded of(Optional<ActivityView> v) {
+            return new Loaded(v, false);
+        }
+
+        static Loaded failure() {
+            return new Loaded(Optional.empty(), true);
+        }
+    }
+
+    /** Situação da lista de execuções. */
+    enum HistoryState { LOADING, EMPTY, LOADED, FAILED }
+
     static final int REFRESH_MS = 400;
+    /** Espera antes de tentar de novo uma leitura que falhou (não martela o disco nem o log). */
+    static final long RETRY_MS = 5_000;
+    /** Leitura sem resposta além disto é dada como perdida: a aba avisa e pede de novo (nunca fica parada). */
+    static final long LOST_REPLY_MS = 15_000;
     private static final List<String> PHASE_ORDER = List.of("INIT", "TRANSFER_DATA_IN", "PROCESS", "TRANSFER_DATA_OUT", "END");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM HH:mm:ss", Locale.ROOT).withZone(ZoneId.systemDefault());
@@ -78,8 +99,11 @@ final class ActivityPanel extends JPanel {
 
     private final Data data;
     private final NekkoraComboBox<ExecutionRecord> runs = new NekkoraComboBox<>();
+    /** No lugar da lista quando não há o que escolher (o combo vazio ficaria em branco). */
+    private final NekkoraText runsEmpty = new NekkoraText("", TextTone.SECONDARY);
     private final NekkoraButton reload = NekkoraButton.secondary("Atualizar lista");
     private final NekkoraCard summaryCard = new NekkoraCard("Acompanhamento da execução", null);
+    private final NekkoraCard timeline = new NekkoraCard("Linha do tempo", null);
     private final NekkoraStack alerts = NekkoraStack.vertical(Spacing.SPACE_3).align(NekkoraStack.Align.STRETCH);
     private final NekkoraComboBox<String> level = new NekkoraComboBox<>(ALL_LEVELS, WARN_UP, ERRORS);
     private final NekkoraComboBox<String> source = new NekkoraComboBox<>(ALL_SOURCES, "Agent", "Framework", "Coletor");
@@ -101,6 +125,8 @@ final class ActivityPanel extends JPanel {
     private boolean follow = true;
     private boolean updatingRuns;
     private boolean inFlight;
+    private long inFlightSince;
+    private long request;
     private boolean dirty = true;
     private final List<ActivityEvent> all = new ArrayList<>();
     private final Map<String, Integer> txIndex = new HashMap<>();
@@ -113,6 +139,11 @@ final class ActivityPanel extends JPanel {
     private com.nekkora.agent.exec.ExecutionState currentState;
     private String query = "";
     private boolean unavailable;
+    private boolean readFailed;
+    private long retryAt;
+    private HistoryState historyState = HistoryState.LOADING;
+    private int historyUnreadable;
+    private ActivityView.Completeness completeness = ActivityView.completeness(null, List.of());
 
     ActivityPanel(Data data) {
         super(new BorderLayout());
@@ -168,11 +199,11 @@ final class ActivityPanel extends JPanel {
         search.getAccessibleContext().setAccessibleName("Buscar nos metadados dos eventos");
         export.setMnemonic(KeyEvent.VK_O);
         export.addActionListener(e -> {
-            if (selected != null && !all.isEmpty()) data.export(selected, List.copyOf(all));
+            if (selected != null && !all.isEmpty()) data.export(selected, List.copyOf(all), completeness);
         });
 
         NekkoraStack top = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-        top.addAll(runs, reload);
+        top.addAll(runs, runsEmpty, reload);
         // dois andares: os filtros cabem na largura do diálogo em todas as escalas
         NekkoraStack filterRow = NekkoraStack.horizontal(Spacing.SPACE_3).align(NekkoraStack.Align.CENTER);
         filterRow.addAll(level, source, phase);
@@ -184,7 +215,6 @@ final class ActivityPanel extends JPanel {
         foot.addAll(footer);
         foot.addGlue();
         foot.add(export);
-        NekkoraCard timeline = new NekkoraCard("Linha do tempo", null);
         NekkoraStack tl = NekkoraStack.vertical(Spacing.SPACE_4).align(NekkoraStack.Align.STRETCH);
         tl.addAll(filters, tableScroll, foot);
         timeline.setContent(tl);
@@ -200,6 +230,7 @@ final class ActivityPanel extends JPanel {
 
         timer = new Timer(REFRESH_MS, e -> tick());
         timer.setCoalesce(true);
+        renderRuns();
         renderSummary();
         renderDetail();
     }
@@ -237,21 +268,46 @@ final class ActivityPanel extends JPanel {
     // ------------------------------------------------------------------------------------------- dados
 
     private void reloadHistory() {
-        data.history(list -> {
-            updatingRuns = true;
-            try {
-                runs.removeAllItems();
-                ExecutionRecord pick = null;
-                for (ExecutionRecord r : list) {
-                    runs.addItem(r);
-                    if (r.id().equals(selected)) pick = r;
+        data.history(listing -> {
+            List<ExecutionRecord> list = listing.records();
+            // falha com a lista já mostrada: mantém o que estava (só avisa); nunca troca por "nenhuma execução"
+            boolean keep = listing.failed() && list.isEmpty() && runs.getItemCount() > 0;
+            historyUnreadable = listing.unreadable();
+            historyState = listing.failed() ? HistoryState.FAILED : list.isEmpty() ? HistoryState.EMPTY : HistoryState.LOADED;
+            if (!keep) {
+                updatingRuns = true;
+                try {
+                    runs.removeAllItems();
+                    ExecutionRecord pick = null;
+                    for (ExecutionRecord r : list) {
+                        runs.addItem(r);
+                        if (r.id().equals(selected)) pick = r;
+                    }
+                    if (pick != null) runs.setSelectedItem(pick);
+                } finally {
+                    updatingRuns = false;
                 }
-                if (pick != null) runs.setSelectedItem(pick);
-            } finally {
-                updatingRuns = false;
             }
+            renderRuns();
             if (selected == null && !list.isEmpty()) select(list.get(0).id());
+            else renderSummary();
         });
+    }
+
+    /** A lista de execuções nunca fica em branco: carregando, nenhuma execução ou falha de leitura são ditos. */
+    private void renderRuns() {
+        boolean empty = runs.getItemCount() == 0;
+        String placeholder = switch (historyState) {
+            case LOADING -> "Carregando histórico…";
+            case EMPTY, LOADED -> "Nenhuma execução registrada";
+            case FAILED -> "Histórico indisponível";
+        };
+        runs.setVisible(!empty);
+        runsEmpty.setVisible(empty);
+        runsEmpty.setText(placeholder);
+        runsEmpty.getAccessibleContext().setAccessibleName("Execução acompanhada: " + placeholder);
+        runs.getAccessibleContext().setAccessibleDescription(empty ? placeholder : runs.getItemCount() + " execução(ões) no histórico");
+        runs.repaint();
     }
 
     private void select(ExecutionId id) {
@@ -265,6 +321,8 @@ final class ActivityPanel extends JPanel {
         health = null;
         record = null;
         unavailable = false;
+        readFailed = false;
+        completeness = ActivityView.completeness(null, List.of());
         model.setRows(List.of());
         dirty = true;
         for (int i = 0; i < runs.getItemCount(); i++) {
@@ -285,21 +343,38 @@ final class ActivityPanel extends JPanel {
     }
 
     private void tick() {
+        if (selected != null && inFlight && System.nanoTime() - inFlightSince > LOST_REPLY_MS * 1_000_000L) {
+            inFlight = false; // resposta perdida: a resposta atrasada, se vier, é descartada pelo número do pedido
+            readFailed = true;
+            retryAt = System.nanoTime();
+            renderSummary();
+        }
         if (selected == null || inFlight) return;
+        if (readFailed && System.nanoTime() - retryAt < 0) return;
         boolean live = health == null || health.live();
-        if (!dirty && !live) return;
+        if (!dirty && !live && !readFailed) return;
         dirty = false;
         inFlight = true;
+        inFlightSince = System.nanoTime();
+        long mine = ++request;
         ExecutionId asked = selected;
         data.view(asked, lastSeq, v -> {
+            if (mine != request) return; // resposta de um pedido já dado como perdido
             inFlight = false;
             if (!asked.equals(selected)) return; // a pessoa trocou de execução enquanto a leitura acontecia
-            if (v.isEmpty()) {
+            if (v.failed()) { // falha de leitura: avisa e tenta de novo; o que já está na tela continua
+                readFailed = true;
+                retryAt = System.nanoTime() + RETRY_MS * 1_000_000L;
+                renderSummary();
+                return;
+            }
+            readFailed = false;
+            if (v.view().isEmpty()) {
                 unavailable = true;
                 renderSummary();
                 return;
             }
-            apply(v.get());
+            apply(v.view().get());
         });
     }
 
@@ -321,6 +396,7 @@ final class ActivityPanel extends JPanel {
                 if (maxOccurred == null || e.occurred().isAfter(maxOccurred)) maxOccurred = e.occurred();
             }
         }
+        completeness = ActivityView.completeness(health, all);
         if (newer) appendRows(fresh);
         renderSummary();
     }
@@ -378,7 +454,14 @@ final class ActivityPanel extends JPanel {
     }
 
     private void updateFooter() {
-        footer.setText("Mostrando " + model.getRowCount() + " de " + all.size() + " eventos guardados");
+        String suffix = switch (completeness.integrity()) {
+            case COMPLETE -> " · linha do tempo completa";
+            case IN_PROGRESS -> " · em andamento";
+            case PENDING -> health == null ? "" : " · coleta não encerrada";
+            case INCOMPLETE -> " · linha do tempo INCOMPLETA";
+        };
+        footer.setText("Mostrando " + model.getRowCount() + " de " + all.size() + " eventos guardados" + suffix);
+        timeline.setTitle(completeness.integrity() == ActivityView.Integrity.INCOMPLETE ? "Linha do tempo (incompleta)" : "Linha do tempo", null);
         export.setEnabled(!all.isEmpty());
     }
 
@@ -387,8 +470,17 @@ final class ActivityPanel extends JPanel {
     private void renderSummary() {
         NekkoraStack s = NekkoraStack.vertical(Spacing.SPACE_4).align(NekkoraStack.Align.STRETCH);
         alerts.removeAll();
+        historyAlerts();
+        if (selected == null) table.setEmptyState(IconName.INFO, "Nenhuma execução para mostrar", "A linha do tempo aparece quando houver uma execução no histórico.");
+        else if (all.isEmpty()) table.setEmptyState(IconName.INFO, "Sem eventos ainda", "Os eventos aparecem aqui assim que forem coletados.");
+        else table.setEmptyState(IconName.INFO, "Sem eventos", "Nenhum evento corresponde à seleção.");
         if (selected == null) {
-            s.add(new NekkoraParagraph("Nenhuma execução registrada nesta máquina.", TextTone.SECONDARY));
+            s.add(new NekkoraParagraph(switch (historyState) {
+                case LOADING -> "Carregando o histórico de execuções…";
+                case EMPTY, LOADED -> "Nenhuma execução registrada nesta máquina. Elas aparecem aqui assim que forem iniciadas na aba \"Execução\"; "
+                        + "o histórico continua disponível depois de reiniciar o Agent.";
+                case FAILED -> "Nenhuma execução pode ser mostrada enquanto o histórico não for lido (ver o aviso abaixo).";
+            }, TextTone.SECONDARY));
             summaryCard.setContent(s);
             updateFooter();
             revalidate();
@@ -397,6 +489,14 @@ final class ActivityPanel extends JPanel {
         }
         if (unavailable) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Registro indisponível",
                 "O registro desta execução não pôde ser lido (removido pela retenção ou ilegível)."));
+        if (readFailed) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Falha ao ler a atividade",
+                "A atividade desta execução não pôde ser lida agora; nova tentativa em " + RETRY_MS / 1000 + " s. Os eventos mostrados podem estar desatualizados."));
+        // primeiro aviso da execução: uma linha do tempo parcial nunca parece completa
+        if (completeness.integrity() == ActivityView.Integrity.INCOMPLETE) {
+            StringBuilder why = new StringBuilder("Faltam eventos nesta linha do tempo: ");
+            for (int i = 0; i < completeness.gaps().size(); i++) why.append(i == 0 ? "" : "; ").append(ActivityText.gap(completeness.gaps().get(i)));
+            alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Linha do tempo incompleta", why.append('.').toString()));
+        }
         ExecutionRecord r = record;
         NekkoraKeyValueView kv = new NekkoraKeyValueView();
         if (r != null) {
@@ -439,6 +539,7 @@ final class ActivityPanel extends JPanel {
             kv.add("Última falha observada", b.toString());
         }
         kv.add("Coleta", collectionLabel());
+        if (health != null) kv.add("Linha do tempo", ActivityText.integrity(completeness, all.size()));
         s.add(kv);
         summaryCard.setContent(s);
         if (health != null) healthAlerts(health, running);
@@ -481,6 +582,14 @@ final class ActivityPanel extends JPanel {
                 h.unknownFields() + " campo(s) e " + h.unknownCodes() + " código(s) de evento desconhecidos foram contados; nenhum valor foi guardado."));
         if (h.restarts() > 0) alerts.add(new NekkoraInlineAlert(Severity.INFO, "Coleta retomada",
                 "A coleta foi retomada " + h.restarts() + " vez(es) depois de reinício do Agent, sem repetir eventos; contagens de recusas anteriores podem ser parciais."));
+    }
+
+    private void historyAlerts() {
+        if (historyState == HistoryState.FAILED) alerts.add(new NekkoraInlineAlert(Severity.ERROR, "Não foi possível carregar o histórico",
+                ActivityText.error("AGT-OBS-014") + (runs.getItemCount() > 0 ? " A lista mostrada pode estar incompleta." : "")
+                        + " Use \"Atualizar lista\" para tentar de novo."));
+        if (historyUnreadable > 0) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Registros de execução ilegíveis",
+                historyUnreadable + " registro(s) de execução não puderam ser lidos e não aparecem na lista (AGT-OBS-014)."));
     }
 
     private void stepsUnavailable() {
@@ -596,8 +705,16 @@ final class ActivityPanel extends JPanel {
         return health;
     }
 
+    NekkoraText runsEmptyLabel() {
+        return runsEmpty;
+    }
+
     NekkoraComboBox<ExecutionRecord> runsBox() {
         return runs;
+    }
+
+    NekkoraButton reloadButton() {
+        return reload;
     }
 
     NekkoraButton exportButton() {
@@ -610,6 +727,18 @@ final class ActivityPanel extends JPanel {
 
     JPanel summaryPanel() {
         return summaryCard;
+    }
+
+    HistoryState historyState() {
+        return historyState;
+    }
+
+    ActivityView.Completeness completeness() {
+        return completeness;
+    }
+
+    NekkoraCaption footerLabel() {
+        return footer;
     }
 
     NekkoraComboBox<String> levelBox() {

@@ -153,8 +153,8 @@ public final class ActivityService implements AutoCloseable {
     }
 
     /** Execuções conhecidas (do registro do supervisor), da mais nova para a mais antiga. Fora da EDT. */
-    public List<ExecutionRecord> history() {
-        return store.all();
+    public RunStore.Listing history() {
+        return store.list();
     }
 
     /**
@@ -194,6 +194,8 @@ public final class ActivityService implements AutoCloseable {
                     case "SOURCE_UNSAFE" -> fs = FrameworkState.UNSAFE;
                     case "SOURCE_REPLACED" -> fs = FrameworkState.REPLACED;
                     case "SOURCE_UNAVAILABLE" -> fs = FrameworkState.UNAVAILABLE;
+                    // voltou a ser legível: a leitura continua da mesma posição (nada perdido)
+                    case "SOURCE_AVAILABLE" -> fs = FrameworkState.READING;
                     default -> {
                         // demais avisos não mudam o estado da origem
                     }

@@ -144,4 +144,27 @@ class ExecutionDomainTest {
         Files.writeString(tmp.resolve("dados").resolve("aprovacoes.json"), "{ quebrado");
         assertFalse(store.approved(p), "ilegível: nada é presumido aprovado");
     }
+
+    @Test
+    @DisplayName("histórico: 'nenhuma execução' é diferente de 'não foi possível ler' e de registro ilegível")
+    void historicoDistingueVazioDeFalha() throws Exception {
+        RunStore none = new RunStore(tmp.resolve("sem-pasta").resolve("execucoes"), AtomicWriter.DEFAULT);
+        assertEquals(new RunStore.Listing(List.of(), 0, false), none.list(), "primeira abertura: vazio, sem falha");
+        Path file = Files.writeString(tmp.resolve("execucoes-arquivo"), "x");
+        RunStore broken = new RunStore(file, AtomicWriter.DEFAULT);
+        assertTrue(broken.list().failed(), "a pasta do histórico não é uma pasta: falha, não 'nenhuma execução'");
+        RunStore store = new RunStore(tmp.resolve("dados").resolve("execucoes"), AtomicWriter.DEFAULT);
+        ExecutionId ok = ExecutionId.random();
+        store.save(new ExecutionRecord(ok, ExecutionPackage.Kind.LAB_GENERIC, "pacote", "sha256:" + "a".repeat(64), ExecutionState.READY, null,
+                Instant.parse("2026-10-23T10:00:00Z"), null, null, null, null, Map.of(), 0, 0, false, 0));
+        ExecutionId bad = ExecutionId.random();
+        Files.createDirectories(store.dir(bad));
+        Files.writeString(store.dir(bad).resolve("estado.json"), "{ quebrado");
+        Files.createDirectories(store.dir(ExecutionId.random())); // em criação (sem estado.json): não conta
+        RunStore.Listing l = store.list();
+        assertEquals(List.of(ok), l.records().stream().map(ExecutionRecord::id).toList());
+        assertEquals(1, l.unreadable());
+        assertFalse(l.failed());
+        assertEquals(l.records(), store.all());
+    }
 }

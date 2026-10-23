@@ -23,3 +23,17 @@ def saida() -> Path:
 def resultado(pasta: Path, status: str, **contagens: int) -> None:
     doc = {"schema": "nekkora-agent/lab-result", "version": "1.0.0", "status": status, "counts": contagens}
     (pasta / "agent-result.json").write_text(json.dumps(doc), encoding="utf-8")
+
+
+def efeito_unico(pasta: Path) -> None:
+    """Anota UM "envio" em ``efeitos.txt`` na pasta-mãe da saída (compartilhada): repetição apareceria como 2ª linha."""
+    with (Path(pasta).parent / "efeitos.txt").open("a", encoding="utf-8") as f:
+        f.write("envio\n")
+
+
+def esperar_acordado(segundos: int) -> None:
+    """Espera ``segundos`` de máquina ACORDADA (passos de 1 s): bloqueio e suspensão no meio não encurtam a execução."""
+    import time
+
+    for _ in range(segundos):
+        time.sleep(1)

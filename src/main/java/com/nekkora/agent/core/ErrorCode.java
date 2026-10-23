@@ -64,6 +64,7 @@ public enum ErrorCode {
     OBS_UNKNOWN_CONTENT("AGT-OBS-011", "Campos ou códigos desconhecidos dos eventos foram descartados e contados."),
     OBS_EXPORT_FAILED("AGT-OBS-012", "A atividade não pôde ser exportada."),
     OBS_SEQUENCE_GAP("AGT-OBS-013", "O histórico de atividade tem lacuna de sequência ou linha ilegível."),
+    OBS_HISTORY_UNAVAILABLE("AGT-OBS-014", "O histórico de execuções não pôde ser lido por completo; isto não significa que não haja execuções."),
     UNEXPECTED("AGT-APP-001", "Falha interna inesperada.");
 
     private final String code;

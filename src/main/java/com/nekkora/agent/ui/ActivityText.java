@@ -2,6 +2,7 @@ package com.nekkora.agent.ui;
 
 import com.nekkora.agent.core.ErrorCode;
 import com.nekkora.agent.obs.ActivityEvent;
+import com.nekkora.agent.obs.ActivityView;
 import java.util.Map;
 
 /**
@@ -116,5 +117,45 @@ final class ActivityText {
         if (ms == null) return "";
         if (ms < 1000) return ms + " ms";
         return String.format(java.util.Locale.ROOT, "%.1f s", ms / 1000.0).replace('.', ',');
+    }
+
+    /** O motivo de a linha do tempo não estar completa, em uma frase curta com o código. */
+    static String gap(ActivityView.Gap g) {
+        String t = switch (g) {
+            case RETENTION_LIMIT -> "eventos além do limite desta execução não foram guardados";
+            case SUPERVISOR_LIMIT -> "o supervisor parou de gravar eventos no limite de 500";
+            case REJECTED -> "eventos recusados (incompletos, corrompidos ou fora do contrato) não aparecem";
+            case SEQUENCE_GAP -> "o histórico tem lacuna de sequência ou linha ilegível";
+            case STORE_FAILED -> "parte do histórico não pôde ser gravada";
+            case PURGED -> "a atividade detalhada foi removida pela retenção";
+            case FRAMEWORK_STOPPED -> "a leitura das etapas do Framework parou (arquivo trocado, truncado ou recusado)";
+            case FRAMEWORK_UNAVAILABLE -> "as etapas do Framework não puderam ser lidas";
+            case SUPERVISOR_SOURCE -> "o registro do supervisor deixou de ser lido";
+        };
+        return t + " (" + g.code() + ")";
+    }
+
+    /** Situação da linha do tempo para o resumo. */
+    static String integrity(ActivityView.Completeness c, int stored) {
+        return switch (c.integrity()) {
+            case COMPLETE -> "Completa — coleta encerrada sem perdas (" + stored + " eventos guardados)";
+            case IN_PROGRESS -> "Em andamento — sem lacunas até agora";
+            case PENDING -> "Ainda não encerrada — pode faltar o final (retomada na próxima abertura do Agent)";
+            case INCOMPLETE -> "INCOMPLETA — " + c.gaps().size() + " motivo(s); ver o aviso acima";
+        };
+    }
+
+    /** Frase da prévia da exportação: nunca exporta uma linha do tempo parcial como se fosse completa. */
+    static String exportIntegrity(ActivityView.Completeness c) {
+        return switch (c.integrity()) {
+            case COMPLETE -> "Linha do tempo completa.";
+            case IN_PROGRESS -> "A execução ainda está em andamento: o arquivo terá só os eventos observados até agora.";
+            case PENDING -> "A coleta desta execução não foi encerrada: o final pode estar faltando.";
+            case INCOMPLETE -> {
+                StringBuilder b = new StringBuilder("ATENÇÃO: linha do tempo INCOMPLETA — ");
+                for (int i = 0; i < c.gaps().size(); i++) b.append(i == 0 ? "" : "; ").append(gap(c.gaps().get(i)));
+                yield b.append(". Os marcadores de lacuna e de recusa vão no arquivo.").toString();
+            }
+        };
     }
 }

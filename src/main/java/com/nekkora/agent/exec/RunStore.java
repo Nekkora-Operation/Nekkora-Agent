@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
@@ -113,18 +114,44 @@ public final class RunStore {
 
     /** Todas as execuções registradas, da mais nova para a mais antiga (registro ilegível fica de fora). */
     public List<ExecutionRecord> all() {
+        return list().records();
+    }
+
+    /**
+     * O histórico como a tela precisa: os registros legíveis (mais novos primeiro), quantos registros existem mas não
+     * puderam ser lidos e se a própria pasta do histórico falhou — "nenhuma execução" nunca é confundido com "não
+     * foi possível ler".
+     */
+    public record Listing(List<ExecutionRecord> records, int unreadable, boolean failed) {
+        public Listing {
+            records = List.copyOf(records);
+        }
+
+        public static Listing failure() {
+            return new Listing(List.of(), 0, true);
+        }
+    }
+
+    public Listing list() {
         List<ExecutionRecord> out = new ArrayList<>();
-        if (!Files.isDirectory(root)) return out;
+        int unreadable = 0;
+        boolean failed = false;
+        // só "não existe" confirmado é histórico vazio; sem poder determinar (acesso negado etc.) é falha
+        if (Files.notExists(root, LinkOption.NOFOLLOW_LINKS)) return new Listing(out, 0, false);
+        if (!Files.isDirectory(root)) return Listing.failure();
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(root)) {
             for (Path d : ds) {
                 if (!ExecutionId.valid(String.valueOf(d.getFileName()))) continue;
-                load(d.resolve("estado.json")).ifPresent(out::add);
+                Path f = d.resolve("estado.json");
+                Optional<ExecutionRecord> r = load(f);
+                if (r.isPresent()) out.add(r.get());
+                else if (!Files.notExists(f, LinkOption.NOFOLLOW_LINKS)) unreadable++; // sem estado.json: execução sendo criada
             }
-        } catch (IOException e) {
-            return out;
+        } catch (IOException | RuntimeException e) {
+            failed = true; // o que já foi lido continua valendo (como antes); a tela avisa que a lista pode estar parcial
         }
         out.sort(Comparator.comparing(ExecutionRecord::created).reversed());
-        return out;
+        return new Listing(out, unreadable, failed);
     }
 
     /** Apaga as execuções terminadas mais antigas além de {@link #KEEP} (só pastas do Agent: cópia do pacote e registro). */

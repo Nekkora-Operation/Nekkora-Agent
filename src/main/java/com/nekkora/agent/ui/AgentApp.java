@@ -371,18 +371,18 @@ public final class AgentApp {
     private ActivityPanel.Data activityData() {
         return new ActivityPanel.Data() {
             @Override
-            public void history(java.util.function.Consumer<java.util.List<ExecutionRecord>> onEdt) {
-                activityBackground(() -> ctx.activity().history(), onEdt);
+            public void history(java.util.function.Consumer<com.nekkora.agent.exec.RunStore.Listing> onEdt) {
+                activityBackground(() -> ctx.activity().history(), onEdt, com.nekkora.agent.exec.RunStore.Listing::failure);
             }
 
             @Override
-            public void view(com.nekkora.agent.exec.ExecutionId id, long after, java.util.function.Consumer<java.util.Optional<ActivityView>> onEdt) {
-                activityBackground(() -> ctx.activity().view(id, after), onEdt);
+            public void view(com.nekkora.agent.exec.ExecutionId id, long after, java.util.function.Consumer<ActivityPanel.Loaded> onEdt) {
+                activityBackground(() -> ActivityPanel.Loaded.of(ctx.activity().view(id, after)), onEdt, ActivityPanel.Loaded::failure);
             }
 
             @Override
-            public void export(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events) {
-                exportActivity(id, events);
+            public void export(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events, ActivityView.Completeness completeness) {
+                exportActivity(id, events, completeness);
             }
         };
     }
@@ -391,9 +391,10 @@ public final class AgentApp {
      * Exportação manual: primeiro a prévia dos campos (o que pode sair no arquivo), depois o destino escolhido pela
      * pessoa. Só envelopes saneados; nunca o arquivo bruto do Framework, a saída do processo ou valores.
      */
-    void exportActivity(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events) {
+    void exportActivity(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events, ActivityView.Completeness completeness) {
         if (execDialog == null) return;
-        String preview = events.size() + " evento(s) da execução " + id.value() + ". Campos que podem aparecer: " + String.join(", ", ActivityExport.FIELDS)
+        String preview = events.size() + " evento(s) da execução " + id.value() + ". " + ActivityText.exportIntegrity(completeness)
+                + " Campos que podem aparecer: " + String.join(", ", ActivityExport.FIELDS)
                 + ". Não há valores de entrada ou saída, textos de página, caminhos, credenciais nem a saída do processo.";
         if (!NekkoraConfirmationDialog.confirm(execDialog, "Exportar a atividade?", preview, "Escolher destino…")) return;
         String name = "nekkora-agent-atividade-" + id.value() + ".jsonl";
@@ -418,20 +419,25 @@ public final class AgentApp {
         });
     }
 
-    private <T> void activityBackground(Supplier<T> work, java.util.function.Consumer<T> onEdt) {
+    /** Leitura da atividade fora da EDT; uma falha inesperada chega à tela como {@code onFailure} (nunca fica sem resposta). */
+    private <T> void activityBackground(Supplier<T> work, java.util.function.Consumer<T> onEdt, Supplier<T> onFailure) {
         if (obsIo.isShutdown()) return;
         try {
             obsIo.execute(() -> {
-                T value;
+                T value = null;
+                boolean ok = false;
                 try {
                     value = work.get();
+                    ok = true;
                 } catch (RuntimeException e) {
                     ctx.log().error(LogEvent.UNEXPECTED_ERROR, ErrorCode.UNEXPECTED, Field.exception(e));
-                    return;
+                } finally {
+                    // a tela SEMPRE recebe uma resposta (até com Error, que segue adiante depois daqui)
+                    T result = ok ? value : onFailure.get();
+                    SwingUtilities.invokeLater(() -> {
+                        if (!exiting.get()) onEdt.accept(result);
+                    });
                 }
-                SwingUtilities.invokeLater(() -> {
-                    if (!exiting.get()) onEdt.accept(value);
-                });
             });
         } catch (java.util.concurrent.RejectedExecutionException e) {
             // encerrando

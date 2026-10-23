@@ -103,6 +103,21 @@ final class DesktopHarness implements AutoCloseable {
         return app.window();
     }
 
+    /** {@link #edt} sem aplicativo (componentes testados isoladamente). */
+    static <T> T onEdt(Callable<T> c) throws InterruptedException, InvocationTargetException {
+        AtomicReference<T> ref = new AtomicReference<>();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                ref.set(c.call());
+            } catch (Exception ex) {
+                err.set(ex);
+            }
+        });
+        if (err.get() != null) throw new IllegalStateException(err.get());
+        return ref.get();
+    }
+
     <T> T edt(Callable<T> c) throws InterruptedException, InvocationTargetException {
         AtomicReference<T> ref = new AtomicReference<>();
         AtomicReference<Exception> err = new AtomicReference<>();
@@ -157,6 +172,11 @@ final class DesktopHarness implements AutoCloseable {
 
     /** Pinta somente o conteúdo da janela (inclui a barra de título do FlatLaf) na resolução real da escala. */
     static Path capture(Window w, String name) throws Exception {
+        return capture(w, EVIDENCE, name);
+    }
+
+    /** Idem, numa pasta de evidências escolhida (homologação física: funciona com a tela bloqueada). */
+    static Path capture(Window w, Path dir, String name) throws Exception {
         AtomicReference<BufferedImage> img = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             JRootPane rp = SwingUtilities.getRootPane(w);
@@ -168,8 +188,8 @@ final class DesktopHarness implements AutoCloseable {
             g.dispose();
             img.set(b);
         });
-        Files.createDirectories(EVIDENCE);
-        Path out = EVIDENCE.resolve(name + ".png");
+        Files.createDirectories(dir);
+        Path out = dir.resolve(name + ".png");
         ImageIO.write(img.get(), "png", out.toFile());
         return out;
     }

@@ -29,8 +29,12 @@ import java.util.stream.Stream;
  * obs-studio &lt;evidências&gt; &lt;pacote do Studio&gt; &lt;python&gt; &lt;lista&gt; &lt;pasta de saída&gt;
  *         OBS-G1/G7: aba "Atividade" capturada DURANTE a execução real, correlação com os eventos originais do
  *         Framework, histórico depois de reiniciar o Agent
- * semear-obs &lt;evidências&gt; &lt;dados&gt; &lt;pacote formato Studio (obs_studio_main)&gt; &lt;python&gt; &lt;saída&gt;
+ * semear-obs &lt;evidências&gt; &lt;dados&gt; &lt;pacote formato Studio (obs_studio_main)&gt; &lt;python&gt; &lt;saída&gt; [config]
  *         queda simulada com um processo que publica eventos do Framework (o Agent empacotado adota e mostra a atividade)
+ * sessao-cenario &lt;evidências&gt; &lt;sucesso|sem_protocolo|falha&gt; &lt;python&gt; &lt;saída&gt; [ensaio]
+ *         G2/A13 físico (roteiro tools/homologation/fisica-g2-a13.ps1): automação sintética de SESSÃO lançada pelo
+ *         botão Iniciar, SEM ícone na bandeja (o único ícone é o do Agent empacotado); a pessoa bloqueia e suspende;
+ *         instantâneos sanitizados antes/durante/depois e a classificação esperada de cada cenário
  * </pre>
  */
 public final class DesktopHomologation {
@@ -55,7 +59,8 @@ public final class DesktopHomologation {
                 case "sessao" -> h.sessao(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]));
                 case "semear" -> h.semear(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]));
                 case "obs-studio" -> h.obsStudio(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]));
-                case "semear-obs" -> h.semearObs(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]));
+                case "semear-obs" -> h.semearObs(Path.of(a[2]), Path.of(a[3]), Path.of(a[4]), Path.of(a[5]), a.length > 6 ? a[6] : null);
+                case "sessao-cenario" -> h.sessaoCenario(a[2], Path.of(a[3]), Path.of(a[4]), a.length > 5 && "ensaio".equals(a[5]));
                 default -> throw new IllegalArgumentException("modo");
             }
             code = h.failures == 0 ? 0 : 2;
@@ -208,6 +213,176 @@ public final class DesktopHomologation {
             DesktopHarness.capture(d, "G6-atividade-fim");
             Files.write(evidence.resolve("atividade-exportada.jsonl"), com.nekkora.agent.obs.ActivityExport.jsonl(act));
         }
+    }
+
+    // ----------------------------------------------------------------------------------------- G2/A13 físico
+
+    /** Bandeja "indisponível": o Agent deste roteiro não põe ícone (o único ícone na sessão é o do Agent empacotado). */
+    static final TrayController.Port NO_TRAY = new TrayController.Port() {
+        @Override
+        public boolean supported() {
+            return false;
+        }
+
+        @Override
+        public TrayController.Handle add(java.util.function.IntFunction<java.awt.Image> icon, String tooltip, TrayController.Actions actions) {
+            throw new UnsupportedOperationException();
+        }
+    };
+
+    /**
+     * Um cenário sintético atravessando o bloqueio e a suspensão REAIS: lançado pelo botão Iniciar (mesmo supervisor do
+     * produto), aba Atividade aberta. Grava {@code estados.jsonl} (só estado, códigos e contagens: nenhum caminho,
+     * nome de máquina ou de pessoa) nos momentos antes / durante o bloqueio / depois do desbloqueio / depois da
+     * retomada / fim, e capturas da janela pintada (funciona com a tela bloqueada). {@code ensaio}: sem a pessoa,
+     * confere a automação e marca bloqueio/suspensão como NÃO EXERCIDOS.
+     */
+    void sessaoCenario(String cenario, Path python, Path output, boolean ensaio) throws Exception {
+        String script = switch (cenario) {
+            case "sucesso" -> "lab_sessao_sucesso.py";
+            case "sem_protocolo" -> "lab_sessao_sem_protocolo.py";
+            case "falha" -> "lab_sessao_falha.py";
+            default -> throw new IllegalArgumentException("cenário: sucesso | sem_protocolo | falha");
+        };
+        Path pkg = ExecutionDesktopTest.labPackage(evidence.resolve("pacote-" + cenario), script);
+        Path data = evidence.resolve("dados-agent");
+        Path shots = evidence.resolve("capturas");
+        Path states = evidence.resolve("estados.jsonl");
+        Path phase = evidence.resolve("fase.txt");
+        Files.createDirectories(output);
+        com.nekkora.agent.exec.SessionProbe probe = com.nekkora.agent.exec.SessionProbe.system(true, System.getenv());
+        DesktopHarness h = DesktopHarness.start(data, Map.of("COMPUTERNAME", "LAB-AGENT-01"), new String[0], NO_TRAY);
+        try {
+            MainWindow w = h.window();
+            h.later(() -> w.executionButton().doClick());
+            h.waitFor(() -> h.app.executionDialog() != null && h.app.executionDialog().isShowing(), "janela Execução local");
+            h.waitFor(() -> h.app.executionSetup().session() != null, "sessão verificada");
+            check("sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)", DesktopHarness.trayIconCount() == 0);
+            choose(h, () -> h.app.selectPackage(pkg));
+            choose(h, h.app::approveConfirmed);
+            choose(h, () -> h.app.selectPython(python));
+            choose(h, () -> h.app.selectOutput(output));
+            ExecutionDialog d = h.edt(h.app::executionDialog);
+            h.run(() -> d.tabs().setSelectedIndex(1));
+            h.run(() -> d.startButton().doClick());
+            h.waitFor(() -> h.app.context().execution().running(), "em andamento");
+            com.nekkora.agent.exec.ExecutionId id = h.app.context().execution().current().orElseThrow().record().id();
+            Path effects = output.resolve("efeitos.txt");
+            h.waitFor(() -> Files.isRegularFile(effects), "efeito anotado");
+            snapshot(h, probe, d, id, effects, states, "antes");
+            DesktopHarness.capture(d, shots, cenario + "-1-antes");
+            Files.writeString(phase, "EM_ANDAMENTO " + id.value());
+            log("EM_ANDAMENTO " + cenario + " " + id.value());
+            boolean wasLocked = false;
+            boolean lockShot = false;
+            boolean unlockShot = false;
+            boolean resumeShot = false;
+            Instant t0 = Instant.now();
+            while (h.app.context().execution().running() && Instant.now().isBefore(t0.plusSeconds(30 * 60))) {
+                Thread.sleep(500);
+                boolean locked = probe.probe().locked();
+                ExecutionRecord now = h.app.context().execution().current().orElseThrow().record();
+                if (locked && !lockShot && now.locks() > 0) { // DURANTE o bloqueio (a janela é pintada fora da tela)
+                    lockShot = true;
+                    snapshot(h, probe, d, id, effects, states, "durante-bloqueio");
+                    h.run(() -> d.activityPanel().revealTimeline());
+                    DesktopHarness.capture(d, shots, cenario + "-2-durante-bloqueio");
+                }
+                if (wasLocked && !locked && !unlockShot) {
+                    unlockShot = true;
+                    h.settle();
+                    snapshot(h, probe, d, id, effects, states, "depois-do-desbloqueio");
+                    DesktopHarness.capture(d, shots, cenario + "-3-depois-do-desbloqueio");
+                }
+                wasLocked = locked;
+                if (now.suspensions() > 0 && !resumeShot) {
+                    resumeShot = true;
+                    h.settle();
+                    snapshot(h, probe, d, id, effects, states, "depois-da-retomada");
+                    h.run(() -> d.activityPanel().revealTimeline());
+                    DesktopHarness.capture(d, shots, cenario + "-4-depois-da-retomada");
+                }
+            }
+            long tc = System.currentTimeMillis();
+            while (!h.edt(() -> d.activityPanel().health() != null && d.activityPanel().health().completed()) && System.currentTimeMillis() - tc < 60_000) {
+                Thread.sleep(500);
+            }
+            if (!h.edt(() -> d.activityPanel().health() != null && d.activityPanel().health().completed())) { // diagnóstico antes de reprovar
+                log("  aba sem 'coleta encerrada' em 60 s: eventos na aba " + h.edt(() -> d.activityPanel().events().size()) + ", saúde "
+                        + h.edt(() -> d.activityPanel().health()) + ", selecionada " + h.edt(() -> d.activityPanel().selectedRun()) + ", serviço "
+                        + h.app.context().activity().view(id, 0).map(v -> v.events().size() + " eventos, " + v.health()).orElse("sem registro"));
+                DesktopHarness.capture(d, shots, cenario + "-diagnostico-coleta");
+            }
+            check(cenario + ": a janela de execução continuou aberta do início ao fim (nada a fechou)", h.edt(d::isDisplayable));
+            check(cenario + ": aba Atividade mostra a coleta encerrada", h.edt(() -> d.activityPanel().health() != null && d.activityPanel().health().completed()));
+            h.settle();
+            ExecutionRecord r = h.app.context().execution().current().orElseThrow().record();
+            snapshot(h, probe, d, id, effects, states, "fim");
+            h.run(() -> d.activityPanel().revealSummary());
+            DesktopHarness.capture(d, shots, cenario + "-5-fim");
+            h.run(() -> d.activityPanel().revealTimeline());
+            DesktopHarness.capture(d, shots, cenario + "-5-fim-linha-do-tempo");
+            List<String> ev = h.app.context().execution().store().events(r.id());
+            log("  " + cenario + ": estado " + r.state() + " · código " + (r.code() == null ? "—" : r.code().code()) + " · bloqueios " + r.locks()
+                    + " · suspensões " + r.suspensions() + " · saída " + r.exitCode());
+            boolean lockSeen = ev.stream().anyMatch(l -> l.contains("SESSION_LOCKED")) && ev.stream().anyMatch(l -> l.contains("SESSION_UNLOCKED"));
+            boolean suspSeen = r.suspensions() >= 1 && ev.stream().anyMatch(l -> l.contains("SUSPENSION_DETECTED"));
+            if (ensaio) {
+                log("  NÃO EXERCIDO (ensaio): bloqueio " + lockSeen + ", suspensão " + suspSeen);
+            } else {
+                check(cenario + ": tela bloqueada e desbloqueada registradas durante a execução", lockSeen);
+                check(cenario + ": suspensão do Windows detectada e registrada", suspSeen);
+                check(cenario + ": captura DURANTE o bloqueio", lockShot);
+            }
+            ExecutionState expected = switch (cenario) {
+                case "sucesso" -> ExecutionState.SUCCEEDED;
+                case "falha" -> ExecutionState.FAILED;
+                default -> ExecutionState.OUTCOME_UNKNOWN;
+            };
+            check(cenario + ": classificação " + r.state() + " = esperada " + expected, r.state() == expected);
+            if ("sem_protocolo".equals(cenario) && !ensaio) {
+                check("sem_protocolo: sem prova depois de suspensão → código AGT-EXE-026 (nada presumido)", r.code() != null && "AGT-EXE-026".equals(r.code().code()));
+            }
+            check(cenario + ": nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)", r.state() != ExecutionState.SUCCEEDED
+                    || Files.isRegularFile(output.resolve(r.id().value()).resolve("agent-result.json")));
+            check(cenario + ": efeito não idempotente aconteceu UMA vez (nada relançado)", Files.readAllLines(effects).size() == 1);
+            check(cenario + ": uma única execução registrada neste Agent", h.app.context().execution().store().all().size() == 1);
+            check(cenario + ": o Agent continuou o mesmo processo (um único LIFE_START)", agentLog(data).split("LIFE_START", -1).length == 2);
+            List<com.nekkora.agent.obs.ActivityEvent> act = h.edt(() -> d.activityPanel().events());
+            boolean contiguous = true;
+            for (int i = 0; i < act.size(); i++) contiguous &= act.get(i).sequence() == i + 1;
+            check(cenario + ": OBS-G6 sequência contínua 1.." + act.size() + " e desfecho do supervisor (" + r.state() + ") na linha do tempo", contiguous
+                    && act.stream().anyMatch(e -> e.source() == com.nekkora.agent.obs.ActivityEvent.Source.AGENT && r.state().name().equals(e.code())));
+            if (!ensaio) {
+                check(cenario + ": OBS-G6 SESSION_LOCKED, SESSION_UNLOCKED e SUSPENSION_DETECTED na linha do tempo", List.of("SESSION_LOCKED",
+                        "SESSION_UNLOCKED", "SUSPENSION_DETECTED").stream().allMatch(c -> act.stream().anyMatch(e -> c.equals(e.code()))));
+            }
+            com.nekkora.agent.obs.ActivityView.Completeness c = h.edt(() -> d.activityPanel().completeness());
+            check(cenario + ": linha do tempo " + c.integrity() + " " + c.gaps() + " (genérico: completa)", c.complete());
+            Files.write(evidence.resolve("eventos-execucao.jsonl"), ev, StandardCharsets.UTF_8);
+            Files.writeString(evidence.resolve("estado-execucao.json"), Files.readString(data.resolve("execucoes").resolve(r.id().value()).resolve("estado.json")));
+            Files.write(evidence.resolve("atividade-exportada.jsonl"), com.nekkora.agent.obs.ActivityExport.jsonl(act));
+            Files.writeString(phase, "FIM " + r.state() + " " + (r.code() == null ? "-" : r.code().code()));
+            h.run(d::dispose);
+        } finally {
+            h.close();
+        }
+    }
+
+    /** Uma linha de {@code estados.jsonl}: só estado, códigos e contagens (sem caminhos, máquina ou pessoa). */
+    private void snapshot(DesktopHarness h, com.nekkora.agent.exec.SessionProbe probe, ExecutionDialog d, com.nekkora.agent.exec.ExecutionId id, Path effects, Path out, String moment) throws Exception {
+        ExecutionRecord r = h.app.context().execution().store().record(id).orElseThrow();
+        List<com.nekkora.agent.obs.ActivityEvent> act = h.edt(() -> d.activityPanel().events());
+        com.nekkora.agent.obs.ActivityView.Completeness c = h.edt(() -> d.activityPanel().completeness());
+        boolean alive = r.owner() != null && r.owner().alive();
+        long effectLines = Files.isRegularFile(effects) ? Files.readAllLines(effects).size() : 0;
+        String line = String.format(java.util.Locale.ROOT,
+                "{\"momento\":\"%s\",\"quando_utc\":\"%s\",\"execucao\":\"%s\",\"estado\":\"%s\",\"codigo\":%s,\"bloqueios\":%d,\"suspensoes\":%d,"
+                        + "\"processo_vivo\":%s,\"sessao_bloqueada\":%s,\"efeitos\":%d,\"eventos_atividade\":%d,\"linha_do_tempo\":\"%s\",\"execucoes_no_agent\":%d}",
+                moment, Instant.now(), id.value(), r.state(), r.code() == null ? "null" : "\"" + r.code().code() + "\"", r.locks(), r.suspensions(), alive,
+                probe.probe().locked(), effectLines, act.size(), c.integrity(), h.app.context().execution().store().all().size());
+        Files.writeString(out, line + "\n", StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        log("  estado [" + moment + "] " + line);
     }
 
     // ----------------------------------------------------------------------------------------- queda simulada
@@ -389,9 +564,12 @@ public final class DesktopHomologation {
      * Queda simulada com um processo no formato do Studio que publica eventos do Framework ({@code obs_studio_main}):
      * cópia conferida, {@code saida.ref}, eventos STARTING/RUNNING e o registro RUNNING — como o Agent teria deixado.
      */
-    void semearObs(Path data, Path pkgDir, Path python, Path output) throws Exception {
+    void semearObs(Path data, Path pkgDir, Path python, Path output, String config) throws Exception {
         if (!Files.exists(pkgDir.resolve("manifest.json"))) {
-            com.nekkora.agent.exec.ObsStudioPackage.create(pkgDir, "{\"mode\": \"slow\", \"items\": 12, \"delay_ms\": 600}");
+            // config "modo:transações:ms" (sem aspas: o PowerShell 5.1 remove aspas de argumentos de programas)
+            String[] c = (config != null ? config : "slow:12:600").split(":");
+            com.nekkora.agent.exec.ObsStudioPackage.create(pkgDir, "{\"mode\": \"" + c[0] + "\", \"items\": " + Integer.parseInt(c[1]) + ", \"delay_ms\": "
+                    + Integer.parseInt(c[2]) + "}");
         }
         ExecutionPackage p = ExecutionPackage.inspect(pkgDir);
         com.nekkora.agent.exec.RunStore store = new com.nekkora.agent.exec.RunStore(data.resolve("execucoes"), com.nekkora.agent.storage.AtomicWriter.DEFAULT);

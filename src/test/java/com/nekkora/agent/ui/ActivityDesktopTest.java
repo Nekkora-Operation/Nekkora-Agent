@@ -11,6 +11,7 @@ import com.nekkora.agent.exec.ExecutionId;
 import com.nekkora.agent.exec.ExecutionState;
 import com.nekkora.agent.exec.ObsStudioPackage;
 import com.nekkora.agent.obs.ActivityEvent;
+import com.nekkora.agent.obs.ActivityView;
 import com.nekkora.agent.os.TrayController;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -144,6 +145,8 @@ class ActivityDesktopTest {
         assertTrue(ev.stream().anyMatch(e -> "profile.read_birth_date".equals(e.stepId())));
         assertEquals(ExecutionState.SUCCEEDED, h.app.context().execution().current().orElseThrow().record().state());
         assertTrue(h.edt(() -> texts(d.activityPanel())).stream().anyMatch(t -> t.equals("Estado: Concluída com sucesso")));
+        assertEquals(ActivityView.Integrity.COMPLETE, h.edt(() -> d.activityPanel().completeness()).integrity());
+        assertTrue(h.edt(() -> d.activityPanel().footerLabel().getText()).endsWith("linha do tempo completa"));
         shots(d, "O02-atividade-concluida");
         int firstCount = ev.size();
 
@@ -161,6 +164,11 @@ class ActivityDesktopTest {
         List<String> all = everything(d);
         assertNull(leak(all), "sentinela na tela");
         assertTrue(all.stream().anyMatch(t -> t.equals("Eventos recusados")), "a recusa é mostrada, não escondida");
+        // parcial nunca parece completa: aviso próprio, título do quadro e rodapé
+        assertEquals(ActivityView.Integrity.INCOMPLETE, h.edt(() -> d.activityPanel().completeness()).integrity());
+        assertTrue(all.contains("Linha do tempo incompleta"), "aviso de linha do tempo incompleta");
+        assertTrue(all.contains("Linha do tempo (incompleta)"), "título do quadro");
+        assertTrue(h.edt(() -> d.activityPanel().footerLabel().getText()).endsWith("linha do tempo INCOMPLETA"));
         shots(d, "O03-atividade-produtor-hostil");
 
         // 3) processo genérico (sem Framework, ~32 MB de saída): só ciclo de vida, "Etapas não disponíveis"
@@ -172,6 +180,7 @@ class ActivityDesktopTest {
         List<String> g = h.edt(() -> texts(d.activityPanel()));
         assertTrue(g.contains("Etapas não disponíveis para este tipo de processo"), g.toString());
         assertTrue(h.edt(() -> d.activityPanel().events()).stream().noneMatch(e -> e.source() == ActivityEvent.Source.FRAMEWORK));
+        assertEquals(ActivityView.Integrity.COMPLETE, h.edt(() -> d.activityPanel().completeness()).integrity(), "sem etapas por natureza não é lacuna");
         assertNull(leak(everything(d)));
         shots(d, "O04-atividade-processo-generico");
         h.run(d::dispose);
@@ -195,5 +204,102 @@ class ActivityDesktopTest {
         h.settle();
         capture(d2, "O05-historico-apos-reiniciar");
         h.run(d2::dispose);
+    }
+
+    @Test
+    @DisplayName("Lista de execuções: carregando, nenhuma execução e falha de leitura são estados distintos e ditos")
+    void historicoVazioEFalhaDeLeitura() throws Exception {
+        boolean windows = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
+        Path data = tmp.resolve("dados-vazio");
+        Path runs = Files.createDirectories(data.resolve("execucoes"));
+        h = DesktopHarness.start(data, AgentDesktopTest.ENV, new String[0], TrayController.SYSTEM);
+        ExecutionDialog d = open();
+        h.waitFor(() -> d.activityPanel().historyState() == ActivityPanel.HistoryState.EMPTY, "histórico vazio carregado");
+        h.settle();
+        assertEquals(0, (int) h.edt(() -> d.activityPanel().runsBox().getItemCount()));
+        assertFalse(h.edt(() -> d.activityPanel().runsBox().isVisible()), "nada a escolher: a lista dá lugar ao aviso");
+        assertTrue(h.edt(() -> d.activityPanel().runsEmptyLabel().isShowing()));
+        assertEquals("Nenhuma execução registrada", h.edt(() -> d.activityPanel().runsEmptyLabel().getText()));
+        assertEquals("Nenhuma execução registrada", h.edt(() -> d.activityPanel().runsBox().getAccessibleContext().getAccessibleDescription()));
+        List<String> empty = h.edt(() -> texts(d.activityPanel()));
+        assertTrue(empty.stream().anyMatch(t -> t.startsWith("Nenhuma execução registrada nesta máquina.")), empty.toString());
+        assertTrue(empty.stream().noneMatch(t -> t.contains("Não foi possível carregar")), "vazio não é falha");
+        capture(d, "O06-historico-vazio");
+        Assumptions.assumeTrue(windows, "falha de leitura com ACL real só no Windows (root lê tudo no Linux)");
+        deny(runs, true);
+        try {
+            h.run(() -> d.activityPanel().reloadButton().doClick());
+            h.waitFor(() -> d.activityPanel().historyState() == ActivityPanel.HistoryState.FAILED, "falha de leitura do histórico");
+            h.settle();
+            List<String> failed = h.edt(() -> texts(d.activityPanel()));
+            assertTrue(failed.contains("Não foi possível carregar o histórico"), failed.toString());
+            assertTrue(failed.stream().anyMatch(t -> t.contains("AGT-OBS-014")), failed.toString());
+            assertTrue(failed.stream().noneMatch(t -> t.startsWith("Nenhuma execução registrada nesta máquina.")), "falha não é 'nenhuma execução'");
+            assertEquals("Histórico indisponível", h.edt(() -> d.activityPanel().runsEmptyLabel().getText()));
+            capture(d, "O07-historico-falha-de-leitura");
+        } finally {
+            deny(runs, false);
+        }
+        h.run(() -> d.activityPanel().reloadButton().doClick());
+        h.waitFor(() -> d.activityPanel().historyState() == ActivityPanel.HistoryState.EMPTY, "recupera ao atualizar");
+        h.run(d::dispose);
+    }
+
+    @Test
+    @DisplayName("Leitura sem resposta não congela a aba: aviso, nova tentativa e recuperação")
+    void leituraPerdidaNaoCongelaAAba() throws Exception {
+        com.nekkora.agent.exec.ExecutionId id = com.nekkora.agent.exec.ExecutionId.random();
+        java.time.Instant t0 = java.time.Instant.parse("2026-10-23T10:00:00Z");
+        com.nekkora.agent.exec.ExecutionRecord rec = new com.nekkora.agent.exec.ExecutionRecord(id, com.nekkora.agent.exec.ExecutionPackage.Kind.LAB_GENERIC,
+                "pacote", "sha256:" + "a".repeat(64), ExecutionState.READY, null, t0, null, null, null, null, java.util.Map.of(), 0, 0, false, 0)
+                .moveTo(ExecutionState.STARTING, null, t0).moveTo(ExecutionState.RUNNING, null, t0).moveTo(ExecutionState.SUCCEEDED, null, t0.plusSeconds(5));
+        ActivityEvent done = ActivityEvent.of(id.value(), t0.plusSeconds(6), ActivityEvent.Source.COLLECTOR, "COLLECTION_COMPLETED", ActivityEvent.Level.INFO,
+                ActivityEvent.Category.TELEMETRY).build().withSequence(1);
+        ActivityView.Health ok = new ActivityView.Health(false, true, false, ActivityView.FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false, 0, false,
+                false, 0, null, false);
+        java.util.concurrent.atomic.AtomicInteger asks = new java.util.concurrent.atomic.AtomicInteger();
+        ActivityPanel.Data data = new ActivityPanel.Data() {
+            @Override
+            public void history(java.util.function.Consumer<com.nekkora.agent.exec.RunStore.Listing> onEdt) {
+                onEdt.accept(new com.nekkora.agent.exec.RunStore.Listing(List.of(rec), 0, false));
+            }
+
+            @Override
+            public void view(com.nekkora.agent.exec.ExecutionId x, long after, java.util.function.Consumer<ActivityPanel.Loaded> onEdt) {
+                if (asks.incrementAndGet() == 1) return; // a primeira resposta se perde
+                onEdt.accept(ActivityPanel.Loaded.of(java.util.Optional.of(new ActivityView(rec, List.of(done), ok))));
+            }
+
+            @Override
+            public void export(com.nekkora.agent.exec.ExecutionId x, List<ActivityEvent> events, ActivityView.Completeness c) {
+            }
+        };
+        java.util.concurrent.atomic.AtomicReference<ActivityPanel> panel = new java.util.concurrent.atomic.AtomicReference<>();
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            ActivityPanel p = new ActivityPanel(data);
+            p.start();
+            panel.set(p);
+        });
+        long t = System.currentTimeMillis();
+        while (System.currentTimeMillis() - t < ActivityPanel.LOST_REPLY_MS + 10_000) {
+            ActivityView.Health h = DesktopHarness.onEdt(() -> panel.get().health());
+            if (h != null && h.completed()) break;
+            Thread.sleep(200);
+        }
+        assertTrue(DesktopHarness.onEdt(() -> panel.get().health()) != null && DesktopHarness.onEdt(() -> panel.get().health()).completed(), "recuperou");
+        assertTrue(asks.get() >= 2, "pediu de novo depois da resposta perdida");
+        assertEquals(ActivityView.Integrity.COMPLETE, DesktopHarness.onEdt(() -> panel.get().completeness()).integrity());
+        javax.swing.SwingUtilities.invokeAndWait(() -> panel.get().stop());
+    }
+
+    /** ACL real: nega (ou devolve) a leitura da pasta ao usuário atual. */
+    private static void deny(Path dir, boolean on) throws Exception {
+        String icacls = System.getenv("SystemRoot") + "\\System32\\icacls.exe";
+        String user = System.getenv("USERNAME");
+        List<String> cmd = on ? List.of(icacls, dir.toString(), "/deny", user + ":(R)") : List.of(icacls, dir.toString(), "/remove:d", user);
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        p.getInputStream().readAllBytes();
+        assertTrue(p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(0, p.exitValue());
     }
 }
