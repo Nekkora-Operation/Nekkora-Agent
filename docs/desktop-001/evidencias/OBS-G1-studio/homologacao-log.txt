@@ -1,0 +1,23 @@
+OK    nenhum Studio aberto nesta máquina
+OK    pacote do Studio reconhecido (LIST, nekkora-rpa 0.3.0)
+OK    Iniciar habilitado só com todas as escolhas
+  durante (G1-obs-durante-01): estado RUNNING · 14 eventos · fase PROCESS · etapa search.fill_search_term · transações iniciadas 1
+  durante (G1-obs-durante-02): estado RUNNING · 22 eventos · fase PROCESS · etapa search.press_enter · transações iniciadas 1
+  durante (G1-obs-durante-03): estado RUNNING · 78 eventos · fase PROCESS · etapa search.press_enter · transações iniciadas 2
+  durante (G1-obs-durante-04): estado RUNNING · 86 eventos · fase PROCESS · etapa profile.read_title · transações iniciadas 2
+  durante (G1-obs-durante-05): estado RUNNING · 132 eventos · fase PROCESS · etapa search.press_enter · transações iniciadas 3
+  durante (G1-obs-durante-06): estado RUNNING · 188 eventos · fase PROCESS · etapa search.press_enter · transações iniciadas 4
+  durante (G1-obs-durante-07): estado RUNNING · 190 eventos · fase PROCESS · etapa search.press_enter · transações iniciadas 4
+OK    etapas do Framework na tela ENQUANTO a execução estava em andamento (7 capturas)
+  estado SUCCEEDED · código — · contagens {SUCCEEDED=4} · 237 eventos de atividade
+OK    execução CONCLUÍDA com sucesso pelo protocolo do supervisor
+OK    fases em sequência INIT → PROCESS → END na linha do tempo
+OK    ações reais na linha do tempo (search.press_enter, profile.read_birth_date)
+OK    transações: 4 iniciadas, 4 concluídas (linhas da lista: 4)
+OK    encerramento pelo supervisor (SUCCEEDED do Agent) seguido do fechamento da coleta
+OK    G7: cada evento da linha do tempo corresponde à linha original na mesma posição (232/232; linhas brutas 232)
+OK    G7: Agent ex-a1148dc79f96d13aee01a11ea0787839 ↔ Framework ex-726a8f47573041e5b809 (identidades distintas, correlação registrada)
+OK    G7: step_id → passo do Studio pelo manifesto (sem correspondência inventada para passos fora dele)
+OK    nenhum valor da lista de entrada (8 valores) na atividade, na tela ou na exportação
+OK    histórico após reiniciar o Agent: 237 eventos, mesma sequência, sem duplicar
+RESULTADO: 14 verificações, 0 falha(s)

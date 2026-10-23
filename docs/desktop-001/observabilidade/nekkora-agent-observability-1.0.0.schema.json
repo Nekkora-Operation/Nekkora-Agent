@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nekkora-agent/observability/1.0.0",
+  "title": "Envelope de atividade do Nekkora Agent (uma linha JSONL por evento)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "agent_execution_id", "sequence", "observed_utc", "source", "event_code", "severity", "category"],
+  "properties": {
+    "schema": {"const": "nekkora-agent/observability"},
+    "version": {"const": "1.0.0"},
+    "agent_execution_id": {"type": "string", "pattern": "^ex-[0-9a-f]{32}$"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "observed_utc": {"type": "string", "format": "date-time"},
+    "source": {"enum": ["AGENT", "FRAMEWORK", "COLLECTOR"]},
+    "event_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
+    "severity": {"enum": ["INFO", "WARNING", "ERROR"]},
+    "category": {"enum": ["LIFECYCLE", "ACTIVITY", "BUSINESS", "FAILURE", "TELEMETRY"]},
+    "phase": {"enum": ["INIT", "TRANSFER_DATA_IN", "PROCESS", "TRANSFER_DATA_OUT", "END"]},
+    "transaction_ref": {"type": "string", "pattern": "^t-[0-9a-f]{16}$"},
+    "step_id": {"type": "string", "maxLength": 120, "pattern": "^[a-z][a-z0-9_]{0,63}(\.[a-z0-9_]{1,63}){0,7}$",
+      "description": "Também recusado se contiver 4 ou mais dígitos seguidos."},
+    "studio_step_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "action": {"type": "string", "pattern": "^[a-z][a-z_]{0,39}$"},
+    "attempt": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "elapsed_ms": {"type": "integer", "minimum": 0, "maximum": 999999999999},
+    "status": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,39}$", "description": "Também recusado se contiver 4 ou mais dígitos seguidos."},
+    "error_code": {"type": "string", "pattern": "^([A-Z][A-Z0-9_]{1,63}|AGT-[A-Z]{2,5}-[0-9]{3})$"},
+    "counts": {"type": "object", "maxProperties": 16, "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,39}$"},
+      "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 999999999999}},
+    "correlation": {"type": "object", "additionalProperties": false, "properties": {
+      "framework_execution_id": {"type": "string", "pattern": "^ex-[0-9a-f]{8,64}$"},
+      "source_position": {"type": "integer", "minimum": 0}}}
+  }
+}

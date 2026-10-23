@@ -1,0 +1,15 @@
+﻿OK    SHA-256 do ZIP confere
+OK    queda simulada: processo vivo publicando eventos + registro RUNNING
+OK    Agent empacotado abriu sem Java no PATH
+OK    execução ADOTADA (processo vivo, sem relançar)
+OK    aba Atividade aberta pelo teclado (Alt+E, Alt+T)
+OK    atividade cresce DURANTE a execução adotada (20 → 40 → 58)
+OK    fim pelo protocolo do supervisor: SUCCEEDED (adotada, summary.json COMPLETED)
+OK    coleta encerrada (COLLECTION_COMPLETED)
+OK    sequência contínua 1..111; Framework 104 eventos = 104 linhas originais, sem repetição
+OK    a linha do tempo tem RECONCILE e ADOPTED do supervisor
+OK    Agent saiu (nenhuma execução ativa)
+OK    histórico depois de reabrir: atividade.jsonl intacto (nada recoletado nem duplicado)
+OK    Agent saiu de novo
+OK    nenhum processo relançado
+RESULTADO: 14 verificações, 0 falha(s)

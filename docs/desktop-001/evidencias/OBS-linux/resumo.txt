@@ -1,0 +1,53 @@
+Regressão Linux — eclipse-temurin:21-jdk-noble, ./mvnw -o -B clean verify (23/10/2026)
+
+== linux-obs-1
+[ERROR] Tests run: 163, Failures: 16, Errors: 0, Skipped: 16
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 ProcessOwnerTest.arvorePropria
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized
+
+== linux-obs-2
+[ERROR] Tests run: 163, Failures: 16, Errors: 0, Skipped: 16
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 ProcessOwnerTest.arvorePropria
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized
+
+== linux-obs-init-1
+[ERROR] Tests run: 163, Failures: 15, Errors: 0, Skipped: 16
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized
+
+== linux-obs-init-2
+[ERROR] Tests run: 163, Failures: 15, Errors: 0, Skipped: 16
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized
+
+== linux-base
+[ERROR] Tests run: 129, Failures: 15, Errors: 0, Skipped: 11
+      1 AgentBootstrapTest.dataDirectoryIsSeparateFromStudioAndExtension
+      1 SensitiveDataLeakTest.logsAndDefaultExportContainNoSyntheticSensitiveValue
+      1 ShortcutTest.failuresCarryOnlyCodeAndExceptionClass
+      9 ShortcutTest.invalidExecutablesAreRejectedWithReason
+      1 ShortcutTest.invalidOrMissingDestinationsStartNothing
+      1 ShortcutTest.studioStartsOnlyTheValidatedExecutableWithoutArgumentsOrShell
+      1 ShortcutTest.validExecutableIsNormalized

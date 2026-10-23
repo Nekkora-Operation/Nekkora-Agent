@@ -19,6 +19,7 @@ Framework foi alterado.
 | `ExecutionRecord` / `RunStore` | `estado.json` (`nekkora-agent/execution` 1.0.0) e `eventos.jsonl` (≤ 500 eventos, só códigos, tempos e contagens); retenção de 50 execuções; `saida.ref` local (caminho da saída, só para reconciliar; nunca no diagnóstico). |
 | `ExecutionController` | Uma execução ativa; conferências no instante de iniciar; drenagem de stdout/stderr só para contagem; monitor (500 ms; sessão a cada 5 s; suspensão por salto de relógio > 20 s); prazo (padrão 60 min); cancelamento; `reconcile()` na abertura; `close()` cancela a ativa. |
 | `ExecutionSetup` | Escolhas da janela em memória e lista do que falta para iniciar. |
+| `obs/*` (OBS-001) | Observabilidade local: envelope `nekkora-agent/observability` 1.0.0, leitura segura e incremental do `eventos.jsonl` do supervisor e do `events.jsonl` do Framework, histórico `atividade.jsonl` limitado, serviço em segundo plano. Só observa; o supervisor não depende dele. Ver `observabilidade.md`. |
 
 ## 2. Comandos (argumentos separados, `ProcessBuilder`, sem `cmd /c`)
 
@@ -65,8 +66,9 @@ READY ──► STARTING ──► RUNNING ──► SUCCEEDED | FAILED | CANCEL
 
 - Janela principal: linha "Execução local" em "Esta máquina" ("Nenhuma nesta sessão" / "Em andamento · N s · PID n") e
   botão "Execução local…". Largura ≤ 720 px mantida.
-- `ExecutionDialog`: cartão de execução (estado, tempo, PID, código), Preparação (pacote, aprovação, Python, entrada,
-  saída, o que falta) e Iniciar/Cancelar; mnemônicos. Fechar a janela não cancela.
+- `ExecutionDialog`: aba "Execução" com o cartão de execução (estado, tempo, PID, código), Preparação (pacote,
+  aprovação, Python, entrada, saída, o que falta) e Iniciar/Cancelar; mnemônicos. Fechar a janela não cancela.
+  Aba "Atividade" (OBS-001, Alt+T): acompanhamento, linha do tempo, histórico e exportação (`observabilidade.md` §7).
 - Sair com execução ativa: "Sair do Nekkora Agent?" com "Voltar" padrão (Alt+V) e "Encerrar execução e sair" (Alt+E).
 - "Execução pela Platform: Indisponível nesta versão" continua (o Agent não recebe execuções remotas).
 

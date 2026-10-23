@@ -1,0 +1,5 @@
+{"at": "2026-10-23T03:32:10.374149100Z", "event": "STARTING", "mode": "TABULAR", "kind": "STUDIO_PYTHON", "session": 1}
+{"at": "2026-10-23T03:32:10.424149600Z", "event": "RUNNING", "pid": 41784}
+{"at": "2026-10-23T03:32:10.955833Z", "event": "RECONCILE", "state": "RUNNING"}
+{"at": "2026-10-23T03:32:11.013571100Z", "event": "ADOPTED", "pid": 41784}
+{"at": "2026-10-23T03:32:32.586933400Z", "event": "SUCCEEDED", "exit": "none", "protocol": true, "output_bytes": 0, "code": "AGT-EXE-025"}
