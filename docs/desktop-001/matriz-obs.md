@@ -11,6 +11,10 @@ janela real) · **Real** (roteiro na janela real do Agent, `DesktopHomologation`
 
 ## Suítes
 
+Revisão da titular (23/10): Windows `clean verify` no `a59aad3` **175/0/1**; `-Pdesktop clean verify` no `a59aad3`
+**195 + escalas 150/200, 0 falhas, 1 pulado**; Linux `--init` no `a59aad3` **175, 15 falhas (= base), 16 pulados**
+(`relatorio.md` §8.1). Abaixo, a entrega anterior.
+
 | Suíte | Commit | Executados | Falhas | Pulados |
 |---|---|---|---|---|
 | Windows `./mvnw -o clean verify` (dentro de `tools/package-windows.ps1`) | `22926cc` | 163 | 0 | 1 |
@@ -39,7 +43,10 @@ recusada (`windowsJunctionInThePathIsRefused`).
 | OBS-G4 | Limite de 500 do supervisor vira `EVENT_GAP/AGT-OBS-006`; cota total purga a atividade das mais antigas (`HISTORY_PURGED`), nunca a mais recente; registro do supervisor fica | **Aprovado** | Auto | `ActivityServiceTest.supervisorEventLimit…`, `.totalQuota…` |
 | OBS-G5 | Queda do Agent no meio de uma execução REAL, `reconcile()`/`ADOPTED`, retomada da coleta: sequência contínua, cada linha do Framework exatamente uma vez, `ENGINE_STARTED` uma vez (nada relançado), `COLLECTION_RESUMED`, desfecho pelo protocolo | **Aprovado** | Auto (Python real) + Pacote | `ObservabilityProcessTest.quedaAdocaoERetomada`, `ActivityServiceTest.restart…`, `evidencias/OBS-pacote` |
 | OBS-G5 | Reabrir o Agent depois do fim: nada recoletado (arquivo com o mesmo SHA-256), histórico com a mesma contagem | **Aprovado** | Real + Pacote + Desktop | `OBS-G1-studio`, `OBS-pacote`, `ActivityDesktopTest` (`O05`) |
-| OBS-G6 | Win+L e suspensão REAL durante a execução, com a aba Atividade: `SESSION_LOCKED/UNLOCKED`, `SUSPENSION_DETECTED`, continuidade, terminal sem sucesso fictício, sem duplicar | **PENDING_PHYSICAL_HOMOLOGATION** | Pendente físico | roteiro `DesktopHomologation sessao` (já confere a aba) — `relatorio.md` §6; simulação automática: `ExecutionControllerTest.bloqueioESuspensao` |
+| OBS-G6 | Win+L e suspensão REAL durante a execução, com a aba Atividade: `SESSION_LOCKED/UNLOCKED`, `SUSPENSION_DETECTED`, continuidade, terminal sem sucesso fictício, sem duplicar | **PENDING_PHYSICAL_HOMOLOGATION** | Pendente físico | roteiro único `tools/homologation/fisica-g2-a13.ps1` ([`homologacao-fisica.md`](homologacao-fisica.md)); ENSAIO sem bloqueio/suspensão 25/25 (`evidencias/G2-A13-ensaio`); simulação automática: `ExecutionControllerTest.bloqueioESuspensao` |
+| OBS-R1 | Lista de execuções: "Carregando…", "Nenhuma execução registrada" (com explicação) e "Histórico indisponível" (`AGT-OBS-014`, ACL real negada) são distintos; registros ilegíveis contados; nunca seletor em branco | **Aprovado** | Auto + Desktop | `ExecutionDomainTest.historicoDistingueVazioDeFalha`, `ActivityDesktopTest.historicoVazioEFalhaDeLeitura` (`O06`, `O07`) |
+| OBS-R2 | Linha do tempo parcial nunca parece completa: `COMPLETE`/`IN_PROGRESS`/`PENDING`/`INCOMPLETE` com motivos e códigos (limites, recusas, lacuna, gravação, retenção, origem do Framework ou do supervisor interrompida); aviso, título, rodapé e prévia da exportação | **Aprovado** | Auto + Desktop | `CompletenessTest` (9), `ActivityTextTest`, `ActivityDesktopTest` (`O03` incompleta, `O02` completa) |
+| OBS-R3 | Leitura sem resposta não congela a aba (aviso + nova tentativa) | **Aprovado** | Desktop | `ActivityDesktopTest.leituraPerdidaNaoCongelaAAba` |
 | OBS-G7 | Mesma execução analisada pela linha do tempo e pelo `events.jsonl` original: 231/231 eventos batem na mesma posição (código, fase, `step_id`, execução do Framework); Agent `ex-…(32)` ↔ Framework `ex-…(20)` distintos e correlacionados; `step_id` → `studioStepId` só pelo manifesto conferido, nenhum passo fora do manifesto recebe correspondência | **Aprovado** | Real + Auto | `OBS-G1-studio/homologacao-log.txt`, `ObservabilityProcessTest.sentinelasNaoVazam` |
 | OBS-G8 | Testes de parser/adaptador/retenção/controlador; UI real Windows empacotada sem Java no PATH; regressões | **Aprovado** (exceto físicos) | Auto + Desktop + Pacote | §Suítes, §Regressão final |
 

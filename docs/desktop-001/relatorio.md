@@ -20,7 +20,11 @@ Windows real, exceto G2/A13/OBS-G6 com a titular presente** (bloqueio real da te
 | `0ad0bc8` | OBS-001: sucesso com código = "Observação"; roteiro físico `sessao` confere a aba (OBS-G6) |
 | `a649ecc` | OBS-001: lote de cada rodada na ordem de ocorrência; exemplos documentados conferidos pelo codec |
 | `22926cc` | OBS-001: fases observadas na ordem canônica (código homologado) |
-| (este)   | OBS-001: documentação, matriz OBS-G1…G8, evidências |
+| `a282f1f` | OBS-001: documentação, matriz OBS-G1…G8, evidências |
+| `27b0b64` | OBS-001: capturas da regressão de desktop |
+| `c4f360b` | **Revisão da titular (23/10)**: lista vazia × falha de leitura (`AGT-OBS-014`), completude explícita da linha do tempo, resposta sempre entregue à aba, roteiro físico `fisica-g2-a13.ps1` + `sessao-cenario` + laboratórios de sessão |
+| `a59aad3` | Teste `a03` da AGENT-001: toque de Alt antes do clique real (foreground lock) |
+| (este)   | Revisão: documentação, ensaio do roteiro físico, regressões |
 
 Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
 
@@ -40,12 +44,12 @@ Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
 
 | Lacuna | Situação | Como fechar |
 |---|---|---|
-| Bloqueio/desbloqueio REAL da tela durante a execução | Lógica provada com sonda simulada; a sonda real foi lida na sessão 1 (sem bloqueio) | §6, passo 1 |
-| Suspensão/retomada REAL (A13 da AGENT-001 e da execução) | Detecção por salto de relógio provada com relógio simulado | §6, passos 1–2 |
+| Bloqueio/desbloqueio REAL da tela durante a execução | `PENDING_PHYSICAL_HOMOLOGATION`. Lógica provada com sonda simulada; roteiro físico pronto e ENSAIADO (25/25 sem bloqueio/suspensão) | §6 |
+| Suspensão/retomada REAL (A13 da AGENT-001 e da execução) | `PENDING_PHYSICAL_HOMOLOGATION`. Detecção provada com relógio simulado; A13 (mesmos PIDs, 1 ícone, segunda abertura recusada) conferido no ensaio sem suspensão | §6 |
 | Bloqueio por tela bloqueada no INÍCIO, em tela real | Simulado (com a tela bloqueada não há quem clique em Iniciar; o caso real é a execução agendada, fora do escopo) | — |
 | `-Pdesktop` completo no HEAD final | **Feito** (§8) | — |
 | Linux | 15 falhas pré-existentes idênticas à base (caminhos do Windows nos testes da AGENT-001) + 1 artefato do contêiner sem `init` (§8) | Fora do escopo; não mascaradas |
-| OBS-G6: Win+L e suspensão reais com a aba Atividade | `PENDING_PHYSICAL_HOMOLOGATION`; lógica provada com sonda/relógio simulados | §6, passo 1 (o roteiro já confere a aba) |
+| OBS-G6: Win+L e suspensão reais com a aba Atividade | `PENDING_PHYSICAL_HOMOLOGATION`; lógica provada com sonda/relógio simulados; o roteiro físico confere a aba nas 4 execuções | §6 |
 | Regerar o pacote do Studio | Não feito: o OBS-G1 usou o pacote REAL gerado pelo Studio na SPEC-OC (idêntico ao do G1) — regerar roda a homologação de interface do Studio, que grava no repositório do Studio | Rodar no Studio com autorização |
 | Ligação simbólica no Windows | Teste PULADO sem privilégio; junção testada e recusada; no Linux a ligação simbólica é testada e recusada | Rodar como administrador/modo desenvolvedor se desejado |
 | Leitor de tela | Não testado (como na AGENT-001) | — |
@@ -87,19 +91,17 @@ Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
 
 ## 6. Procedimento de homologação pendente (titular presente, máquina livre)
 
-Pré-requisitos: Agent compilado (`./mvnw -o -DskipTests package` + classpath de teste) e o Python do framework
-(`..\Nekkora-RPA-Framework\.venv\Scripts\python.exe`). Sem jogos/chamadas abertos; não mexer no mouse durante o
-`Robot`.
-
-1. **Sessão durante a execução (G2 + OBS-G6)** — `java -cp <classpath de teste> com.nekkora.agent.ui.DesktopHomologation sessao
-   <evidências> <pacote lab_efeito> <python> <saída>`. Quando o roteiro pedir: Win+L, ~10 s, desbloquear; depois
-   Iniciar → Suspender, ≥ 1 min, retomar. Esperado: `SESSION_LOCKED`/`SESSION_UNLOCKED`, `SUSPENSION_DETECTED`, estado
-   terminal sem relançamento, `efeitos.txt` com UMA linha, um único `LIFE_START`; na aba Atividade (aberta pelo
-   roteiro): os mesmos fatos com horário de ocorrência e de observação, sequência contínua, desfecho do supervisor,
-   capturas `G6-atividade-*` e `atividade-exportada.jsonl`.
-2. **A13 com o pacote** — abrir o `.exe` do ZIP; `tools/homologation/suspend-check.ps1 -Fase antes`; suspender ≥ 1 min;
-   retomar; `-Fase depois`. Esperado: mesmos PIDs, um ícone, sem `LIFE_START` novo.
-3. **Regressão desktop no HEAD** — `./mvnw -o -Pdesktop clean verify`.
+**Um único roteiro** cobre G2, A13 e OBS-G6 no mesmo bloqueio e na mesma suspensão reais:
+`tools/homologation/fisica-g2-a13.ps1 -Python <venv do Framework> -TestClasspath <classpath de teste>` — guia completo,
+o que é verificado e como ler as evidências em [`homologacao-fisica.md`](homologacao-fisica.md). Resumo: o Agent
+EMPACOTADO (único ícone na bandeja) adota uma execução sintética com eventos reais do Framework; três execuções
+sintéticas (sucesso, sem protocolo, falha) são lançadas pelo botão Iniciar na janela real; a pessoa faz Win+L / ~10 s /
+desbloquear e Iniciar → Suspender / ≥ 1 min / retomar quando o roteiro pedir. Esperado: nenhuma execução duplicada
+(efeito 1×), classificação `SUCCEEDED` / `OUTCOME_UNKNOWN` (`AGT-EXE-026`) / `FAILED` / `SUCCEEDED` (adotada),
+mesmos PIDs, um único ícone, segunda abertura recusada, linha do tempo contínua e completa com `SESSION_LOCKED`,
+`SESSION_UNLOCKED` e `SUSPENSION_DETECTED`; instantâneos antes/durante/depois e evidências sanitizadas. O roteiro foi
+ENSAIADO sem bloqueio/suspensão (resultado em `homologacao-fisica.md` §4). O roteiro antigo (`DesktopHomologation
+sessao` + `suspend-check.ps1`) continua disponível, mas o novo o substitui.
 
 Homologações já feitas (reproduzíveis): OBS-G1 `DesktopHomologation obs-studio <evidências> <pacote do Studio> <python>
 <lista> <saída>` (`evidencias/OBS-G1-studio`), OBS no pacote `tools/homologation/obs-001-pacote.ps1 -Python …
@@ -114,6 +116,28 @@ Python do ambiente do projeto com `nekkora-rpa` na versão do manifesto (o Agent
 e o Google Chrome instalado. Pacotes de laboratório: qualquer Python ≥ 3.12.
 
 ## 8. Regressão no código final (OBS-001)
+
+### 8.1 Revisão da titular (23/10, commits `c4f360b` e `a59aad3`)
+
+| Suíte | Commit | Executados | Falhas | Pulados (identificados) |
+|---|---|---|---|---|
+| Windows `./mvnw -o clean verify` (dentro de `tools/package-windows.ps1`) | `a59aad3` | 175 | 0 | 1 — `SourceFileTest.symbolicLinksAreRefused` (criar ligação simbólica exige privilégio que a sessão não tem; a junção é testada e recusada) |
+| Windows `./mvnw -o -Pdesktop clean verify` + `ScaleEvidenceTest` 150% e 200% | `a59aad3` | 195 + 1 + 1 | 0 | o mesmo 1 |
+| Linux `eclipse-temurin:21-jdk-noble`, `docker run --init` | `a59aad3` | 175 | 15 (= as 15 da base `de2170f`) | 16 — lista em `evidencias/OBS-linux/resumo-revisao.txt` |
+
+Ocorrências desta rodada, registradas em vez de escondidas:
+- Antes do `a59aad3`, a suíte de desktop completa falhou 3 vezes seguidas em `AgentDesktopTest.a03` (teste da AGENT-001,
+  não alterado pela OBS-001), e isolado passava (13/13). Causa medida com uma captura de tela temporária, apagada em
+  seguida por mostrar conteúdo pessoal: a janela do terminal ficava por cima e recebia o clique real do `Robot`; o
+  Windows não entregava o primeiro plano à janela de teste (foreground lock). Correção só no teste: toque de Alt antes
+  de trazer a janela para a frente, mais uma espera pela janela ativa. Depois disso: 195/0/1.
+- O ensaio do roteiro físico achou 6 defeitos do PRÓPRIO roteiro, todos corrigidos antes do ensaio limpo: aspas do
+  JSON removidas pelo PS 5.1; `.Count` sob `StrictMode`; leitura do `agent.log` aberto; o lançador do `python.exe` do venv
+  (2 processos por execução); erro terminando com código 0; e o `ESC` da contagem de ícones fechando a janela de um
+  cenário. Este último explicou as duas falhas intermitentes de "coleta encerrada"; a aba não tinha defeito. Mesmo
+  assim, a aba ganhou proteção contra resposta perdida (`ActivityDesktopTest.leituraPerdidaNaoCongelaAAba`).
+
+### 8.2 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
 |---|---|---|---|---|---|

@@ -1,0 +1,16 @@
+OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
+  estado [antes] {"momento":"antes","quando_utc":"2026-10-23T15:40:55.490306800Z","execucao":"ex-6d4caad1bc46ebbcb27a9e64886d24c3","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
+EM_ANDAMENTO sucesso ex-6d4caad1bc46ebbcb27a9e64886d24c3
+OK    sucesso: a janela de execução continuou aberta do início ao fim (nada a fechou)
+OK    sucesso: aba Atividade mostra a coleta encerrada
+  estado [fim] {"momento":"fim","quando_utc":"2026-10-23T15:46:56.529482900Z","execucao":"ex-6d4caad1bc46ebbcb27a9e64886d24c3","estado":"SUCCEEDED","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
+  sucesso: estado SUCCEEDED · código — · bloqueios 0 · suspensões 0 · saída 0
+  NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
+OK    sucesso: classificação SUCCEEDED = esperada SUCCEEDED
+OK    sucesso: nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)
+OK    sucesso: efeito não idempotente aconteceu UMA vez (nada relançado)
+OK    sucesso: uma única execução registrada neste Agent
+OK    sucesso: o Agent continuou o mesmo processo (um único LIFE_START)
+OK    sucesso: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (SUCCEEDED) na linha do tempo
+OK    sucesso: linha do tempo COMPLETE [] (genérico: completa)
+RESULTADO: 10 verificações, 0 falha(s)

@@ -86,7 +86,8 @@ Opcionais ausentes são omitidos. Não existe campo livre (`message`, `detail`, 
 (`MALFORMED_JSON`, `LINE_TOO_LONG`, `ENCODING_INVALID`, `PARTIAL_LINE`, `SCHEMA_MISMATCH`, `SCHEMA_UNSUPPORTED`,
 `FIELD_INVALID`, `NESTING_TOO_DEEP`, `STALE_EVENT`, `CORRELATION_INVALID`, `CORRELATION_CONFLICT`),
 `SOURCE_UNAVAILABLE` (`AGT-OBS-001`), `SOURCE_AVAILABLE`, `SOURCE_UNSAFE` (`AGT-OBS-003`), `SOURCE_REPLACED`
-(`AGT-OBS-004`), `HISTORY_PURGED` (`AGT-OBS-010`). Catálogo `AGT-OBS-001…013` em `core/ErrorCode`.
+(`AGT-OBS-004`), `HISTORY_PURGED` (`AGT-OBS-010`). Catálogo `AGT-OBS-001…014` em `core/ErrorCode` (`AGT-OBS-014`:
+o histórico de execuções não pôde ser lido — só na tela, nunca no envelope).
 
 ### 3.3 Mapeamento
 - **Framework** (lista de permissão): `timestamp_utc`→`timestamp_utc`; `execution_id`→`correlation`; `event_code`,
@@ -174,6 +175,27 @@ lacuna, retenção, conteúdo desconhecido, coleta retomada), linha do tempo (fi
 em metadados; colunas #, hora, nível, evento, etapa, ação, resultado, tentativa, duração, fase, transação `T1…`,
 origem), detalhe do evento selecionado e exportação. Textos em português; códigos e schema em inglês.
 Escalas 100/150/200% conferidas (`ScaleEvidenceTest`, `O12-atividade-*`).
+
+**Lista de execuções (revisão 23/10).** `RunStore.list()` devolve os registros legíveis, quantos registros existem mas
+não puderam ser lidos e se a própria pasta falhou; só "não existe" CONFIRMADO (`Files.notExists`) é histórico vazio —
+acesso negado nunca vira "nenhuma execução". A tela nunca mostra o seletor em branco: "Carregando histórico…",
+"Nenhuma execução registrada" (com a explicação no cartão) ou "Histórico indisponível" com o aviso de erro
+`AGT-OBS-014` e "Atualizar lista"; registros ilegíveis são contados num aviso próprio; falha ao atualizar uma lista já
+mostrada mantém a lista e avisa que pode estar incompleta. Uma leitura da atividade que falha (exceção) chega à tela
+como "Falha ao ler a atividade" e é repetida em 5 s (antes a aba ficava esperando sem resposta).
+
+**Completude da linha do tempo (revisão 23/10).** `ActivityView.completeness(saúde, eventos)` — sem Swing — devolve
+`COMPLETE`, `IN_PROGRESS`, `PENDING` ou `INCOMPLETE` com os motivos (cada um com código): limite de eventos
+(`AGT-OBS-005`), limite de 500 do supervisor (`AGT-OBS-006`), linhas recusadas (`AGT-OBS-002`), lacuna de sequência ou
+linha ilegível (`AGT-OBS-013`), histórico não gravado (`AGT-OBS-009`), atividade removida (`AGT-OBS-010`), etapas do
+Framework interrompidas (`AGT-OBS-004`) ou indisponíveis (`AGT-OBS-001`), registro do supervisor deixou de ser lido
+(`AGT-OBS-001`). "Completa" só com a coleta encerrada e nenhum motivo; coleta não encerrada é `PENDING`, nunca completa.
+Na tela: aviso "Linha do tempo incompleta" (primeiro aviso, com todos os motivos), linha "Linha do tempo" no resumo,
+título do quadro "Linha do tempo (incompleta)" e rodapé "… · linha do tempo INCOMPLETA"; a prévia da exportação diz
+"ATENÇÃO: linha do tempo INCOMPLETA — …" com os motivos (os marcadores de lacuna vão no arquivo). Indisponibilidade
+temporária do arquivo do Framework que se recupera (`SOURCE_AVAILABLE`) não é lacuna: a leitura continua da mesma
+posição (correção: o histórico relido do disco também volta a `READING`). Campos desconhecidos descartados não tiram
+eventos da linha do tempo e não a tornam incompleta (continuam no aviso próprio).
 
 ## 8. Fronteira com a Platform e com a STUDIO-AGENT-001 (desenho, nada conectado)
 

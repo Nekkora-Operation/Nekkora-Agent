@@ -1,0 +1,65 @@
+﻿OK    SHA-256 do ZIP do Agent confere
+OK    nenhum Nekkora Agent aberto antes de começar
+OK    nenhum ícone do Nekkora Agent na bandeja antes de começar
+OK    Python do venv do Framework existe
+     energia (powercfg /a, início): Os seguintes estados de suspensão estão disponíveis neste sistema: | Espera (S3) | Hibernar
+OK    P: execução sintética com eventos do Framework em andamento (registro RUNNING; o Agent vai adotá-la)
+OK    P: Agent empacotado abriu sem Java no PATH
+OK    P: execução ADOTADA, processo vivo (PIDs da execução: 43220,42876), nada relançado
+OK    P: aba Atividade aberta pelo teclado (Alt+E, Alt+T)
+     P [antes] estado RUNNING · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 21 (16 do Framework)
+OK    P antes: 2 processos do Agent (lançador + JVM), 1 ícone na bandeja, 1 LIFE_START
+OK    S sucesso: execução lançada pelo botão Iniciar e em andamento
+OK    S sem_protocolo: execução lançada pelo botão Iniciar e em andamento
+OK    S falha: execução lançada pelo botão Iniciar e em andamento
+     P [execucoes-iniciadas] estado RUNNING · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 53 (48 do Framework)
+OK    S sucesso: roteiro da janela real sem falhas (RESULTADO: 10 verificações, 0 falha(s))
+        [sucesso] OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
+        [sucesso] OK    sucesso: a janela de execução continuou aberta do início ao fim (nada a fechou)
+        [sucesso] OK    sucesso: aba Atividade mostra a coleta encerrada
+        [sucesso] NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
+        [sucesso] OK    sucesso: classificação SUCCEEDED = esperada SUCCEEDED
+        [sucesso] OK    sucesso: nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)
+        [sucesso] OK    sucesso: efeito não idempotente aconteceu UMA vez (nada relançado)
+        [sucesso] OK    sucesso: uma única execução registrada neste Agent
+        [sucesso] OK    sucesso: o Agent continuou o mesmo processo (um único LIFE_START)
+        [sucesso] OK    sucesso: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (SUCCEEDED) na linha do tempo
+        [sucesso] OK    sucesso: linha do tempo COMPLETE [] (genérico: completa)
+OK    S sem_protocolo: roteiro da janela real sem falhas (RESULTADO: 10 verificações, 0 falha(s))
+        [sem_protocolo] OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
+        [sem_protocolo] OK    sem_protocolo: a janela de execução continuou aberta do início ao fim (nada a fechou)
+        [sem_protocolo] OK    sem_protocolo: aba Atividade mostra a coleta encerrada
+        [sem_protocolo] NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
+        [sem_protocolo] OK    sem_protocolo: classificação OUTCOME_UNKNOWN = esperada OUTCOME_UNKNOWN
+        [sem_protocolo] OK    sem_protocolo: nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)
+        [sem_protocolo] OK    sem_protocolo: efeito não idempotente aconteceu UMA vez (nada relançado)
+        [sem_protocolo] OK    sem_protocolo: uma única execução registrada neste Agent
+        [sem_protocolo] OK    sem_protocolo: o Agent continuou o mesmo processo (um único LIFE_START)
+        [sem_protocolo] OK    sem_protocolo: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (OUTCOME_UNKNOWN) na linha do tempo
+        [sem_protocolo] OK    sem_protocolo: linha do tempo COMPLETE [] (genérico: completa)
+OK    S falha: roteiro da janela real sem falhas (RESULTADO: 10 verificações, 0 falha(s))
+        [falha] OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
+        [falha] OK    falha: a janela de execução continuou aberta do início ao fim (nada a fechou)
+        [falha] OK    falha: aba Atividade mostra a coleta encerrada
+        [falha] NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
+        [falha] OK    falha: classificação FAILED = esperada FAILED
+        [falha] OK    falha: nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)
+        [falha] OK    falha: efeito não idempotente aconteceu UMA vez (nada relançado)
+        [falha] OK    falha: uma única execução registrada neste Agent
+        [falha] OK    falha: o Agent continuou o mesmo processo (um único LIFE_START)
+        [falha] OK    falha: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (FAILED) na linha do tempo
+        [falha] OK    falha: linha do tempo COMPLETE [] (genérico: completa)
+     P [depois] estado SUCCEEDED · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
+OK    P A13: mesmos processos do Agent antes e depois ([10408,32672] = [10408,32672])
+OK    P A13: um único ícone na bandeja depois da retomada (1)
+OK    P A13: nenhum novo LIFE_START (1)
+     P [depois-da-segunda-abertura] estado SUCCEEDED · Agent 2 processo(s) [10408,32672] · ícones 1 · LIFE_START 1 · atividade 975 (968 do Framework)
+OK    P A13: segunda abertura mostrou o aviso e saiu (código 3); continuam os mesmos 2 processos, 1 ícone, 1 LIFE_START
+OK    P: execução adotada terminou pelo protocolo: SUCCEEDED
+OK    P OBS-G6: sequência contínua 1..975; Framework 968 eventos = 968 linhas originais, sem repetição
+OK    P: ENGINE_STARTED uma única vez, nenhum processo novo da execução em nenhum instantâneo (0) e nenhum restante
+OK    P OBS-G6: nenhum EVENT_GAP, EVENT_INVALID ou origem interrompida (linha do tempo completa)
+OK    P: Agent empacotado saiu (nenhuma execução ativa)
+     sanitização: 0 arquivo(s) com trechos substituídos por <local>/<caminho>
+OK    evidências sem usuário, máquina ou caminhos locais
+RESULTADO: 25 verificações, 0 falha(s) — ENSAIO: bloqueio/suspensão NÃO EXERCIDOS
