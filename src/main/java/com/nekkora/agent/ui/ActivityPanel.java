@@ -69,6 +69,7 @@ final class ActivityPanel extends JPanel {
     }
 
     static final int REFRESH_MS = 400;
+    private static final List<String> PHASE_ORDER = List.of("INIT", "TRANSFER_DATA_IN", "PROCESS", "TRANSFER_DATA_OUT", "END");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM HH:mm:ss", Locale.ROOT).withZone(ZoneId.systemDefault());
     private static final String ALL_LEVELS = "Todos os níveis", WARN_UP = "Avisos e erros", ERRORS = "Só erros";
@@ -415,7 +416,9 @@ final class ActivityPanel extends JPanel {
         boolean steps = health == null || health.frameworkExpected();
         boolean running = r != null && !r.state().terminal();
         if (steps) {
-            kv.add("Fases observadas", p.phasesSeen().isEmpty() ? "—" : String.join(" → ", p.phasesSeen().stream().map(ActivityText::phase).toList()));
+            // conjunto na ordem canônica do Framework (a ordem real está na linha do tempo)
+            List<String> seen = PHASE_ORDER.stream().filter(p.phasesSeen()::contains).map(ActivityText::phase).toList();
+            kv.add("Fases observadas", seen.isEmpty() ? "—" : String.join(" → ", seen));
             if (p.phase() != null) kv.add(running ? "Fase atual" : "Última fase", ActivityText.phase(p.phase()));
             if (p.currentStep() != null) {
                 ActivityEvent st = p.currentStep();
