@@ -118,7 +118,7 @@ e o Google Chrome instalado. Pacotes de laboratório: qualquer Python ≥ 3.12.
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
 |---|---|---|---|---|---|
 | Windows `./mvnw -o clean verify` | `22926cc` | 163 | 0 | 1 | pulado: ligação simbólica sem privilégio (junção testada) |
-| Windows `./mvnw -o -Pdesktop clean verify` + escalas 150/200% | HEAD dos documentos | ver `matriz-obs.md` §Regressão final | | | |
+| Windows `./mvnw -o -Pdesktop clean verify` + escalas 150/200% | `a282f1f` | 181 + 1 + 1 | 0 | 1 | o mesmo pulado; capturas em `evidencias/OBS-desktop` |
 | Linux `eclipse-temurin:21-jdk-noble` (cópia da árvore de `22926cc` + documentos) | — | 163 | 16 | 16 | 15 = falhas da base + `ProcessOwnerTest.arvorePropria` (zumbi sob o PID 1 do contêiner) |
 | Linux, mesmo contêiner com `--init` (2 rodadas) | — | 163 | **15** | 16 | exatamente as 15 da base |
 | Linux base `de2170f` (antes da OBS-001) | `de2170f` | 129 | 15 | 11 | referência |

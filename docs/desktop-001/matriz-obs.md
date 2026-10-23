@@ -14,7 +14,7 @@ janela real) · **Real** (roteiro na janela real do Agent, `DesktopHomologation`
 | Suíte | Commit | Executados | Falhas | Pulados |
 |---|---|---|---|---|
 | Windows `./mvnw -o clean verify` (dentro de `tools/package-windows.ps1`) | `22926cc` | 163 | 0 | 1 |
-| Windows `./mvnw -o -Pdesktop clean verify` (+ JVMs de escala 150/200%) | ver §Regressão final | — | — | — |
+| Windows `./mvnw -o -Pdesktop clean verify` (+ JVMs de escala 150/200%) | `a282f1f` (código `22926cc` + documentos) | 181 + 1 + 1 | 0 | 1 | capturas `evidencias/OBS-desktop` |
 | Linux `eclipse-temurin:21-jdk-noble` com `--init` (2 rodadas) | árvore de `22926cc` | 163 | 15 (= base) | 16 | `relatorio.md` §8 |
 | Linux, mesmo contêiner sem `--init` (2 rodadas) | árvore de `22926cc` | 163 | 16 | 16 | +`ProcessOwnerTest.arvorePropria` (zumbi sob o PID 1; ver §8) |
 
@@ -45,8 +45,9 @@ recusada (`windowsJunctionInThePathIsRefused`).
 
 ## Regressão final
 
-Preenchida em `relatorio.md` §1 com o resultado do commit final (Windows `clean verify`, `-Pdesktop clean verify`,
-Linux com as falhas da base listadas).
+Windows `-Pdesktop clean verify` no `a282f1f` (o commit seguinte só acrescenta as capturas geradas por esta mesma
+execução e estas linhas): 181 testes + `ScaleEvidenceTest` em 150% e 200%, 0 falhas, 1 pulado (ligação simbólica).
+Windows `clean verify` no `22926cc`: 163, 0 falhas, 1 pulado. Linux: `relatorio.md` §8.
 
 ## Pendências que dependem da titular
 
