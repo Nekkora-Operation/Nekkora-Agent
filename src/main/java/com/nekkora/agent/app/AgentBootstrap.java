@@ -12,6 +12,7 @@ import com.nekkora.agent.exec.ApprovalStore;
 import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.exec.SessionProbe;
+import com.nekkora.agent.obs.ActivityService;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.storage.AgentDataDir;
@@ -110,17 +111,22 @@ public final class AgentBootstrap {
 
         // DESKTOP-001: execução local supervisionada. Depois de um reinício, execuções não terminadas são reconciliadas
         // (adotadas se o processo ainda for o mesmo; senão fechadas sem inventar resultado) — nada é relançado
-        ExecutionController execution = new ExecutionController(new RunStore(dir.root().resolve("execucoes"), e.writer()),
+        RunStore runs = new RunStore(dir.root().resolve("execucoes"), e.writer());
+        ExecutionController execution = new ExecutionController(runs,
                 new ApprovalStore(dir.root().resolve("execucao").resolve("aprovacoes.json"), e.writer()), SessionProbe.system(e.windows(), e.env()),
                 e.clock(), dir.root().resolve("execucao"));
+        // OBS-001: atividade local (só observa: lê os eventos já gravados pelo supervisor e pelo Framework, em segundo plano)
+        ActivityService activity = new ActivityService(runs, e.clock());
+        execution.addListener(activity.controllerListener());
         int reconciled = execution.reconcile();
+        activity.start(); // retoma a coleta pendente (inclusive da execução adotada) a partir das posições gravadas
         if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
                 Field.of("adopted", execution.running()));
 
         // a abertura do arquivo de log é assíncrona: espera o resultado para a primeira tela já mostrar o estado real
         log.flush(1000);
         return new Ready(new AgentContext(build, dir, lock, log, journal, config, machine, options, e.clock(),
-                e.processStart(), e.launcher(), e.probe(), e.windows(), execution));
+                e.processStart(), e.launcher(), e.probe(), e.windows(), execution, activity));
     }
 
     private static String shortHash(String h) {

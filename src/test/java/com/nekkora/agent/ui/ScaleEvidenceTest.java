@@ -69,6 +69,11 @@ class ScaleEvidenceTest {
             h.settle();
             check(h, x, "Execução local");
             capture(x, "D12-execucao-local-" + pct);
+            // OBS-001: aba Atividade na mesma escala
+            h.run(() -> ((ExecutionDialog) x).tabs().setSelectedIndex(1));
+            h.settle();
+            check(h, x, "Atividade");
+            capture(x, "O12-atividade-" + pct);
             h.run(x::dispose);
         }
     }

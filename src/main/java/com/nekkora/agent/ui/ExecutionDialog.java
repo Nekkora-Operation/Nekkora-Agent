@@ -16,6 +16,8 @@ import com.nekkora.ui.core.Status;
 import com.nekkora.ui.data.NekkoraKeyValueView;
 import com.nekkora.ui.data.NekkoraStatusBadge;
 import com.nekkora.ui.feedback.NekkoraInlineAlert;
+import com.nekkora.ui.icon.IconName;
+import com.nekkora.ui.navigation.NekkoraTabs;
 import com.nekkora.ui.typography.NekkoraParagraph;
 import com.nekkora.ui.typography.TextTone;
 import java.awt.Component;
@@ -59,7 +61,10 @@ final class ExecutionDialog extends FittedDialog {
     private final NekkoraCard setupCard = new NekkoraCard("Preparação", null);
     private final NekkoraCard runCard = new NekkoraCard("Execução", null);
 
-    ExecutionDialog(Component parent, Actions actions) {
+    private final ActivityPanel activity;
+    private final NekkoraTabs tabs = new NekkoraTabs();
+
+    ExecutionDialog(Component parent, Actions actions, ActivityPanel.Data activityData) {
         super(parent, TITLE);
         setDescription("Executa nesta máquina, na sua sessão, uma automação local aprovada por você. Nada começa sozinho e "
                 + "a Platform não participa.");
@@ -86,7 +91,25 @@ final class ExecutionDialog extends FittedDialog {
         body.addAll(runCard, setupCard, buttons);
         NekkoraScrollPane sp = NekkoraScrollPane.verticalOnly(body);
         sp.setBorder(null);
-        setContent(sp);
+        // OBS-001: a aba "Atividade" acompanha etapas e eventos (somente leitura); a de execução continua igual
+        activity = new ActivityPanel(activityData);
+        tabs.addTab("Execução", IconName.PLAY, sp);
+        tabs.addTab("Atividade", IconName.PULSE, activity);
+        tabs.setMnemonicAt(0, KeyEvent.VK_X);
+        tabs.setMnemonicAt(1, KeyEvent.VK_T);
+        tabs.getAccessibleContext().setAccessibleName("Execução local");
+        setContent(tabs);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowOpened(java.awt.event.WindowEvent e) {
+                activity.start();
+            }
+
+            @Override
+            public void windowClosed(java.awt.event.WindowEvent e) {
+                activity.stop(); // a coleta continua no serviço; só a tela para de atualizar
+            }
+        });
 
         addSecondary("Fechar");
         cancelRun = addDanger("Cancelar execução", () -> {
@@ -104,6 +127,7 @@ final class ExecutionDialog extends FittedDialog {
     /** Redesenha com as escolhas atuais e a execução ativa ou a última. {@code busy}: uma ação está em andamento. */
     void render(ExecutionSetup s, Optional<ExecutionController.Snapshot> snap, boolean busy) {
         boolean running = snap.map(ExecutionController.Snapshot::running).orElse(false);
+        activity.snapshot(snap);
         NekkoraKeyValueView kv = new NekkoraKeyValueView();
         kv.add("Sessão", ExecutionSetup.sessionLabel(s.session()));
         ExecutionPackage p = s.pkg();
@@ -184,6 +208,14 @@ final class ExecutionDialog extends FittedDialog {
     }
 
     // acesso para testes de desktop
+    ActivityPanel activityPanel() {
+        return activity;
+    }
+
+    NekkoraTabs tabs() {
+        return tabs;
+    }
+
     NekkoraButton packageButton() {
         return pkg;
     }

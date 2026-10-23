@@ -8,6 +8,7 @@ import com.nekkora.agent.core.TrayState;
 import com.nekkora.agent.diagnostics.AgentLog;
 import com.nekkora.agent.diagnostics.DiagnosticReport;
 import com.nekkora.agent.exec.ExecutionController;
+import com.nekkora.agent.obs.ActivityService;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.storage.AgentConfig;
@@ -41,13 +42,14 @@ public final class AgentContext implements AutoCloseable {
     private final ShortcutPolicy.FileProbe probe;
     private final boolean windows;
     private final ExecutionController execution;
+    private final ActivityService activity;
     private volatile TrayState tray = TrayState.PENDING;
     private volatile Long startupMillis;
     private boolean closed;
 
     AgentContext(BuildInfo build, AgentDataDir dataDir, InstanceLock lock, AgentLog log, ErrorJournal journal, ConfigStore config,
             Optional<String> machineName, AgentOptions options, Clock clock, Optional<Instant> processStart,
-            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows, ExecutionController execution) {
+            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows, ExecutionController execution, ActivityService activity) {
         this.build = build;
         this.dataDir = dataDir;
         this.lock = lock;
@@ -63,6 +65,12 @@ public final class AgentContext implements AutoCloseable {
         this.probe = probe;
         this.windows = windows;
         this.execution = execution;
+        this.activity = activity;
+    }
+
+    /** Atividade local das execuções (OBS-001): linha do tempo e histórico, só leitura. */
+    public ActivityService activity() {
+        return activity;
     }
 
     /** Execução local supervisionada (DESKTOP-001). */
@@ -180,6 +188,7 @@ public final class AgentContext implements AutoCloseable {
         if (closed) return;
         closed = true;
         execution.close(); // uma execução ainda ativa é cancelada (só a árvore possuída) antes de liberar a trava
+        activity.close(); // o que faltar ler é retomado na próxima abertura, a partir das posições gravadas
         log.close();
         lock.close();
     }

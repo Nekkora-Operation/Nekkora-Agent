@@ -30,6 +30,12 @@ class ArchitectureTest {
         check("app", List.of("java.awt", "javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui"), violations);
         check("os", List.of("javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui",
                 "com.nekkora.agent.app", "com.nekkora.agent.storage", "com.nekkora.agent.diagnostics"), violations);
+        // OBS-001: a observabilidade é domínio (sem Swing nem interface); o supervisor não depende dela
+        check("obs", List.of("java.awt", "javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui",
+                "com.nekkora.agent.app", "com.nekkora.agent.os", "com.nekkora.agent.diagnostics"), violations);
+        // (exec consulta GraphicsEnvironment.isHeadless para saber se há sessão gráfica: java.awt fica de fora da regra)
+        check("exec", List.of("javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui",
+                "com.nekkora.agent.app", "com.nekkora.agent.obs"), violations);
         assertTrue(violations.isEmpty(), String.join("\n", violations));
     }
 

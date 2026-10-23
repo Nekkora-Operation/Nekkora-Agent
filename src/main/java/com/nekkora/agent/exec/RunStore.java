@@ -21,11 +21,14 @@ import java.util.stream.Stream;
 /**
  * Pastas das execuções em {@code <dados>/execucoes/<ExecutionId>/}: {@code estado.json} (gravação atômica a cada
  * transição) e {@code eventos.jsonl} (só nomes de evento, códigos, tempos e contagens; limitado a {@link #MAX_EVENTS}
- * linhas). Retenção: as {@link #KEEP} execuções TERMINADAS mais recentes; nada em andamento é apagado.
+ * linhas, a última delas o marcador {@link #LIMIT_MARKER}). Retenção: as {@link #KEEP} execuções TERMINADAS mais
+ * recentes; nada em andamento é apagado (a atividade da OBS-001, {@code atividade.jsonl}, fica na mesma pasta).
  */
 public final class RunStore {
     public static final int KEEP = 50;
     public static final int MAX_EVENTS = 500;
+    /** Última linha do {@code eventos.jsonl} quando o limite é atingido (OBS-001: a perda deixa de ser silenciosa). */
+    public static final String LIMIT_MARKER = "EVENTS_LIMIT_REACHED";
 
     private final Path root;
     private final AtomicWriter writer;
@@ -57,10 +60,17 @@ public final class RunStore {
         Path f = dir(id).resolve("eventos.jsonl");
         try {
             Files.createDirectories(dir(id));
+            long lines = 0;
             if (Files.exists(f)) {
                 try (Stream<String> s = Files.lines(f, StandardCharsets.UTF_8)) {
-                    if (s.count() >= MAX_EVENTS) return;
+                    lines = s.count();
                 }
+            }
+            if (lines >= MAX_EVENTS) return;
+            if (lines == MAX_EVENTS - 1) {
+                // a última linha possível vira o marcador do limite: quem lê sabe que eventos seguintes não foram gravados
+                event = LIMIT_MARKER;
+                fields = Map.of();
             }
             StringBuilder b = new StringBuilder("{\"at\": ").append(StrictJson.quote(at.toString())).append(", \"event\": ").append(StrictJson.quote(event));
             fields.forEach((k, v) -> b.append(", ").append(StrictJson.quote(k)).append(": ")
@@ -77,6 +87,27 @@ public final class RunStore {
             return Files.readAllLines(dir(id).resolve("eventos.jsonl"), StandardCharsets.UTF_8);
         } catch (IOException e) {
             return List.of();
+        }
+    }
+
+    /** O registro de uma execução, se existir e for legível. */
+    public Optional<ExecutionRecord> record(ExecutionId id) {
+        return load(dir(id).resolve("estado.json"));
+    }
+
+    /**
+     * A pasta de saída anotada no início da execução ({@code saida.ref}), só quando é a pasta que o Agent criou para ela:
+     * caminho absoluto cujo último nome é o próprio identificador da execução.
+     */
+    public Optional<Path> output(ExecutionId id) {
+        try {
+            Path ref = dir(id).resolve(ExecutionController.OUTPUT_REF);
+            if (!Files.isRegularFile(ref, java.nio.file.LinkOption.NOFOLLOW_LINKS) || Files.size(ref) > 4096) return Optional.empty();
+            Path p = Path.of(Files.readString(ref, StandardCharsets.UTF_8).strip());
+            if (!p.isAbsolute() || p.getFileName() == null || !p.getFileName().toString().equals(id.value()) || !p.normalize().equals(p)) return Optional.empty();
+            return Optional.of(p);
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
         }
     }
 

@@ -50,6 +50,20 @@ public enum ErrorCode {
     EXEC_CANCELLED("AGT-EXE-024", "A execução foi cancelada pela pessoa operadora."),
     EXEC_AGENT_RESTARTED("AGT-EXE-025", "O Agent reiniciou durante a execução; o fim não foi observado."),
     EXEC_SUSPENDED("AGT-EXE-026", "O Windows foi suspenso durante a execução."),
+    // ----- DESKTOP-001 OBS-001: atividade da execução (telemetria; nunca muda o desfecho da automação) -----
+    OBS_SOURCE_UNAVAILABLE("AGT-OBS-001", "Os eventos de atividade da automação não puderam ser lidos (arquivo ausente ou sem permissão)."),
+    OBS_EVENT_INVALID("AGT-OBS-002", "Um evento de atividade foi recusado (linha parcial, corrompida, grande demais ou fora do contrato)."),
+    OBS_SOURCE_UNSAFE("AGT-OBS-003", "O arquivo de eventos não é um arquivo comum da execução (ligação, junção ou outro dono) e não foi lido."),
+    OBS_SOURCE_REPLACED("AGT-OBS-004", "O arquivo de eventos foi truncado, trocado ou rotacionado durante a leitura; a coleta dessa origem parou."),
+    OBS_RETENTION_LIMIT("AGT-OBS-005", "O limite de eventos guardados desta execução foi atingido; os seguintes foram descartados e contados."),
+    OBS_AGENT_EVENTS_LIMIT("AGT-OBS-006", "O registro do supervisor atingiu o limite de 500 eventos; os seguintes do supervisor não foram gravados."),
+    OBS_SCHEMA_UNSUPPORTED("AGT-OBS-007", "Os eventos do Framework são de uma versão de contrato não suportada e não foram exibidos."),
+    OBS_CORRELATION_CONFLICT("AGT-OBS-008", "Eventos de outra execução do Framework, ou anteriores ao início, foram recusados."),
+    OBS_STORE_FAILED("AGT-OBS-009", "O histórico de atividade não pôde ser gravado; a automação não é afetada."),
+    OBS_HISTORY_PURGED("AGT-OBS-010", "A atividade detalhada desta execução foi removida pela retenção do histórico."),
+    OBS_UNKNOWN_CONTENT("AGT-OBS-011", "Campos ou códigos desconhecidos dos eventos foram descartados e contados."),
+    OBS_EXPORT_FAILED("AGT-OBS-012", "A atividade não pôde ser exportada."),
+    OBS_SEQUENCE_GAP("AGT-OBS-013", "O histórico de atividade tem lacuna de sequência ou linha ilegível."),
     UNEXPECTED("AGT-APP-001", "Falha interna inesperada.");
 
     private final String code;

@@ -12,6 +12,9 @@ import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.ExecutionPackage;
 import com.nekkora.agent.exec.ExecutionRecord;
 import com.nekkora.agent.exec.ExecutionSetup;
+import com.nekkora.agent.obs.ActivityEvent;
+import com.nekkora.agent.obs.ActivityExport;
+import com.nekkora.agent.obs.ActivityView;
 import com.nekkora.agent.exec.PythonRuntime;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
@@ -67,6 +70,12 @@ public final class AgentApp {
         t.setDaemon(true);
         return t;
     });
+    // OBS-001: leituras da atividade em linha própria (não atrasam as ações de preparação nem a EDT)
+    private final ExecutorService obsIo = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "nekkora-agent-atividade-tela");
+        t.setDaemon(true);
+        return t;
+    });
     private final AtomicBoolean exiting = new AtomicBoolean();
     private MainWindow window;
     private TrayController tray;
@@ -95,6 +104,9 @@ public final class AgentApp {
 
         initialNotices = initial.notices().size();
         ctx.execution().addListener(snap -> SwingUtilities.invokeLater(this::renderExecution));
+        ctx.activity().addListener(id -> SwingUtilities.invokeLater(() -> {
+            if (execDialog != null && execDialog.isDisplayable()) execDialog.activityPanel().changed(id);
+        }));
         renderExecution();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
@@ -346,13 +358,84 @@ public final class AgentApp {
 
     void openExecution() {
         if (exiting.get() || bringActiveDialogToFront()) return;
-        execDialog = new ExecutionDialog(window, executionActions());
+        execDialog = new ExecutionDialog(window, executionActions(), activityData());
         activeDialog = execDialog;
         refreshSession();
         renderExecution();
         execDialog.showDialog();
         activeDialog = null;
         execDialog = null;
+    }
+
+    /** Dados da aba "Atividade": tudo fora da EDT, só o envelope do Agent. */
+    private ActivityPanel.Data activityData() {
+        return new ActivityPanel.Data() {
+            @Override
+            public void history(java.util.function.Consumer<java.util.List<ExecutionRecord>> onEdt) {
+                activityBackground(() -> ctx.activity().history(), onEdt);
+            }
+
+            @Override
+            public void view(com.nekkora.agent.exec.ExecutionId id, long after, java.util.function.Consumer<java.util.Optional<ActivityView>> onEdt) {
+                activityBackground(() -> ctx.activity().view(id, after), onEdt);
+            }
+
+            @Override
+            public void export(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events) {
+                exportActivity(id, events);
+            }
+        };
+    }
+
+    /**
+     * Exportação manual: primeiro a prévia dos campos (o que pode sair no arquivo), depois o destino escolhido pela
+     * pessoa. Só envelopes saneados; nunca o arquivo bruto do Framework, a saída do processo ou valores.
+     */
+    void exportActivity(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events) {
+        if (execDialog == null) return;
+        String preview = events.size() + " evento(s) da execução " + id.value() + ". Campos que podem aparecer: " + String.join(", ", ActivityExport.FIELDS)
+                + ". Não há valores de entrada ou saída, textos de página, caminhos, credenciais nem a saída do processo.";
+        if (!NekkoraConfirmationDialog.confirm(execDialog, "Exportar a atividade?", preview, "Escolher destino…")) return;
+        String name = "nekkora-agent-atividade-" + id.value() + ".jsonl";
+        Path target = NekkoraFileDialogs.saveFile(execDialog, "Exportar atividade", name, "jsonl").orElse(null);
+        if (target == null) return;
+        background(() -> {
+            try {
+                AtomicWriter.DEFAULT.write(target, ActivityExport.jsonl(events));
+                return null;
+            } catch (Exception e) {
+                return e.getClass().getSimpleName();
+            }
+        }, failureType -> {
+            if (failureType == null) {
+                ctx.log().info(LogEvent.ACTIVITY_EXPORTED, Field.of("events", events.size()));
+                toast(Severity.SUCCESS, "Atividade exportada", "Arquivo " + target.getFileName() + " gravado.");
+            } else {
+                ErrorCode code = ErrorCode.OBS_EXPORT_FAILED;
+                ctx.log().error(LogEvent.ACTIVITY_EXPORT_FAILED, code, Field.of("exception", failureType));
+                toast(Severity.ERROR, "Não foi possível exportar", code.description() + " (" + code.code() + ").");
+            }
+        });
+    }
+
+    private <T> void activityBackground(Supplier<T> work, java.util.function.Consumer<T> onEdt) {
+        if (obsIo.isShutdown()) return;
+        try {
+            obsIo.execute(() -> {
+                T value;
+                try {
+                    value = work.get();
+                } catch (RuntimeException e) {
+                    ctx.log().error(LogEvent.UNEXPECTED_ERROR, ErrorCode.UNEXPECTED, Field.exception(e));
+                    return;
+                }
+                SwingUtilities.invokeLater(() -> {
+                    if (!exiting.get()) onEdt.accept(value);
+                });
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // encerrando
+        }
     }
 
     private ExecutionDialog.Actions executionActions() {
@@ -539,6 +622,7 @@ public final class AgentApp {
         }
         for (Window w : Window.getWindows()) w.dispose();
         io.shutdownNow();
+        obsIo.shutdownNow();
         try {
             io.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
