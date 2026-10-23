@@ -117,19 +117,20 @@ final class ActivityPanel extends JPanel {
         super(new BorderLayout());
         this.data = data;
         setOpaque(false);
+        // ordem: o que a pessoa procura primeiro (o que aconteceu, em que etapa, com que resultado) fica à esquerda
         model = new NekkoraTableModel<>(List.of(
                 Column.<ActivityEvent>number("#", e -> e.sequence()).width(52),
                 Column.<ActivityEvent>mono("Hora", this::time).width(112),
-                Column.<ActivityEvent>text("Origem", e -> ActivityText.source(e.source())).width(104),
-                Column.<ActivityEvent>status("Nível", e -> status(e.severity())).width(112),
-                Column.<ActivityEvent>text("Fase", e -> ActivityText.phase(e.phase())).width(104),
-                Column.<ActivityEvent>mono("Transação", e -> tx(e.transactionRef())).width(96),
-                Column.<ActivityEvent>mono("Etapa", e -> e.stepId() == null ? "" : e.stepId()).width(240),
-                Column.<ActivityEvent>text("Ação", e -> e.action() == null ? "" : ActivityText.action(e.action())).width(110),
-                Column.<ActivityEvent>text("Tent.", e -> e.attempt() == null ? "" : String.valueOf(e.attempt())).width(48),
-                Column.<ActivityEvent>text("Duração", e -> ActivityText.duration(e.elapsedMs())).width(70),
+                Column.<ActivityEvent>status("Nível", e -> status(e.severity())).width(110),
+                Column.<ActivityEvent>text("Evento", e -> ActivityText.event(e.code())).width(190),
+                Column.<ActivityEvent>mono("Etapa", e -> e.stepId() == null ? "" : e.stepId()).width(220),
+                Column.<ActivityEvent>text("Ação", e -> e.action() == null ? "" : ActivityText.action(e.action())).width(120),
                 Column.<ActivityEvent>mono("Resultado", ActivityPanel::result).width(170),
-                Column.<ActivityEvent>text("Evento", e -> ActivityText.event(e.code())).width(200)));
+                Column.<ActivityEvent>text("Tent.", e -> e.attempt() == null ? "" : String.valueOf(e.attempt())).width(48),
+                Column.<ActivityEvent>text("Duração", e -> ActivityText.duration(e.elapsedMs())).width(76),
+                Column.<ActivityEvent>text("Fase", e -> ActivityText.phase(e.phase())).width(96),
+                Column.<ActivityEvent>mono("Transação", e -> tx(e.transactionRef())).width(92),
+                Column.<ActivityEvent>text("Origem", e -> ActivityText.source(e.source())).width(100)));
         table = new NekkoraTable(model);
         table.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_OFF);
         table.setEmptyState(IconName.INFO, "Sem eventos", "Nenhum evento corresponde à seleção.");
@@ -164,7 +165,7 @@ final class ActivityPanel extends JPanel {
             refilter();
         });
         search.getAccessibleContext().setAccessibleName("Buscar nos metadados dos eventos");
-        export.setMnemonic(KeyEvent.VK_X);
+        export.setMnemonic(KeyEvent.VK_O);
         export.addActionListener(e -> {
             if (selected != null && !all.isEmpty()) data.export(selected, List.copyOf(all));
         });
