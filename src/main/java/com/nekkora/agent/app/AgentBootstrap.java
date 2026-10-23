@@ -10,6 +10,7 @@ import com.nekkora.agent.diagnostics.AgentLog.Field;
 import com.nekkora.agent.diagnostics.LogEvent;
 import com.nekkora.agent.exec.ApprovalStore;
 import com.nekkora.agent.exec.ExecutionController;
+import com.nekkora.agent.exec.ExecutionId;
 import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.exec.SessionProbe;
 import com.nekkora.agent.obs.ActivityService;
@@ -118,6 +119,23 @@ public final class AgentBootstrap {
         // OBS-001: atividade local (só observa: lê os eventos já gravados pelo supervisor e pelo Framework, em segundo plano)
         ActivityService activity = new ActivityService(runs, e.clock());
         execution.addListener(activity.controllerListener());
+        // gravação do histórico de atividade: só transições e contagens no log (sem caminho nem conteúdo de evento)
+        activity.storeDiagnostics(new ActivityService.StoreDiagnostics() {
+            @Override
+            public void delayed(ExecutionId id, int pending) {
+                log.warn(LogEvent.ACTIVITY_STORE_DELAYED, ErrorCode.OBS_STORE_FAILED, Field.of("execution", id.value()), Field.of("pending", pending));
+            }
+
+            @Override
+            public void recovered(ExecutionId id) {
+                log.info(LogEvent.ACTIVITY_STORE_RECOVERED, Field.of("execution", id.value()));
+            }
+
+            @Override
+            public void lost(ExecutionId id, long lost) {
+                log.warn(LogEvent.ACTIVITY_STORE_LOST, ErrorCode.OBS_STORE_FAILED, Field.of("execution", id.value()), Field.of("lost", lost));
+            }
+        });
         int reconciled = execution.reconcile();
         activity.start(); // retoma a coleta pendente (inclusive da execução adotada) a partir das posições gravadas
         if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),

@@ -126,7 +126,8 @@ final class ActivityText {
             case SUPERVISOR_LIMIT -> "o supervisor parou de gravar eventos no limite de 500";
             case REJECTED -> "eventos recusados (incompletos, corrompidos ou fora do contrato) não aparecem";
             case SEQUENCE_GAP -> "o histórico tem lacuna de sequência ou linha ilegível";
-            case STORE_FAILED -> "parte do histórico não pôde ser gravada";
+            case STORE_FAILED -> "parte do histórico não pôde ser gravada e foi descartada";
+            case STORE_PENDING -> "parte do histórico ainda não foi gravada no disco (o Agent tenta de novo sozinho)";
             case PURGED -> "a atividade detalhada foi removida pela retenção";
             case FRAMEWORK_STOPPED -> "a leitura das etapas do Framework parou (arquivo trocado, truncado ou recusado)";
             case FRAMEWORK_UNAVAILABLE -> "as etapas do Framework não puderam ser lidas";

@@ -256,7 +256,7 @@ class ActivityDesktopTest {
         ActivityEvent done = ActivityEvent.of(id.value(), t0.plusSeconds(6), ActivityEvent.Source.COLLECTOR, "COLLECTION_COMPLETED", ActivityEvent.Level.INFO,
                 ActivityEvent.Category.TELEMETRY).build().withSequence(1);
         ActivityView.Health ok = new ActivityView.Health(false, true, false, ActivityView.FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false, 0, false,
-                false, 0, null, false);
+                false, 0, 0, null, false);
         java.util.concurrent.atomic.AtomicInteger asks = new java.util.concurrent.atomic.AtomicInteger();
         ActivityPanel.Data data = new ActivityPanel.Data() {
             @Override
@@ -290,6 +290,79 @@ class ActivityDesktopTest {
         assertTrue(asks.get() >= 2, "pediu de novo depois da resposta perdida");
         assertEquals(ActivityView.Integrity.COMPLETE, DesktopHarness.onEdt(() -> panel.get().completeness()).integrity());
         javax.swing.SwingUtilities.invokeAndWait(() -> panel.get().stop());
+    }
+
+    @Test
+    @DisplayName("Gravação do histórico pendente fica à vista e só volta a completa quando gravada (OBS-PERSISTENCE-HARDENING)")
+    void gravacaoPendenteFicaAVista() throws Exception {
+        com.nekkora.agent.exec.ExecutionId id = com.nekkora.agent.exec.ExecutionId.random();
+        java.time.Instant t0 = java.time.Instant.parse("2026-10-23T10:00:00Z");
+        com.nekkora.agent.exec.ExecutionRecord rec = new com.nekkora.agent.exec.ExecutionRecord(id, com.nekkora.agent.exec.ExecutionPackage.Kind.LAB_GENERIC,
+                "pacote", "sha256:" + "a".repeat(64), ExecutionState.READY, null, t0, null, null, null, null, java.util.Map.of(), 0, 0, false, 0)
+                .moveTo(ExecutionState.STARTING, null, t0).moveTo(ExecutionState.RUNNING, null, t0).moveTo(ExecutionState.SUCCEEDED, null, t0.plusSeconds(5));
+        ActivityEvent done = ActivityEvent.of(id.value(), t0.plusSeconds(6), ActivityEvent.Source.COLLECTOR, "COLLECTION_COMPLETED", ActivityEvent.Level.INFO,
+                ActivityEvent.Category.TELEMETRY).build().withSequence(1);
+        // fechamento aceito, ainda não gravado: a coleta continua aberta até a prova no disco
+        ActivityView.Health pendingHealth = new ActivityView.Health(true, true, false, ActivityView.FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false,
+                0, false, false, 1, 0, null, false);
+        ActivityView.Health written = new ActivityView.Health(false, true, false, ActivityView.FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false, 0,
+                false, false, 0, 0, null, false);
+        java.util.concurrent.atomic.AtomicBoolean released = new java.util.concurrent.atomic.AtomicBoolean();
+        ActivityPanel.Data data = new ActivityPanel.Data() {
+            @Override
+            public void history(java.util.function.Consumer<com.nekkora.agent.exec.RunStore.Listing> onEdt) {
+                onEdt.accept(new com.nekkora.agent.exec.RunStore.Listing(List.of(rec), 0, false));
+            }
+
+            @Override
+            public void view(com.nekkora.agent.exec.ExecutionId x, long after, java.util.function.Consumer<ActivityPanel.Loaded> onEdt) {
+                onEdt.accept(ActivityPanel.Loaded.of(java.util.Optional.of(new ActivityView(rec, after >= 1 ? List.of() : List.of(done),
+                        released.get() ? written : pendingHealth))));
+            }
+
+            @Override
+            public void export(com.nekkora.agent.exec.ExecutionId x, List<ActivityEvent> events, ActivityView.Completeness c) {
+            }
+        };
+        java.util.concurrent.atomic.AtomicReference<javax.swing.JFrame> frame = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<ActivityPanel> panel = new java.util.concurrent.atomic.AtomicReference<>();
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            com.nekkora.ui.Nekkora.install(AgentApp.themeFor("")); // o tema do Agent (a captura é a tela real)
+            ActivityPanel p = new ActivityPanel(data);
+            javax.swing.JFrame f = new javax.swing.JFrame("Atividade");
+            f.setContentPane(p);
+            f.setSize(760, 760);
+            f.setVisible(true);
+            p.start();
+            panel.set(p);
+            frame.set(f);
+        });
+        try {
+            long t = System.currentTimeMillis();
+            while (System.currentTimeMillis() - t < 15_000 && !DesktopHarness.onEdt(() -> texts(panel.get())).contains("Gravação do histórico pendente")) {
+                Thread.sleep(100);
+            }
+            List<String> during = DesktopHarness.onEdt(() -> texts(panel.get()));
+            assertTrue(during.contains("Gravação do histórico pendente"), during.toString());
+            assertTrue(during.stream().anyMatch(s -> s.contains("ainda não gravado") && s.contains("AGT-OBS-009")), during.toString());
+            assertTrue(during.contains("Encerrada (1 eventos; 1 aguardando gravação no disco)"), "não diz 'guardados' antes de gravar: " + during);
+            ActivityView.Completeness c = DesktopHarness.onEdt(() -> panel.get().completeness());
+            assertEquals(ActivityView.Integrity.INCOMPLETE, c.integrity());
+            assertTrue(c.gaps().contains(ActivityView.Gap.STORE_PENDING));
+            capture(frame.get(), "O13-gravacao-pendente");
+            released.set(true);
+            t = System.currentTimeMillis();
+            while (System.currentTimeMillis() - t < 15_000 && DesktopHarness.onEdt(() -> panel.get().completeness()).integrity() != ActivityView.Integrity.COMPLETE) {
+                Thread.sleep(100);
+            }
+            assertEquals(ActivityView.Integrity.COMPLETE, DesktopHarness.onEdt(() -> panel.get().completeness()).integrity(), "completa depois de gravada");
+            assertFalse(DesktopHarness.onEdt(() -> texts(panel.get())).contains("Gravação do histórico pendente"));
+        } finally {
+            javax.swing.SwingUtilities.invokeAndWait(() -> {
+                panel.get().stop();
+                frame.get().dispose();
+            });
+        }
     }
 
     /** ACL real: nega (ou devolve) a leitura da pasta ao usuário atual. */

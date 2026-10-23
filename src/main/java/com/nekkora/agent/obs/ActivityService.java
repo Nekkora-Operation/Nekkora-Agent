@@ -47,6 +47,21 @@ public final class ActivityService implements AutoCloseable {
         void appended(ExecutionId id);
     }
 
+    /**
+     * Diagnóstico da gravação do histórico (para o log do Agent): só transições e contagens, nunca caminho ou
+     * conteúdo de evento. Chamado na linha de fundo; uma falha aqui é ignorada (sem recursão, sem travar a coleta).
+     */
+    public interface StoreDiagnostics {
+        /** A gravação falhou e eventos ficaram pendentes (nova tentativa automática). */
+        void delayed(ExecutionId id, int pending);
+
+        /** As pendentes foram gravadas, conferidas contra o fim do arquivo. */
+        void recovered(ExecutionId id);
+
+        /** Eventos descartados do disco depois de esgotar as tentativas, encher a fila ou o arquivo não conferir. */
+        void lost(ExecutionId id, long lost);
+    }
+
     public static final Duration DEFAULT_PERIOD = Duration.ofMillis(500);
     public static final long MAX_TOTAL_BYTES = 96L * 1024 * 1024;
     static final int BUDGET = 256 * 1024;
@@ -59,6 +74,8 @@ public final class ActivityService implements AutoCloseable {
     private final Map<ExecutionId, ActivityView.Health> health = new ConcurrentHashMap<>();
     private final Set<ExecutionId> pending = ConcurrentHashMap.newKeySet();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
+    private final Map<ExecutionId, long[]> storeState = new ConcurrentHashMap<>();
+    private volatile StoreDiagnostics diagnostics;
     private ScheduledExecutorService exec;
 
     public ActivityService(RunStore store, Clock clock) {
@@ -74,6 +91,10 @@ public final class ActivityService implements AutoCloseable {
 
     public void addListener(Listener l) {
         listeners.add(l);
+    }
+
+    public void storeDiagnostics(StoreDiagnostics d) {
+        this.diagnostics = d;
     }
 
     /** Ouvinte para o supervisor: cada execução que ele noticia passa a ser coletada (barato; nunca bloqueia). */
@@ -130,8 +151,11 @@ public final class ActivityService implements AutoCloseable {
                     changed = false; // falha do leitor: nunca derruba a coleta das demais nem a automação
                 }
                 health.put(e.getKey(), c.health(!c.completed()));
-                if (c.completed()) {
+                report(e.getKey(), c.log());
+                // terminada só sai da memória com tudo no disco (até lá a tela segue a memória, com a pendência à vista)
+                if (c.completed() && c.log().pendingCount() == 0) {
                     open.remove(e.getKey());
+                    storeState.remove(e.getKey());
                     closed = true;
                 }
                 if (changed) notifyListeners(e.getKey());
@@ -139,6 +163,23 @@ public final class ActivityService implements AutoCloseable {
             if (closed) enforceQuota();
         } catch (RuntimeException e) {
             // a linha de fundo continua viva
+        }
+    }
+
+    /** Só as transições vão para o diagnóstico (limitado: uma linha por mudança, não por tentativa). */
+    private void report(ExecutionId id, ActivityLog l) {
+        StoreDiagnostics d = diagnostics;
+        int pendingNow = l.pendingCount();
+        long lostNow = l.lost();
+        long[] before = storeState.getOrDefault(id, new long[] {0, 0});
+        storeState.put(id, new long[] {pendingNow > 0 ? 1 : 0, lostNow});
+        if (d == null) return;
+        try {
+            if (lostNow > before[1]) d.lost(id, lostNow - before[1]);
+            if (pendingNow > 0 && before[0] == 0) d.delayed(id, pendingNow);
+            if (pendingNow == 0 && before[0] == 1) d.recovered(id);
+        } catch (RuntimeException ex) {
+            // o diagnóstico nunca derruba a coleta
         }
     }
 
@@ -208,7 +249,7 @@ public final class ActivityService implements AutoCloseable {
         return new ActivityView.Health(live, completed, r.kind() == ExecutionPackage.Kind.STUDIO_PYTHON, fs, Math.max(l.dropped(), summary.getOrDefault("dropped", 0L)),
                 summary.getOrDefault("invalid", (long) l.count("EVENT_INVALID")), summary.getOrDefault("excluded_fields", 0L),
                 summary.getOrDefault("unknown_fields", 0L), summary.getOrDefault("unknown_codes", 0L), l.capped(), l.sequenceGap(), l.unreadable(),
-                l.has("HISTORY_PURGED"), l.storeFailed(), Math.toIntExact(Math.min(Integer.MAX_VALUE, summary.getOrDefault("restarts", 0L))), fw, trusted);
+                l.has("HISTORY_PURGED"), l.storeFailed(), 0, Math.toIntExact(Math.min(Integer.MAX_VALUE, summary.getOrDefault("restarts", 0L))), fw, trusted);
     }
 
     // ------------------------------------------------------------------------------------------- retenção
@@ -255,6 +296,15 @@ public final class ActivityService implements AutoCloseable {
             exec.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+        // última tentativa (uma só) para o que ficou pendente; o que não for gravado é recolhido das origens na
+        // próxima abertura, a partir das posições que estão no disco
+        for (ActivityCollector c : open.values()) {
+            try {
+                c.log().flushNow(clock.instant());
+            } catch (RuntimeException e) {
+                // fechar nunca trava
+            }
         }
     }
 }

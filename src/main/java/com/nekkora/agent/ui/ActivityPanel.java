@@ -552,6 +552,9 @@ final class ActivityPanel extends JPanel {
     private String collectionLabel() {
         if (health == null) return "Carregando…";
         if (health.purged()) return "Removida pela retenção do histórico";
+        if (health.completed() && health.pendingWrites() > 0) {
+            return "Encerrada (" + all.size() + " eventos; " + health.pendingWrites() + " aguardando gravação no disco)";
+        }
         if (health.completed()) return "Encerrada (" + all.size() + " eventos guardados)";
         return health.live() ? "Em tempo quase real (atualiza a cada " + REFRESH_MS + " ms)" : "Pendente (retomada na próxima abertura do Agent)";
     }
@@ -576,7 +579,11 @@ final class ActivityPanel extends JPanel {
                 h.invalid() + " evento(s) inválido(s), incompleto(s) ou fora do contrato foram recusados e não aparecem na linha do tempo."));
         if (h.sequenceGap() || h.unreadableLines() > 0) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Lacuna no histórico",
                 ActivityText.error("AGT-OBS-013") + (h.unreadableLines() > 0 ? " Linhas ilegíveis: " + h.unreadableLines() + "." : "")));
-        if (h.storeFailed()) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Histórico não gravado", ActivityText.error("AGT-OBS-009")));
+        if (h.storeFailed()) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Histórico não gravado", ActivityText.error("AGT-OBS-009")
+                + " A parte não gravada aparece só nesta sessão e falta no histórico."));
+        if (h.pendingWrites() > 0) alerts.add(new NekkoraInlineAlert(Severity.WARNING, "Gravação do histórico pendente",
+                h.pendingWrites() + " evento(s) ainda não gravado(s): o arquivo do histórico está sem permissão de escrita no momento (outro programa"
+                        + " pode estar com ele aberto). O Agent tenta de novo sozinho; a automação não é afetada. (AGT-OBS-009)"));
         if (h.purged()) alerts.add(new NekkoraInlineAlert(Severity.INFO, "Atividade removida", ActivityText.error("AGT-OBS-010")));
         if (h.unknownFields() + h.unknownCodes() > 0) alerts.add(new NekkoraInlineAlert(Severity.INFO, "Conteúdo desconhecido descartado",
                 h.unknownFields() + " campo(s) e " + h.unknownCodes() + " código(s) de evento desconhecidos foram contados; nenhum valor foi guardado."));

@@ -26,7 +26,7 @@ public record ActivityView(ExecutionRecord record, List<ActivityEvent> events, H
     /** Saúde da coleta: nada disto é escondido da pessoa. */
     public record Health(boolean live, boolean completed, boolean frameworkExpected, FrameworkState frameworkState, long dropped,
                          long invalid, long excludedFields, long unknownFields, long unknownCodes, boolean capped, boolean sequenceGap, int unreadableLines,
-                         boolean purged, boolean storeFailed, int restarts, String frameworkExecutionId, boolean stepCatalogTrusted) {
+                         boolean purged, boolean storeFailed, int pendingWrites, int restarts, String frameworkExecutionId, boolean stepCatalogTrusted) {
 
         /** Estado da origem do Framework como texto estável (para a tela e os testes). */
         public String frameworkStateName() {
@@ -93,8 +93,10 @@ public record ActivityView(ExecutionRecord record, List<ActivityEvent> events, H
         REJECTED("AGT-OBS-002"),
         /** Lacuna de sequência ou linha ilegível no próprio histórico do Agent. */
         SEQUENCE_GAP("AGT-OBS-013"),
-        /** O histórico não pôde ser gravado durante a coleta. */
+        /** Parte do histórico não pôde ser gravada e foi descartada (lacuna permanente). */
         STORE_FAILED("AGT-OBS-009"),
+        /** Eventos ainda não gravados no disco: a gravação está sendo tentada de novo. */
+        STORE_PENDING("AGT-OBS-009"),
         /** A atividade detalhada foi removida pela retenção. */
         PURGED("AGT-OBS-010"),
         /** A leitura das etapas do Framework parou (arquivo trocado, truncado ou recusado). */
@@ -139,6 +141,7 @@ public record ActivityView(ExecutionRecord record, List<ActivityEvent> events, H
         if (h.invalid() > 0) gaps.add(Gap.REJECTED);
         if (h.sequenceGap() || h.unreadableLines() > 0) gaps.add(Gap.SEQUENCE_GAP);
         if (h.storeFailed()) gaps.add(Gap.STORE_FAILED);
+        if (h.pendingWrites() > 0) gaps.add(Gap.STORE_PENDING);
         if (h.frameworkExpected()) {
             if (h.frameworkState() == FrameworkState.REPLACED || h.frameworkState() == FrameworkState.UNSAFE) gaps.add(Gap.FRAMEWORK_STOPPED);
             if (h.frameworkState() == FrameworkState.UNAVAILABLE) gaps.add(Gap.FRAMEWORK_UNAVAILABLE);
@@ -147,6 +150,7 @@ public record ActivityView(ExecutionRecord record, List<ActivityEvent> events, H
         for (ActivityEvent e : events) {
             if ("EVENT_GAP".equals(e.code())) {
                 if ("AGT-OBS-006".equals(e.errorCode())) gaps.add(Gap.SUPERVISOR_LIMIT);
+                else if ("AGT-OBS-009".equals(e.errorCode())) gaps.add(Gap.STORE_FAILED);
                 else gaps.add(Gap.RETENTION_LIMIT);
             }
             if ("EVENT_INVALID".equals(e.code())) gaps.add(Gap.REJECTED);

@@ -179,21 +179,21 @@ class CompletenessTest {
     void everyHealthCounterBecomesAnExplicitReason() {
         assertEquals(List.of(Gap.RETENTION_LIMIT), ActivityView.completeness(health(false, true, true, 2_000, false), List.of()).gaps());
         assertEquals(List.of(Gap.SEQUENCE_GAP), ActivityView.completeness(health(false, true, false, 0, true), List.of()).gaps());
-        ActivityView.Health storeFailed = new ActivityView.Health(false, true, false, FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false, 0, false, true, 0,
+        ActivityView.Health storeFailed = new ActivityView.Health(false, true, false, FrameworkState.NOT_APPLICABLE, 0, 0, 0, 0, 0, false, false, 0, false, true, 0, 0,
                 null, false);
         assertEquals(List.of(Gap.STORE_FAILED), ActivityView.completeness(storeFailed, List.of()).gaps());
-        ActivityView.Health purged = new ActivityView.Health(false, false, true, FrameworkState.WAITING, 0, 0, 0, 0, 0, false, false, 0, true, false, 0, null,
+        ActivityView.Health purged = new ActivityView.Health(false, false, true, FrameworkState.WAITING, 0, 0, 0, 0, 0, false, false, 0, true, false, 0, 0, null,
                 false);
         assertEquals(Gap.PURGED, ActivityView.completeness(purged, List.of()).gaps().get(0));
         assertEquals(Integrity.PENDING, ActivityView.completeness(null, List.of()).integrity(), "sem saúde: nunca 'completa'");
         // conteúdo desconhecido descartado (campos) não tira eventos da linha do tempo
-        ActivityView.Health unknown = new ActivityView.Health(false, true, false, FrameworkState.NOT_APPLICABLE, 0, 0, 7, 3, 1, false, false, 0, false, false, 1,
+        ActivityView.Health unknown = new ActivityView.Health(false, true, false, FrameworkState.NOT_APPLICABLE, 0, 0, 7, 3, 1, false, false, 0, false, false, 0, 1,
                 null, false);
         assertEquals(Integrity.COMPLETE, ActivityView.completeness(unknown, List.of()).integrity());
     }
 
     private static ActivityView.Health health(boolean live, boolean completed, boolean capped, long dropped, boolean sequenceGap) {
-        return new ActivityView.Health(live, completed, false, FrameworkState.NOT_APPLICABLE, dropped, 0, 0, 0, 0, capped, sequenceGap, 0, false, false, 0, null,
+        return new ActivityView.Health(live, completed, false, FrameworkState.NOT_APPLICABLE, dropped, 0, 0, 0, 0, capped, sequenceGap, 0, false, false, 0, 0, null,
                 false);
     }
 

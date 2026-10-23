@@ -120,7 +120,10 @@ final class ActivityCollector {
      * Uma rodada de leitura (no máximo {@code budget} bytes por origem). Devolve se algo novo foi gravado.
      */
     boolean poll(int budget) {
-        if (completed) return false;
+        if (completed) {
+            log.flush(clock.instant()); // fechamento ainda pendente no disco: só a gravação é tentada de novo
+            return false;
+        }
         Instant now = clock.instant();
         Optional<ExecutionRecord> rec = store.record(id);
         if (rec.isEmpty()) return false; // registro em gravação ou apagado: a próxima rodada tenta de novo
@@ -312,6 +315,6 @@ final class ActivityCollector {
     ActivityView.Health health(boolean live) {
         return new ActivityView.Health(live, completed, frameworkExpected, frameworkState == null ? FrameworkState.NOT_APPLICABLE : frameworkState,
                 log.dropped(), invalid, excluded, unknownFields, unknownCodes, log.capped(), log.sequenceGap(), log.unreadable(), log.has("HISTORY_PURGED"),
-                log.storeFailed(), restarts, frameworkId, catalog != null && catalog.trusted());
+                log.storeFailed(), log.pendingCount(), restarts, frameworkId, catalog != null && catalog.trusted());
     }
 }
