@@ -162,6 +162,9 @@ final class ActivityCollector {
                 for (SourceFile.Line l : b.lines()) agentLine(l, now, batch);
             }
         }
+        // as duas origens são lidas na mesma rodada: o lote entra na ordem de OCORRÊNCIA (ordenação estável; aviso do
+        // coletor, sem horário de origem, fica no fim) — a sequência continua sendo a ordem de gravação
+        batch.sort(java.util.Comparator.comparing((ActivityEvent e) -> e.occurred() != null ? e.occurred() : e.observed()));
         List<ActivityEvent> written = log.append(batch, now);
         if (terminal && !more) {
             if (terminalSince == null) terminalSince = now;
