@@ -318,24 +318,143 @@ class ActivityPersistenceTest {
         assertFalse(reopened.storeFailed());
     }
 
+    /** Escritor que registra o tamanho de cada chamada (0 = só sincronização) e delega ou falha. */
+    private static ActivityLog.Writer recording(List<Integer> sizes, boolean fail) {
+        return (f, data) -> {
+            sizes.add(data.length);
+            if (fail) throw new IOException("fsync");
+            ActivityLog.DISK.append(f, data);
+        };
+    }
+
     @Test
-    void writeThatSucceededButReportedFailureIsNotRepeated() throws Exception {
+    void visibleBytesAreNotDurableUntilASyncIsConfirmedAndAreNeverRewritten() throws Exception {
         String id = ExecutionId.random().value();
         ActivityLog log = ActivityLog.open(tmp, id);
-        int[] calls = {0};
-        log.writer((f, data) -> { // grava tudo e a confirmação (fsync) falha
-            calls[0]++;
-            Files.write(f, data, StandardOpenOption.APPEND);
+        log.writer((f, data) -> { // a escrita entra no arquivo, a sincronização falha
+            Files.write(f, data, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             throw new IOException("fsync");
         });
         log.append(fws(id, 1, 4), T0);
-        log.writer(ActivityLog.DISK);
+        assertEquals(range(1, 4), diskSequences(tmp, id), "bytes visíveis no arquivo");
+        assertEquals(4, log.pendingCount(), "mas a gravação não está confirmada: continua pendente");
+
+        List<Integer> sizes = new ArrayList<>();
+        log.writer(recording(sizes, true)); // a sincronização continua falhando
         log.flush(T0.plus(ActivityLog.FIRST_RETRY));
-        assertEquals(1, calls[0]);
+        assertEquals(List.of(0), sizes, "só sincroniza: nada é regravado");
+        assertEquals(4, log.pendingCount(), "enquanto a sincronização falhar, o aviso continua");
+
+        log.writer(recording(sizes, false));
+        log.flush(T0.plus(ActivityLog.MAX_RETRY));
+        assertEquals(List.of(0, 0), sizes, "a recuperação termina com uma sincronização confirmada, sem regravar");
         assertEquals(0, log.pendingCount());
-        assertEquals(range(1, 4), diskSequences(tmp, id), "a conferência viu que já estava gravado: nada repetido");
-        log.append(fws(id, 5, 1), T0.plus(ActivityLog.FIRST_RETRY));
+        assertFalse(log.storeFailed());
+        assertEquals(range(1, 4), diskSequences(tmp, id), "cada linha uma vez");
+        log.append(fws(id, 5, 1), T0.plus(ActivityLog.MAX_RETRY));
         assertEquals(range(1, 5), diskSequences(tmp, id));
+    }
+
+    @Test
+    void linesThatReachedTheFileAreNotCountedAsLostWhenSyncKeepsFailing() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.writer((f, data) -> {
+            Files.write(f, data, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            throw new IOException("fsync");
+        });
+        log.append(fws(id, 1, 3), T0);
+        Instant t = T0;
+        for (int i = 0; i < ActivityLog.MAX_ATTEMPTS + 3; i++) {
+            t = t.plus(ActivityLog.MAX_RETRY);
+            log.flush(t);
+        }
+        assertEquals(0, log.lost(), "as linhas estão no arquivo: não são perdidas");
+        assertFalse(log.storeFailed());
+        assertEquals(0, log.unwrittenGapNotices(), "sem perda, sem aviso de perda");
+        assertEquals(3, log.pendingCount(), "continuam pendentes até sincronizar");
+        assertEquals(range(1, 3), diskSequences(tmp, id), "nada regravado em nenhuma tentativa");
+        log.writer(ActivityLog.DISK);
+        log.flush(t.plus(ActivityLog.MAX_RETRY));
+        assertEquals(0, log.pendingCount());
+        assertEquals(range(1, 3), diskSequences(tmp, id));
+    }
+
+    @Test
+    void severalFailureCyclesKeepOneNoticeWithTheAccumulatedLossThroughRecoveryAndReopening() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 2), T0);
+        log.writer(FAILING);
+        log.append(fws(id, 3, 3), T0);
+        Instant t = T0;
+        for (int round = 0; round < 6 * (ActivityLog.MAX_ATTEMPTS + 1); round++) {
+            t = t.plus(ActivityLog.MAX_RETRY);
+            if (round == 20) log.append(fws(id, 6, 2), t); // mais eventos durante a indisponibilidade
+            log.flush(t);
+            assertTrue(log.unwrittenGapNotices() <= 1, "no máximo um aviso não gravado");
+            assertTrue(log.all().stream().filter(e -> "EVENT_GAP".equals(e.code())).count() <= 1, "a memória não acumula avisos");
+        }
+        assertTrue(log.writeFailures() >= 4L * ActivityLog.MAX_ATTEMPTS, "vários ciclos completos de falha: " + log.writeFailures());
+        assertEquals(5, log.lost(), "3 + 2 perdidos");
+        ActivityEvent notice = log.all().stream().filter(e -> "EVENT_GAP".equals(e.code())).findFirst().orElseThrow();
+        assertEquals(5L, notice.counts().get("lost"), "o aviso cobre a perda ACUMULADA, não só o último ciclo");
+
+        log.writer(ActivityLog.DISK);
+        log.flush(t.plus(ActivityLog.MAX_RETRY));
+        assertEquals(0, log.pendingCount());
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        List<ActivityEvent> gaps = reopened.all().stream().filter(e -> "EVENT_GAP".equals(e.code())).toList();
+        assertEquals(1, gaps.size(), "um único aviso no disco");
+        assertEquals(5L, gaps.get(0).counts().get("lost"));
+        assertEquals("AGT-OBS-009", gaps.get(0).errorCode());
+        assertTrue(reopened.storeFailed());
+        assertTrue(reopened.sequenceGap());
+        assertEquals(List.of(1L, 2L), reopened.all().stream().map(ActivityEvent::sequence).toList().subList(0, 2));
+
+        // uma nova perda depois do aviso gravado gera um aviso só dela
+        log.writer(FAILING);
+        log.append(fws(id, 8, 1), t.plus(ActivityLog.MAX_RETRY));
+        Instant u = t.plus(ActivityLog.MAX_RETRY);
+        for (int i = 0; i < ActivityLog.MAX_ATTEMPTS + 1; i++) {
+            u = u.plus(ActivityLog.MAX_RETRY);
+            log.flush(u);
+        }
+        log.writer(ActivityLog.DISK);
+        log.flush(u.plus(ActivityLog.MAX_RETRY));
+        List<Long> lostCounts = ActivityLog.read(tmp, id).all().stream().filter(e -> "EVENT_GAP".equals(e.code())).map(e -> e.counts().get("lost")).toList();
+        assertEquals(List.of(5L, 1L), lostCounts);
+    }
+
+    @Test
+    void tornLineLeftByAFailedWriteIsSeparatedAndOnlyWhatIsMissingIsLost() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 1), T0);
+        boolean[] first = {true};
+        log.writer((f, data) -> { // na primeira tentativa grava 1,5 linha; depois nada passa
+            if (first[0]) {
+                first[0] = false;
+                int one = 0;
+                while (data[one] != '\n') one++;
+                Files.write(f, Arrays.copyOf(data, one + 1 + 20), StandardOpenOption.APPEND);
+            }
+            throw new IOException("bloqueado");
+        });
+        log.append(fws(id, 2, 3), T0);
+        Instant t = T0;
+        for (int i = 0; i < ActivityLog.MAX_ATTEMPTS + 1 && log.lost() == 0; i++) {
+            t = t.plus(ActivityLog.MAX_RETRY);
+            log.flush(t);
+        }
+        assertEquals(2, log.lost(), "a linha inteira no arquivo (seq 2) não é perdida; a pela metade (3) e a 4 são");
+        log.writer(ActivityLog.DISK);
+        log.flush(t.plus(ActivityLog.MAX_RETRY));
+        assertEquals(0, log.pendingCount());
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        assertEquals(List.of(1L, 2L, 5L), reopened.all().stream().map(ActivityEvent::sequence).toList());
+        assertEquals(1, reopened.unreadable(), "o resto da linha 3 virou uma linha ilegível, separada");
+        assertEquals(2L, reopened.all().get(2).counts().get("lost"));
     }
 
     @Test

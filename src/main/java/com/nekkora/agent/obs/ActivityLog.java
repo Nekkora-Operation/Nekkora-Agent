@@ -41,10 +41,18 @@ import java.util.Map;
  * crescente ({@link #FIRST_RETRY} até {@link #MAX_RETRY}) e no máximo {@link #MAX_ATTEMPTS} tentativas — sempre na
  * linha da coleta, nunca na interface, e sem tocar na automação. Antes de cada nova tentativa o fim do arquivo é
  * CONFERIDO contra o que estava pendente (uma tentativa anterior pode ter gravado tudo ou parte antes de falhar): o
- * que já está lá não é regravado e uma linha gravada pela metade é completada. Se o fim não confere (arquivo alterado
- * por outro), se as tentativas se esgotam ou se a fila enche, as pendentes são DESCARTADAS e contadas e um
- * {@code EVENT_GAP} ({@code AGT-OBS-009}) entra na fila: a lacuna de sequência fica no disco e a linha do tempo
- * continua incompleta, inclusive depois de um reinício. Nada é inventado para parecer contínuo.
+ * que já está lá não é regravado e uma linha gravada pela metade é completada. Bytes visíveis no arquivo NÃO bastam:
+ * uma pendente só sai da fila depois de uma sincronização ({@code fsync}) confirmada — se só ela falhou, a próxima
+ * tentativa sincroniza sem regravar.
+ *
+ * <p>Se o fim não confere (arquivo alterado por outro), se as tentativas se esgotam ou se a fila enche, as pendentes que
+ * não estão no arquivo são DESCARTADAS e contadas e UM {@code EVENT_GAP} ({@code AGT-OBS-009}) com a perda ACUMULADA
+ * ainda não registrada no disco entra na fila; num novo ciclo de falha ele é SUBSTITUÍDO (nunca acumulado), então há no
+ * máximo um aviso não gravado na memória. Depois de gravado, a lacuna de sequência e o aviso ficam no disco e a linha do
+ * tempo continua incompleta inclusive depois de um reinício. Se o Agent terminar ANTES de gravá-lo, nada posterior à
+ * perda está no disco (a fila é ordenada): na reabertura os eventos das origens são relidos das posições gravadas
+ * (enquanto as origens existirem); os avisos do próprio coletor desse intervalo não são recuperáveis. Nada é inventado
+ * para parecer contínuo.
  */
 final class ActivityLog {
     static final String FILE = "atividade.jsonl";
@@ -60,20 +68,30 @@ final class ActivityLog {
     static final Duration MAX_RETRY = Duration.ofSeconds(5);
     static final String STORE_STATUS = "ACTIVITY_STORE";
 
-    /** Acréscimo no disco (os testes simulam escrita parcial e confirmação perdida). */
+    /**
+     * Acréscimo seguido de sincronização ({@code fsync}); com {@code data} vazio, só sincroniza (linhas já visíveis no
+     * arquivo, cuja sincronização não foi confirmada). Os testes simulam escrita parcial e sincronização que falha.
+     */
     interface Writer {
         void append(Path file, byte[] data) throws IOException;
     }
 
     static final Writer DISK = (f, data) -> {
         try (FileOutputStream fo = new FileOutputStream(f.toFile(), true)) {
-            fo.write(data);
+            if (data.length > 0) fo.write(data);
             fo.getFD().sync();
         }
     };
 
-    /** Linha à espera de gravação; {@code sequence} 0 = só uma quebra de linha (separa um resto alheio no fim). */
-    private record Pending(long sequence, byte[] line) {}
+    /**
+     * Linha à espera de gravação. {@code sequence} 0 = só completa um resto sem quebra de linha no fim do arquivo;
+     * {@code reports} ≥ 0 = é o aviso de perda e cobre essa quantidade de eventos perdidos (-1 nos demais).
+     */
+    private record Pending(long sequence, byte[] line, long reports) {
+        boolean gap() {
+            return reports >= 0;
+        }
+    }
 
     /** O fim do arquivo não é o que este histórico gravou: as pendentes não podem ser completadas com segurança. */
     private static final class Mismatch extends Exception {
@@ -103,6 +121,8 @@ final class ActivityLog {
     private int attempts;
     private Instant retryAt;
     private long lost;
+    /** Perdas ainda não cobertas por um aviso sincronizado no disco. */
+    private long unreported;
     private long writeFailures;
     private Writer writer = DISK;
 
@@ -226,21 +246,23 @@ final class ActivityLog {
         if (pending.isEmpty()) return true;
         if (!force && retryAt != null && now.isBefore(retryAt)) return false;
         try {
-            int done = reconcile();
-            if (!pending.isEmpty()) {
-                byte[] data = new byte[Math.toIntExact(pendingBytes - done)];
-                int off = 0;
-                int from = done;
-                for (Pending p : pending) {
-                    System.arraycopy(p.line(), from, data, off, p.line().length - from);
-                    off += p.line().length - from;
-                    from = 0;
-                }
-                writer.append(file, data);
-                diskBytes += pendingBytes;
-                pending.clear();
-                pendingBytes = 0;
+            long done = reconcile();
+            byte[] data = new byte[Math.toIntExact(pendingBytes - done)];
+            int off = 0;
+            long skip = done;
+            for (Pending p : pending) {
+                int from = (int) Math.min(skip, p.line().length);
+                skip -= from;
+                System.arraycopy(p.line(), from, data, off, p.line().length - from);
+                off += p.line().length - from;
             }
+            writer.append(file, data); // o resto (se houver) e a sincronização de TUDO o que estava pendente
+            diskBytes += pendingBytes;
+            for (Pending p : pending) {
+                if (p.gap()) unreported -= p.reports();
+            }
+            pending.clear();
+            pendingBytes = 0;
             attempts = 0;
             retryAt = null;
             return true;
@@ -262,10 +284,10 @@ final class ActivityLog {
 
     /**
      * Confere o que uma tentativa anterior pode ter gravado antes de falhar: o que está no arquivo depois da última
-     * gravação confirmada tem de ser o começo exato das pendentes. Linhas inteiras já gravadas saem da fila; devolve
-     * quantos bytes da primeira pendente já estão no disco (linha gravada pela metade, completada em seguida).
+     * gravação sincronizada tem de ser o começo exato das pendentes. Devolve quantos bytes delas já estão lá (não serão
+     * regravados). Não tira nada da fila: só a sincronização confirmada faz isso.
      */
-    private int reconcile() throws IOException, Mismatch {
+    private long reconcile() throws IOException, Mismatch {
         long size;
         try {
             size = Files.size(file);
@@ -287,46 +309,85 @@ final class ActivityLog {
             }
         }
         int off = 0;
-        while (off < got.length) {
-            Pending p = pending.peekFirst();
+        for (Pending p : pending) {
+            if (off >= got.length) break;
             int n = Math.min(p.line().length, got.length - off);
             if (!Arrays.equals(got, off, off + n, p.line(), 0, n)) throw new Mismatch();
-            if (n < p.line().length) return n;
-            pending.pollFirst();
-            pendingBytes -= n;
-            diskBytes += n;
             off += n;
         }
-        return 0;
+        return extra;
     }
 
     /**
-     * Desiste das pendentes: são contadas como perdidas (ficam só na memória desta sessão; no disco fica a lacuna de
-     * sequência) e um {@code EVENT_GAP} com {@code AGT-OBS-009} entra na memória e na fila, para o motivo sobreviver a
-     * um reinício.
+     * Desiste do que não está no arquivo: essas pendentes são contadas como perdidas (ficam só na memória desta sessão;
+     * no disco fica a lacuna de sequência). Linhas que já estão inteiras no arquivo continuam na fila só para a
+     * sincronização (não são perdidas nem regravadas); um resto de linha gravado pela metade é completado com a quebra
+     * (vira linha ilegível). Um aviso de perda ainda não gravado é SUBSTITUÍDO pelo novo, que cobre toda a perda ainda
+     * não registrada no disco — a contagem nunca encolhe e a memória nunca acumula avisos.
      */
-    private ActivityEvent abandon(Instant now) {
-        long n = pending.stream().filter(p -> p.sequence() > 0).count();
+    private void abandon(Instant now) {
+        long present;
+        try {
+            present = reconcile();
+        } catch (Mismatch | IOException | RuntimeException e) {
+            present = -1; // fim desconhecido ou alheio: nada da fila é dado como gravado
+        }
+        ArrayDeque<Pending> keep = new ArrayDeque<>();
+        long kept = 0;
+        long covered = 0;
+        long n = 0;
+        byte[] torn = null;
+        for (Pending p : pending) {
+            if (present >= 0 && kept + p.line().length <= present) {
+                keep.addLast(p); // inteira no arquivo: falta só a sincronização
+                kept += p.line().length;
+                if (p.gap()) covered += p.reports();
+                continue;
+            }
+            if (present > kept && torn == null) torn = Arrays.copyOf(p.line(), (int) (present - kept)); // gravada pela metade
+            if (p.gap()) removeEvent(p.sequence()); // aviso não gravado: substituído abaixo, nunca acumulado
+            else if (p.sequence() > 0) n++;
+        }
         lost += n;
-        storeFailed = true;
+        unreported += n;
         pending.clear();
         pendingBytes = 0;
         attempts = 0;
         retryAt = now.plus(backoff(1));
-        try { // daqui em diante vale o arquivo como está; um resto sem quebra de linha fica separado (vira linha ilegível)
-            long size = Files.size(file);
-            diskBytes = size;
-            if (size > 0 && !endsWithNewline(size)) enqueue(new Pending(0, new byte[] {'\n'}));
-        } catch (IOException | RuntimeException e) {
-            // a próxima conferência decide
+        keep.forEach(this::enqueue);
+        if (torn != null) {
+            byte[] fix = Arrays.copyOf(torn, torn.length + 1);
+            fix[torn.length] = '\n';
+            enqueue(new Pending(0, fix, -1));
+        } else if (present < 0) {
+            try { // daqui em diante vale o arquivo como está; um resto sem quebra de linha fica separado (linha ilegível)
+                long size = Files.size(file);
+                diskBytes = size;
+                if (size > 0 && !endsWithNewline(size)) enqueue(new Pending(0, new byte[] {'\n'}, -1));
+            } catch (IOException | RuntimeException e) {
+                // a próxima conferência decide
+            }
         }
+        long report = unreported - covered;
+        if (report <= 0) return;
+        storeFailed = true;
         ActivityEvent gap = ActivityEvent.of(id, now, Source.COLLECTOR, "EVENT_GAP", Level.WARNING, Category.TELEMETRY)
-                .error(ErrorCode.OBS_STORE_FAILED.code()).status(STORE_STATUS).count("lost", n).build().withSequence(nextSequence++);
+                .error(ErrorCode.OBS_STORE_FAILED.code()).status(STORE_STATUS).count("lost", report).build().withSequence(nextSequence++);
         byte[] line = (ActivityCodec.encode(gap) + "\n").getBytes(StandardCharsets.UTF_8);
-        enqueue(new Pending(gap.sequence(), line));
+        enqueue(new Pending(gap.sequence(), line, report));
         bytes += line.length;
         events.add(gap);
-        return gap;
+    }
+
+    /** Tira da memória um aviso que nunca foi gravado (a lista está em ordem de sequência). */
+    private void removeEvent(long sequence) {
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).sequence() == sequence) {
+                events.remove(i);
+                return;
+            }
+            if (events.get(i).sequence() < sequence) return;
+        }
     }
 
     private boolean endsWithNewline(long size) throws IOException {
@@ -353,10 +414,10 @@ final class ActivityLog {
 
     private void add(ActivityEvent e, List<ActivityEvent> accepted, Instant now) {
         // fila cheia: grava antes (lote grande e saudável); só descarta se a gravação estiver falhando — nunca cresce sem limite
-        if (queueFull() && !flush(now, false) && queueFull()) accepted.add(abandon(now));
+        if (queueFull() && !flush(now, false) && queueFull()) abandon(now);
         ActivityEvent s = e.withSequence(nextSequence++);
         byte[] line = (ActivityCodec.encode(s) + "\n").getBytes(StandardCharsets.UTF_8);
-        enqueue(new Pending(s.sequence(), line));
+        enqueue(new Pending(s.sequence(), line, -1));
         // na memória na ordem da sequência (a busca por sequência depende disso), mesmo antes de chegar ao disco
         events.add(s);
         if (s.sourcePosition() != null) positions.merge(origin(s), s.sourcePosition(), Math::max);
@@ -437,9 +498,14 @@ final class ActivityLog {
         return tooLarge;
     }
 
-    /** Eventos aceitos que ainda não estão no disco (a gravação será tentada de novo). */
+    /** Eventos aceitos ainda sem gravação sincronizada no disco (a gravação será tentada de novo). */
     synchronized int pendingCount() {
         return (int) pending.stream().filter(p -> p.sequence() > 0).count();
+    }
+
+    /** Avisos de perda na memória ainda não gravados (no máximo um). */
+    synchronized int unwrittenGapNotices() {
+        return (int) pending.stream().filter(Pending::gap).count();
     }
 
     /** Eventos que não puderam ser gravados e foram descartados do disco (contados). */

@@ -166,9 +166,18 @@ perdida (nada regravado); arquivo alterado por outro (nada colado; resto alheio 
 2 defeitos do próprio desenho antes do commit, corrigidos: lote grande e saudável descartado como "fila cheia"; ordem
 da memória quebrada por um descarte no meio do lote.
 
+Revisão de fontes da titular (23/10) — dois defeitos corrigidos no commit seguinte (ver §8.3):
+1. A falha persistente podia descartar o próprio aviso de perda (o `EVENT_GAP` ia para a mesma fila descartável; um
+   novo ciclo o trocava por outro com contagem menor) e cada ciclo acrescentava outro aviso à memória sem limite. O
+   teste anterior parava no primeiro descarte e não cobria isso.
+2. Bytes presentes no arquivo não comprovam a sincronização: com `write()` bem-sucedido e `fsync` falho, a conferência
+   tirava as linhas da fila sem sincronizar. O teste de "confirmação perdida" aceitava isso.
+
 Risco residual registrado: se o arquivo ficar sem escrita por mais tempo do que as 12 tentativas (~41 s) ou a fila
-encher, os eventos dessa janela ficam só na memória da sessão e faltam no disco; isso é contado, gravado como
-`EVENT_GAP`/`AGT-OBS-009` e a linha do tempo fica INCOMPLETA — nunca escondido.
+encher, os eventos dessa janela que não chegaram ao arquivo ficam só na memória da sessão e faltam no disco. A perda é
+contada e, quando o arquivo voltar a aceitar escrita, gravada como UM `EVENT_GAP`/`AGT-OBS-009` com a perda acumulada;
+a linha do tempo fica INCOMPLETA. Se o Agent terminar antes disso, o aviso não chega ao disco: os eventos das origens
+são relidos na reabertura (enquanto as origens existirem), mas os avisos do coletor desse intervalo se perdem.
 
 ### 8.3 Entrega anterior (OBS-001)
 
