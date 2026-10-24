@@ -22,6 +22,8 @@ Set-StrictMode -Version 3.0
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# AGENT-LEAN-001: -Xms16m — sem ele o heap inicial é 1/64 da RAM (limitado ao -Xmx256m) e fica todo comprometido na
+# abertura (memória privada 350 MB → 108 MB medidos; teto -Xmx256m e GC serial inalterados; docs/agent-lean-001).
 # Módulos do runtime: o que o jdeps encontra + o que é carregado por reflexão/serviço.
 #  - jdk.unsupported: ExtendedOpenOption.NOSHARE_DELETE (trava) e FlatLaf
 #  - java.prefs: Preferences (o ThemeManager a usa; o Agent a redireciona para memória)
@@ -88,7 +90,7 @@ Invoke-Checked 'jpackage' { & (Join-Path $jbin 'jpackage.exe') --type app-image 
         --icon (Join-Path $pkg 'nekkora-agent.ico') --input (Join-Path $pkg 'input') --main-jar 'nekkora-agent.jar' `
         --main-class 'com.nekkora.agent.AgentMain' --runtime-image $runtime --dest $image `
         --java-options '-Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory' `
-        --java-options '-Dflatlaf.nativeLibraryPath=$APPDIR\lib' --java-options '-XX:+UseSerialGC' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' }
+        --java-options '-Dflatlaf.nativeLibraryPath=$APPDIR\lib' --java-options '-XX:+UseSerialGC' --java-options '-Xms16m' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' }
 $app = Join-Path $image 'Nekkora Agent'
 
 Write-Host "[6/7] Licenças, LEIA-ME e versões"
@@ -128,7 +130,7 @@ $lines += "Runtime Java incluído (jlink):"
 $lines += ($release | ForEach-Object { "  $_" })
 $lines += ""
 $lines += "Biblioteca nativa: app\lib\flatlaf-$flatVersion-windows-x86_64.dll (extraída do JAR do FlatLaf; -Dflatlaf.nativeLibraryPath=`$APPDIR\lib)"
-$lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
+$lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xms16m -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
 [System.IO.File]::WriteAllLines((Join-Path $app 'VERSOES.txt'), [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "[7/7] ZIP e SHA-256"
