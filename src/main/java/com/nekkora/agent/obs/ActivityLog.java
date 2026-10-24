@@ -21,8 +21,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Histórico de atividade de UMA execução: {@code <dados>/execucoes/<id>/atividade.jsonl}, envelopes já saneados, um
@@ -42,8 +45,15 @@ import java.util.Map;
  * linha da coleta, nunca na interface, e sem tocar na automação. Antes de cada nova tentativa o fim do arquivo é
  * CONFERIDO contra o que estava pendente (uma tentativa anterior pode ter gravado tudo ou parte antes de falhar): o
  * que já está lá não é regravado e uma linha gravada pela metade é completada. Bytes visíveis no arquivo NÃO bastam:
- * uma pendente só sai da fila depois de uma sincronização ({@code fsync}) confirmada — se só ela falhou, a próxima
- * tentativa sincroniza sem regravar.
+ * uma pendente só é dada como gravada depois de uma sincronização ({@code fsync}) confirmada — se só ela falhou, a
+ * próxima tentativa sincroniza sem regravar.
+ *
+ * <p>Limite da fila (B-OBS-03): a fila guarda na memória só o que ainda NÃO está no arquivo. Quando ela enche, uma
+ * gravação é tentada na hora (mesmo dentro do intervalo, no máximo uma vez por fila cheia); se falhar, as linhas que já
+ * estão inteiras no arquivo saem da memória e passam a ser só contadas (continuam aguardando a sincronização, não são
+ * perdidas nem regravadas) e só o resto é descartado. Assim a fila nunca passa de {@link #MAX_PENDING} linhas, e os
+ * bytes nunca passam de {@link #MAX_PENDING_BYTES} mais UMA linha (a última aceita antes de a fila encher). Se outro programa
+ * cortar o arquivo, as linhas aguardando sincronização são relidas do que sobrou: só as que sumiram são perdidas.
  *
  * <p>Se o fim não confere (arquivo alterado por outro), se as tentativas se esgotam ou se a fila enche, as pendentes que
  * não estão no arquivo são DESCARTADAS e contadas e UM {@code EVENT_GAP} ({@code AGT-OBS-009}) com a perda ACUMULADA
@@ -117,7 +127,15 @@ final class ActivityLog {
     private boolean tooLarge;
     private final ArrayDeque<Pending> pending = new ArrayDeque<>();
     private long pendingBytes;
+    /** Fim, no arquivo, do que este histórico pôs lá e conferiu (sincronizado ou não). */
     private long diskBytes;
+    /** Fim do que tem sincronização confirmada, e a maior sequência até ali. */
+    private long syncedBytes;
+    private long syncedSequence;
+    /** Eventos inteiros no arquivo, fora da fila, aguardando sincronização (só contados: não ocupam a memória). */
+    private long unsyncedEvents;
+    /** Avisos de perda nessa mesma situação: sequência → perdas que cobrem. */
+    private final Map<Long, Long> unsyncedNotices = new LinkedHashMap<>();
     private int attempts;
     private Instant retryAt;
     private long lost;
@@ -191,6 +209,8 @@ final class ActivityLog {
             }
             nextSequence = prev + 1;
             diskBytes = bytes;
+            syncedBytes = bytes;
+            syncedSequence = prev;
         } catch (IOException | RuntimeException e) {
             storeFailed = true;
         }
@@ -243,7 +263,7 @@ final class ActivityLog {
     }
 
     private boolean flush(Instant now, boolean force) {
-        if (pending.isEmpty()) return true;
+        if (pending.isEmpty() && unsyncedEvents == 0 && unsyncedNotices.isEmpty()) return true;
         if (!force && retryAt != null && now.isBefore(retryAt)) return false;
         try {
             long done = reconcile();
@@ -258,9 +278,14 @@ final class ActivityLog {
             }
             writer.append(file, data); // o resto (se houver) e a sincronização de TUDO o que estava pendente
             diskBytes += pendingBytes;
+            syncedBytes = diskBytes;
+            syncedSequence = nextSequence - 1;
             for (Pending p : pending) {
                 if (p.gap()) unreported -= p.reports();
             }
+            for (long r : unsyncedNotices.values()) unreported -= r;
+            unsyncedNotices.clear();
+            unsyncedEvents = 0;
             pending.clear();
             pendingBytes = 0;
             attempts = 0;
@@ -320,49 +345,66 @@ final class ActivityLog {
 
     /**
      * Desiste do que não está no arquivo: essas pendentes são contadas como perdidas (ficam só na memória desta sessão;
-     * no disco fica a lacuna de sequência). Linhas que já estão inteiras no arquivo continuam na fila só para a
-     * sincronização (não são perdidas nem regravadas); um resto de linha gravado pela metade é completado com a quebra
-     * (vira linha ilegível). Um aviso de perda ainda não gravado é SUBSTITUÍDO pelo novo, que cobre toda a perda ainda
-     * não registrada no disco — a contagem nunca encolhe e a memória nunca acumula avisos.
+     * no disco fica a lacuna de sequência). Linhas que já estão inteiras no arquivo, na posição esperada, SAEM DA FILA e
+     * passam a ser só contadas, aguardando a sincronização (não são perdidas nem regravadas) — é isso que mantém a fila
+     * no limite quando só a sincronização falha. Um resto de linha gravado pela metade no fim é completado com a quebra
+     * (vira linha ilegível); depois de bytes alheios, o arquivo como está passa a valer e uma quebra os separa. Um aviso
+     * de perda ainda não gravado é SUBSTITUÍDO pelo novo, que cobre toda a perda ainda não registrada no disco — a
+     * contagem nunca encolhe e a memória nunca acumula avisos.
      */
     private void abandon(Instant now) {
-        long present;
+        long size;
         try {
-            present = reconcile();
-        } catch (Mismatch | IOException | RuntimeException e) {
-            present = -1; // fim desconhecido ou alheio: nada da fila é dado como gravado
+            size = Files.size(file);
+        } catch (NoSuchFileException e) {
+            size = 0;
+        } catch (IOException | RuntimeException e) {
+            size = -1; // fim desconhecido: nada da fila é dado como gravado
         }
-        ArrayDeque<Pending> keep = new ArrayDeque<>();
+        long match = 0;
+        boolean foreign = false;
+        if (size >= 0 && size < diskBytes) {
+            truncated(size);
+            foreign = true;
+        } else if (size >= 0) {
+            try {
+                match = matching(size - diskBytes);
+                foreign = size - diskBytes > match;
+            } catch (IOException | RuntimeException e) {
+                size = -1;
+            }
+        }
+        ArrayDeque<Pending> old = new ArrayDeque<>(pending);
+        pending.clear();
+        pendingBytes = 0;
         long kept = 0;
         long covered = 0;
+        for (long r : unsyncedNotices.values()) covered += r;
         long n = 0;
         byte[] torn = null;
-        for (Pending p : pending) {
-            if (present >= 0 && kept + p.line().length <= present) {
-                keep.addLast(p); // inteira no arquivo: falta só a sincronização
+        for (Pending p : old) {
+            if (kept + p.line().length <= match) {
+                settle(p); // inteira no arquivo: sai da memória, falta só a sincronização
                 kept += p.line().length;
                 if (p.gap()) covered += p.reports();
                 continue;
             }
-            if (present > kept && torn == null) torn = Arrays.copyOf(p.line(), (int) (present - kept)); // gravada pela metade
+            if (match > kept && torn == null && !foreign) torn = Arrays.copyOf(p.line(), (int) (match - kept)); // gravada pela metade
             if (p.gap()) removeEvent(p.sequence()); // aviso não gravado: substituído abaixo, nunca acumulado
             else if (p.sequence() > 0) n++;
         }
         lost += n;
         unreported += n;
-        pending.clear();
-        pendingBytes = 0;
         attempts = 0;
         retryAt = now.plus(backoff(1));
-        keep.forEach(this::enqueue);
         if (torn != null) {
             byte[] fix = Arrays.copyOf(torn, torn.length + 1);
             fix[torn.length] = '\n';
             enqueue(new Pending(0, fix, -1));
-        } else if (present < 0) {
+        } else if (foreign) {
             try { // daqui em diante vale o arquivo como está; um resto sem quebra de linha fica separado (linha ilegível)
-                long size = Files.size(file);
                 diskBytes = size;
+                syncedBytes = Math.min(syncedBytes, size);
                 if (size > 0 && !endsWithNewline(size)) enqueue(new Pending(0, new byte[] {'\n'}, -1));
             } catch (IOException | RuntimeException e) {
                 // a próxima conferência decide
@@ -377,6 +419,83 @@ final class ActivityLog {
         enqueue(new Pending(gap.sequence(), line, report));
         bytes += line.length;
         events.add(gap);
+    }
+
+    /** Linha inteira no arquivo, aguardando só a sincronização: sai da fila e fica contada. */
+    private void settle(Pending p) {
+        diskBytes += p.line().length;
+        if (p.gap()) unsyncedNotices.put(p.sequence(), p.reports());
+        else if (p.sequence() > 0) unsyncedEvents++;
+    }
+
+    /** Quantos bytes das pendentes, em ordem, estão no arquivo logo depois de {@code diskBytes} (para no 1º diferente). */
+    private long matching(long extra) throws IOException {
+        int len = (int) Math.min(extra, pendingBytes);
+        if (len == 0) return 0;
+        byte[] got = new byte[len];
+        readFully(diskBytes, got);
+        int off = 0;
+        for (Pending p : pending) {
+            if (off >= len) break;
+            int n = Math.min(p.line().length, len - off);
+            int diff = Arrays.mismatch(got, off, off + n, p.line(), 0, n);
+            if (diff >= 0) return off + diff;
+            off += n;
+        }
+        return off;
+    }
+
+    /**
+     * Outro programa cortou o arquivo antes do fim do que este histórico pôs lá: as linhas aguardando sincronização são
+     * relidas do que sobrou e só as que sumiram são perdidas (as já sincronizadas não são recontadas).
+     */
+    private void truncated(long size) {
+        long survivors = 0;
+        Set<Long> notices = new HashSet<>();
+        if (size > syncedBytes) {
+            try {
+                byte[] got = new byte[(int) (size - syncedBytes)];
+                readFully(syncedBytes, got);
+                int start = 0;
+                for (int i = 0; i < got.length; i++) {
+                    if (got[i] != '\n') continue;
+                    var e = ActivityCodec.decode(new String(got, start, i - start, StandardCharsets.UTF_8))
+                            .filter(x -> x.agentExecutionId().equals(id) && x.sequence() > syncedSequence);
+                    if (e.isPresent()) {
+                        if (unsyncedNotices.containsKey(e.get().sequence())) notices.add(e.get().sequence());
+                        else survivors++;
+                    }
+                    start = i + 1;
+                }
+            } catch (IOException | RuntimeException e) {
+                survivors = 0; // sem leitura, nada é dado como presente
+                notices.clear();
+            }
+        }
+        long gone = Math.max(0, unsyncedEvents - survivors);
+        lost += gone;
+        unreported += gone;
+        unsyncedEvents -= gone;
+        for (var it = unsyncedNotices.keySet().iterator(); it.hasNext(); ) {
+            long seq = it.next();
+            if (notices.contains(seq)) continue;
+            removeEvent(seq); // o aviso sumiu do arquivo: o novo cobre também a perda que ele registrava
+            it.remove();
+        }
+        diskBytes = size;
+        syncedBytes = Math.min(syncedBytes, size);
+    }
+
+    private void readFully(long from, byte[] into) throws IOException {
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+            ByteBuffer b = ByteBuffer.wrap(into);
+            long pos = from;
+            while (b.hasRemaining()) {
+                int n = ch.read(b, pos);
+                if (n < 0) throw new IOException("fim do arquivo");
+                pos += n;
+            }
+        }
     }
 
     /** Tira da memória um aviso que nunca foi gravado (a lista está em ordem de sequência). */
@@ -413,8 +532,9 @@ final class ActivityLog {
     }
 
     private void add(ActivityEvent e, List<ActivityEvent> accepted, Instant now) {
-        // fila cheia: grava antes (lote grande e saudável); só descarta se a gravação estiver falhando — nunca cresce sem limite
-        if (queueFull() && !flush(now, false) && queueFull()) abandon(now);
+        // fila cheia: grava na hora (lote grande e saudável; no máximo uma tentativa fora do intervalo por fila cheia). Se
+        // falhar, o que já está no arquivo sai da memória e só o resto é descartado: a fila nunca passa do limite
+        if (queueFull() && !flush(now, true) && queueFull()) abandon(now);
         ActivityEvent s = e.withSequence(nextSequence++);
         byte[] line = (ActivityCodec.encode(s) + "\n").getBytes(StandardCharsets.UTF_8);
         enqueue(new Pending(s.sequence(), line, -1));
@@ -500,7 +620,17 @@ final class ActivityLog {
 
     /** Eventos aceitos ainda sem gravação sincronizada no disco (a gravação será tentada de novo). */
     synchronized int pendingCount() {
-        return (int) pending.stream().filter(p -> p.sequence() > 0).count();
+        return (int) (pending.stream().filter(p -> p.sequence() > 0).count() + unsyncedEvents + unsyncedNotices.size());
+    }
+
+    /** Linhas que a fila mantém na memória (só o que ainda não está no arquivo; no máximo {@link #MAX_PENDING}). */
+    synchronized int queuedLines() {
+        return pending.size();
+    }
+
+    /** Bytes que a fila mantém na memória (no máximo {@link #MAX_PENDING_BYTES} mais uma linha: a tolerância explícita). */
+    synchronized long queuedBytes() {
+        return pendingBytes;
     }
 
     /** Avisos de perda na memória ainda não gravados (no máximo um). */

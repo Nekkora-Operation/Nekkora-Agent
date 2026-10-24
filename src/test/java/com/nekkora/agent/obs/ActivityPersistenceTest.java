@@ -531,6 +531,177 @@ class ActivityPersistenceTest {
         assertEquals(Integrity.COMPLETE, ActivityView.completeness(health(reopened, true), reopened.all()).integrity());
     }
 
+    // ------------------------------------------------------------------- B-OBS-03: fila cheia com fsync que só falha
+
+    /** Escritor em que todo byte chega ao arquivo e a sincronização falha sempre (conta as chamadas). */
+    private static ActivityLog.Writer visibleButNeverSynced(int[] calls) {
+        return (f, data) -> {
+            calls[0]++;
+            Files.write(f, data, StandardOpenOption.APPEND);
+            throw new IOException("fsync");
+        };
+    }
+
+    @Test
+    void fullQueueOfVisibleLinesWithFsyncAlwaysFailingStaysWithinTheLimitsLosesNothingAndConfirmsOnlyAfterRecovery() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 2), T0); // sincronizados
+        int[] calls = {0};
+        log.writer(visibleButNeverSynced(calls));
+        Instant t = T0;
+        long pos = 3;
+        long accepted = 2;
+        int round = 0;
+        // fase 1: cada lote chega ao arquivo antes do próximo, então a fila enche só de linhas visíveis (o cenário do
+        // parecer); fase 2: chegada mais rápida que o intervalo entre tentativas, a fila enche com linhas ainda não escritas
+        for (int phase = 1; phase <= 2; phase++) {
+            int total = 2 * ActivityLog.MAX_PENDING + 3 * 64; // a fila enche duas vezes em cada fase
+            int batch = phase == 1 ? 64 : 97;
+            Duration step = phase == 1 ? ActivityLog.MAX_RETRY : ActivityLog.FIRST_RETRY;
+            for (int fed = 0; fed < total; ) {
+                t = t.plus(step);
+                int n = Math.min(batch, total - fed);
+                List<ActivityEvent> got = log.append(fws(id, pos, n), t); // a coleta nunca recebe exceção
+                assertEquals(n, got.size(), "a falha de gravação não recusa evento");
+                pos += n;
+                fed += n;
+                accepted += n;
+                String at = " (fase " + phase + ", " + accepted + " aceitos)";
+                assertTrue(log.queuedLines() <= ActivityLog.MAX_PENDING, "linhas na memória: " + log.queuedLines() + at);
+                assertTrue(log.queuedBytes() <= ActivityLog.MAX_PENDING_BYTES + ActivityCodec.MAX_LINE, "bytes na memória: " + log.queuedBytes() + at);
+                assertEquals(accepted, log.size(), "memória = eventos aceitos: sem cópia e sem aviso" + at);
+                assertEquals(accepted - 2, log.pendingCount(), "nenhuma confirmação indevida: tudo desde a falha aguarda sincronização" + at);
+                assertEquals(0, log.lost(), "nada perdido: a escrita funciona, só a sincronização falha" + at);
+                assertFalse(log.storeFailed());
+                assertEquals(0, log.unwrittenGapNotices());
+                ActivityView.Completeness c = ActivityView.completeness(health(log, true), log.all());
+                assertEquals(Integrity.INCOMPLETE, c.integrity());
+                assertTrue(c.gaps().contains(Gap.STORE_PENDING) && !c.gaps().contains(Gap.STORE_FAILED), c.gaps().toString());
+                if (++round % 16 == 0) {
+                    List<Long> disk = diskSequences(tmp, id);
+                    assertEquals(range(1, disk.size()), disk, "no arquivo, cada linha uma vez e em ordem" + at);
+                    assertTrue(disk.size() <= accepted);
+                }
+            }
+        }
+        t = t.plus(ActivityLog.MAX_RETRY);
+        log.flush(t); // o que faltava chega ao arquivo; a sincronização falha de novo
+        assertEquals(accepted - 2, log.pendingCount());
+        assertTrue(calls[0] >= 3, "a gravação foi tentada (e a sincronização falhou) várias vezes: " + calls[0]);
+        assertEquals(range(1, accepted), diskSequences(tmp, id), "nada perdido, nada repetido");
+
+        List<Integer> sizes = new ArrayList<>();
+        log.writer(recording(sizes, false)); // a sincronização volta
+        t = t.plus(ActivityLog.MAX_RETRY);
+        assertTrue(log.flush(t));
+        assertEquals(List.of(0), sizes, "tudo já estava no arquivo: a recuperação só sincroniza, nada é regravado");
+        assertEquals(0, log.pendingCount());
+        assertEquals(0, log.queuedLines());
+        assertEquals(0, log.queuedBytes());
+        log.append(fws(id, pos, 1), t);
+        assertEquals(range(1, accepted + 1), diskSequences(tmp, id));
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        assertEquals(range(1, accepted + 1), reopened.all().stream().map(ActivityEvent::sequence).toList());
+        assertFalse(reopened.sequenceGap());
+        assertFalse(reopened.storeFailed());
+        assertEquals(0, reopened.unreadable());
+        assertEquals(Integrity.COMPLETE, ActivityView.completeness(health(reopened, true), reopened.all()).integrity());
+    }
+
+    /** Evento grande (passo longo e 16 contagens): a fila enche pelos bytes antes das linhas. */
+    private static ActivityEvent big(String id, long pos) {
+        ActivityEvent.Builder b = ActivityEvent.of(id, T0, Source.FRAMEWORK, "ACTION_COMPLETED", Level.INFO, Category.ACTIVITY)
+                .step("a".repeat(60) + "." + "b".repeat(59)).position(pos);
+        for (int i = 0; i < ActivityEvent.MAX_COUNTS; i++) b.count(String.valueOf((char) ('a' + i)).repeat(40), 999_999_999_999L);
+        return b.build();
+    }
+
+    @Test
+    void queueFullByBytesWithFsyncAlwaysFailingStaysWithinTheByteLimitAndLosesNothing() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 1), T0);
+        log.writer(visibleButNeverSynced(new int[1]));
+        int line = (ActivityCodec.encode(big(id, 2).withSequence(2)) + "\n").getBytes(StandardCharsets.UTF_8).length;
+        int total = (int) (2 * ActivityLog.MAX_PENDING_BYTES / line) + 100; // os bytes enchem a fila duas vezes
+        assertTrue(total < ActivityLog.MAX_PENDING, "é o limite de bytes que enche, não o de linhas");
+        Instant t = T0;
+        for (int i = 0; i < total; i += 50) {
+            t = t.plus(ActivityLog.FIRST_RETRY);
+            List<ActivityEvent> batch = new ArrayList<>();
+            for (int k = i; k < Math.min(total, i + 50); k++) batch.add(big(id, 2L + k));
+            log.append(batch, t);
+            assertTrue(log.queuedBytes() <= ActivityLog.MAX_PENDING_BYTES + line, "bytes na memória: " + log.queuedBytes());
+            assertEquals(0, log.lost());
+        }
+        assertEquals(total, log.pendingCount(), "todas aguardando sincronização, nenhuma confirmada");
+        log.writer(ActivityLog.DISK);
+        assertTrue(log.flush(t.plus(ActivityLog.MAX_RETRY)));
+        assertEquals(range(1, 1L + total), diskSequences(tmp, id));
+        assertEquals(0, log.queuedBytes());
+    }
+
+    /** Quebras de linha do arquivo a partir do byte {@code from}. */
+    private static int newlinesFrom(Path file, long from) throws IOException {
+        byte[] b = Files.readAllBytes(file);
+        int n = 0;
+        for (int i = (int) from; i < b.length; i++) if (b[i] == '\n') n++;
+        return n;
+    }
+
+    /** Início da primeira linha a partir do byte {@code from}. */
+    private static long lineStartFrom(Path file, long from) throws IOException {
+        byte[] b = Files.readAllBytes(file);
+        int i = (int) from;
+        while (b[i - 1] != '\n') i++;
+        return i;
+    }
+
+    @Test
+    void linesReleasedFromMemoryWhileAwaitingSyncAreLostOnlyIfTheFileProvesIt() throws Exception {
+        String id = ExecutionId.random().value();
+        ActivityLog log = ActivityLog.open(tmp, id);
+        log.append(fws(id, 1, 2), T0);
+        Path file = tmp.resolve(ActivityLog.FILE);
+        long synced = Files.size(file);
+        log.writer(visibleButNeverSynced(new int[1]));
+        int n = ActivityLog.MAX_PENDING + 500;
+        log.append(fws(id, 3, n), T0); // enche a fila: as visíveis saem da memória, continuam aguardando sincronização
+        assertTrue(log.queuedLines() <= ActivityLog.MAX_PENDING);
+        log.flush(T0.plus(ActivityLog.FIRST_RETRY)); // o resto também chega ao arquivo, sem sincronizar
+        assertEquals(range(1, 2L + n), diskSequences(tmp, id));
+        assertEquals(n, log.pendingCount());
+
+        // outro programa acrescenta no fim: nada do que é deste histórico sumiu, nada é perdido
+        Files.writeString(file, "{\"lixo\":", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        log.flush(T0.plus(ActivityLog.MAX_RETRY));
+        assertEquals(0, log.lost(), "o arquivo ainda tem todas as linhas: nenhuma perda sem prova");
+        assertEquals(n, log.pendingCount());
+
+        // outro programa corta o arquivo no meio das linhas não sincronizadas: só as que sumiram são perdidas
+        long cut = lineStartFrom(file, synced + (Files.size(file) - synced) / 2) + 7; // no meio de uma linha
+        int gone = newlinesFrom(file, cut); // a cortada ao meio e as seguintes (o resto alheio não tem quebra)
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.WRITE)) {
+            ch.truncate(cut);
+        }
+        log.writer(ActivityLog.DISK);
+        log.flush(T0.plus(ActivityLog.MAX_RETRY).plus(ActivityLog.MAX_RETRY));
+        assertEquals(gone, log.lost(), "perdidas = exatamente as linhas que o arquivo não tem mais");
+        assertTrue(log.storeFailed());
+        log.flush(T0.plus(Duration.ofMinutes(1)));
+        assertEquals(0, log.pendingCount());
+        ActivityLog reopened = ActivityLog.read(tmp, id);
+        List<ActivityEvent> onDisk = reopened.all();
+        ActivityEvent notice = onDisk.get(onDisk.size() - 1);
+        assertEquals("AGT-OBS-009", notice.errorCode());
+        assertEquals((long) gone, notice.counts().get("lost"));
+        assertEquals(2 + n - gone + 1, onDisk.size(), "as sobreviventes + o aviso, cada uma uma vez");
+        assertEquals(range(1, 2L + n - gone), onDisk.subList(0, onDisk.size() - 1).stream().map(ActivityEvent::sequence).toList());
+        assertEquals(1, reopened.unreadable(), "a linha cortada ao meio virou uma linha ilegível, separada");
+        assertTrue(reopened.sequenceGap());
+    }
+
     @Test
     void tornLineLeftByAFailedWriteIsSeparatedAndOnlyWhatIsMissingIsLost() throws Exception {
         String id = ExecutionId.random().value();
