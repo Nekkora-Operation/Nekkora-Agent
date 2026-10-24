@@ -28,6 +28,8 @@ Windows real, exceto G2/A13/OBS-G6 com a titular presente** (bloqueio real da te
 | `5c3fd6e` | **OBS-PERSISTENCE-HARDENING** (autorizada pela titular em 23/10): gravação do `atividade.jsonl` que falha fica pendente, é conferida e gravada uma vez |
 | `ae13e22` | Documentação, regressões e ensaio da OBS-PERSISTENCE-HARDENING |
 | `37d5a72`, `05f7a48` | Revisão de fontes (B-OBS-01, B-OBS-02): aviso de perda único e acumulado; pendência só sai com `fsync` confirmado; testes de aceitação e prova vermelho/verde |
+| `7357525` | Documentação, regressões e ensaio da revisão B-OBS-01/02 |
+| `139a002` | Revisão de fontes do pacote `7357525` (B-OBS-03): fila limitada mesmo com `fsync` sempre falho; 3 testes novos e prova vermelho/verde |
 | (este)   | Revisão: documentação, ensaio do roteiro físico, regressões |
 
 Ver diff: `git diff d465296..feat/nekkora-desktop-001 --stat`.
@@ -215,7 +217,45 @@ parcial + `fsync` falho (só o que faltava é escrito, depois só sincronizaçã
 | Linux `--init` | 189 | 15 (= base) | 18 = 16 anteriores + 2 só Windows — `evidencias/OBS-linux/resumo-hardening-revisao.txt` |
 | Ensaio do roteiro físico (sem bloqueio/suspensão) | 25 verificações | 0 | bloqueio/suspensão NÃO EXERCIDOS; capturas `P-*` revisadas (só janelas do Agent) |
 
-### 8.4 Entrega anterior (OBS-001)
+### 8.4 Revisão de fontes do pacote `7357525` (24/10, commit `139a002`) — B-OBS-03
+
+Parecer: B-OBS-01 e B-OBS-02 confirmados; B-OBS-03 (achado por leitura de fonte) exigia teste direcionado e correção
+localizada. Corrigido só o `ActivityLog` (e os testes); `ExecutionController`, Framework, Studio, Platform e o envelope
+1.0.0 intactos; a automação não é tocada (a gravação continua na linha da coleta e `append()` nunca lança nem recusa).
+
+- **Reproduzido** no `05f7a48`: com todo byte chegando ao arquivo e `fsync` sempre falhando, `abandon()` mantinha na fila
+  as linhas visíveis (correto pelo B-OBS-02) e `add()` acrescentava o evento novo mesmo com a fila ainda cheia: 4098
+  linhas (limite 4096) e 2 100 148 bytes (limite 2 MiB + 1 linha). Uma sonda não versionada (16 384 eventos) mostrou
+  ainda 4436 linhas na fila e **10 682 eventos descartados como perdidos** com a escrita funcionando — cada evento novo,
+  com a fila cheia, descartava o anterior ainda não escrito porque a tentativa respeitava o intervalo e nem era feita.
+- **Correção:** a fila guarda na memória só o que ainda NÃO está no arquivo. Fila cheia → uma gravação na hora (no
+  máximo uma por fila cheia, fora do intervalo; nunca um laço). Se falhar, as linhas inteiras já no arquivo, na posição
+  esperada, saem da fila e ficam só CONTADAS aguardando a sincronização (continuam em `pendingCount()`, tela INCOMPLETA
+  com `STORE_PENDING`; não são perdidas nem regravadas); só o que não chegou ao arquivo é descartado, com o aviso único
+  do B-OBS-01. Bytes alheios depois delas não as tornam perdidas. Se outro programa CORTAR o arquivo, o trecho não
+  sincronizado é relido e só as linhas que sumiram são perdidas (contagem exata, aviso substituto se um aviso sumiu).
+- **Limites:** fila ≤ `MAX_PENDING` (4096) linhas, estrito; bytes ≤ `MAX_PENDING_BYTES` (2 MiB) + UMA linha (a última
+  aceita antes de a fila encher) — tolerância explícita. A lista de eventos na memória continua limitada pelos limites
+  de `append()` (sem cópias nem avisos acumulados).
+
+Vermelho/verde (`evidencias/OBS-persistence/vermelho-verde-B-OBS-03.txt`): os 17 testes de `ActivityPersistenceTest`
+contra o `05f7a48` (só com os accessors de leitura `queuedLines()`/`queuedBytes()` acrescentados) → **3 falham** (os 3
+novos); na correção → 17/17. Testes novos: (1) fila cheia só de linhas visíveis (lotes que chegam ao arquivo antes do
+próximo, o cenário do parecer) e depois chegada mais rápida que o intervalo, `fsync` sempre falho — a cada lote: limites
+de linhas e bytes, memória = eventos aceitos, nenhuma perda, nenhuma confirmação (todos pendentes), tela INCOMPLETA,
+arquivo sem repetição; recuperação só sincroniza (0 bytes regravados), reabertura COMPLETA, sequência 1…N sem lacuna;
+(2) a mesma coisa enchendo pelos bytes (eventos grandes); (3) linhas já fora da memória com bytes alheios acrescentados
+(nenhuma perda) e depois o arquivo cortado no meio (perdidas = exatamente as linhas que sumiram; aviso com essa
+contagem; linha cortada separada como ilegível).
+
+| Suíte (commit `139a002`) | Executados | Falhas | Pulados (identificados) |
+|---|---|---|---|
+| Windows `clean verify` (em `tools/package-windows.ps1`; ZIP SHA-256 `53f5318b6914dac286fe724923434104c54eeb2eabdbaf7447e695897ce6e5f2`) | 192 | 0 | 1 — `SourceFileTest.symbolicLinksAreRefused` |
+| Windows `-Pdesktop clean verify` + `ScaleEvidenceTest` 150% e 200% | 213 + 1 + 1 | 0 | o mesmo 1 |
+| Linux `--init` | 192 | 15 (= base; nenhuma nova) | 18 (a mesma lista da rodada anterior) — `evidencias/OBS-linux/resumo-b-obs-03.txt` |
+| Ensaio do roteiro físico (sem bloqueio/suspensão), ZIP `53f5318b…e6e5f2` | 25 verificações | 0 | bloqueio/suspensão NÃO EXERCIDOS; nenhum aviso `ACTIVITY_STORE` no `agent.log`; capturas `P-*` revisadas (só janelas do Agent) — `evidencias/G2-A13-ensaio` |
+
+### 8.5 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
 |---|---|---|---|---|---|
