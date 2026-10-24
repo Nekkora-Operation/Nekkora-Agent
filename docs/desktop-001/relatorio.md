@@ -255,6 +255,12 @@ contagem; linha cortada separada como ilegível).
 | Linux `--init` | 192 | 15 (= base; nenhuma nova) | 18 (a mesma lista da rodada anterior) — `evidencias/OBS-linux/resumo-b-obs-03.txt` |
 | Ensaio do roteiro físico (sem bloqueio/suspensão), ZIP `53f5318b…e6e5f2` | 25 verificações | 0 | bloqueio/suspensão NÃO EXERCIDOS; nenhum aviso `ACTIVITY_STORE` no `agent.log`; capturas `P-*` revisadas (só janelas do Agent) — `evidencias/G2-A13-ensaio` |
 
+**Parecer independente (24/10):** B-OBS-03 `SOURCE_REVIEW_ACCEPTED` (revisão estática do pacote
+`desktop-001-fontes-b-obs-03-280ffd9.zip`, 10/10 hashes da auditoria conferidos; resultados de suítes e ensaio
+registrados pelo executor, não reexecutados pelo revisor). Rodada física G2/A13/OBS-G6 liberada tecnicamente com o
+código `139a002`, com a titular presente; a DESKTOP-001 continua `PENDING_PHYSICAL_HOMOLOGATION` até a revisão das
+evidências físicas e o aceite humano explícito.
+
 ### 8.5 Entrega anterior (OBS-001)
 
 | Suíte | Commit | Executados | Falhas | Pulados | Observação |
