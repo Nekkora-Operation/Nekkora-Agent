@@ -30,3 +30,24 @@ não muda: o runtime já era reduzido por `jlink`, e os candidatos restantes val
 
 As pendências físicas da DESKTOP-001 continuam como estavam: G2 e OBS-G6 pendentes, A13 adiado. O ensaio não
 substitui a homologação física.
+
+## Séries complementares pedidas na revisão (24/10, noite)
+
+Mesmos cenários, ZIP antigo × novo intercalados. Detalhes, GC e roteiros estão no pacote de revisão.
+
+| Série | Antes | Depois |
+|---|---|---|
+| 1ª abertura após extrair (3 extrações) | 1 318 / 1 477 / 1 293 ms | 1 477 / 1 491 / 1 346 ms |
+| Aberturas seguintes (9), mediana | 1 014 ms | 1 008 ms |
+| 10 execuções seguidas, saída volumosa, mesma instância | 10/10; pico 236 MB; privada ~393 MB | 10/10; pico 173 MB; privada 148 → 153 MB |
+| 10 execuções seguidas, AUT-03 (Framework + portal local) | 10/10; 4,1 s; pico 245 MB; privada ~396 MB | 10/10; 4,0 s; pico 186 MB; privada ~159 MB |
+| GC (`-Xlog:gc`), saída volumosa | 3 coletas; pausas 51 ms no total, máx. 22 ms; heap reservado 247 MB | 32 coletas; 70 ms no total, máx. 19 ms; reservado ≤ 19 MB |
+| GC, AUT-03 × 10 | 8 coletas; 61 ms, máx. 23 ms | 86 coletas; 144 ms, máx. 21 ms |
+
+Mais coletas jovens, cada uma de ~1 ms. A pausa máxima e a duração das execuções não mudam, e não há crescimento de
+memória ao longo das repetições.
+
+**Achado F-AGT-01 (presente nos DOIS ZIPs; não é regressão):** no Windows, a troca atômica do `estado.json` falha se
+outro processo estiver com o arquivo aberto, mesmo com compartilhamento total. Quando isso acontece na gravação de
+`RUNNING`, o processo já lançado fica sem supervisão e o registro fica em `STARTING`. A correção toca o
+`ExecutionController` e aguarda autorização.
