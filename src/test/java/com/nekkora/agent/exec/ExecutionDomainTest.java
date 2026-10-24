@@ -106,6 +106,41 @@ class ExecutionDomainTest {
     }
 
     @Test
+    @DisplayName("procedência: sem metadado, com gerador do Studio declarado, com declaração inválida e laboratório → sempre 'Origem não verificada'; nunca 'gerada pelo Studio'")
+    void procedenciaNaoVerificada() throws Exception {
+        // NEGATIVO: manifesto no formato do Studio SEM generator (montado à mão, por exemplo) — nada é inferido do formato
+        ExecutionPackage bare = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o1"), "single", "\"output\": \"--output\"", ""));
+        assertEquals(ExecutionPackage.Kind.STUDIO_PYTHON, bare.kind(), "o formato continua aceito");
+        assertTrue(bare.declaredGenerator().isEmpty());
+        assertEquals("Origem não verificada · nenhum gerador declarado", ExecutionSetup.originLabel(bare));
+        // o gerador do Studio DECLARADO continua sendo só declaração: o manifesto não é assinado
+        ExecutionPackage studio = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o2"), "single", "\"output\": \"--output\"",
+                "\"generator\": \"nekkora-studio-codegen/1.2.0\", "));
+        assertEquals("nekkora-studio-codegen/1.2.0", studio.declaredGenerator().orElseThrow());
+        assertEquals("Origem não verificada · gerador declarado pelo pacote: nekkora-studio-codegen/1.2.0", ExecutionSetup.originLabel(studio));
+        // pacote escrito à mão que se declara como tal (E2E-005)
+        ExecutionPackage hand = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o3"), "single", "\"output\": \"--output\"",
+                "\"generator\": \"hand-written:nekkora-e2e-005/1.0.0\", "));
+        assertTrue(ExecutionSetup.originLabel(hand).endsWith("gerador declarado pelo pacote: hand-written:nekkora-e2e-005/1.0.0"));
+        // declaração fora do formato exibível (caminho, quebra de linha, longa demais, não texto): não aparece; o pacote não é recusado por isso
+        for (String bad : List.of("\"C:\\\\Users\\\\fulano\\\\gerador\"", "\"linha\\nnova\"", "\"" + "g".repeat(81) + "\"", "\" espaco\"", "42", "{\"x\": 1}")) {
+            ExecutionPackage p = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o-" + Math.abs(bad.hashCode())), "single",
+                    "\"output\": \"--output\"", "\"generator\": " + bad + ", "));
+            assertTrue(p.declaredGenerator().isEmpty(), bad);
+            assertEquals("Origem não verificada · nenhum gerador declarado", ExecutionSetup.originLabel(p), bad);
+        }
+        ExecutionPackage lab = ExecutionPackage.inspect(ExecFixtures.labPackage(tmp.resolve("o-lab"), "Laboratorio sucesso", "lab_sucesso.py"));
+        assertTrue(ExecutionSetup.originLabel(lab).startsWith("Origem não verificada"));
+        for (ExecutionPackage p : List.of(bare, studio, hand, lab)) {
+            String shown = ExecutionSetup.kindLabel(p) + " " + ExecutionSetup.originLabel(p);
+            assertFalse(shown.toLowerCase(java.util.Locale.ROOT).matches(".*gerad[ao] pelo studio.*"), shown);
+        }
+        assertEquals("Pacote local importado (projeto Python com nekkora-rpa)", ExecutionSetup.kindLabel(studio));
+        // a declaração não entra na impressão digital de outra forma que não o próprio manifesto (já coberto: o manifesto é hasheado)
+        assertNotEquals(bare.fingerprint(), studio.fingerprint());
+    }
+
+    @Test
     @DisplayName("pacote inseguro: caminho que sobe de pasta, arquivo ausente e pasta desconhecida")
     void pacoteInseguro() throws Exception {
         Path dir = ExecFixtures.labPackage(tmp.resolve("lab"), "Laboratorio", "lab_sucesso.py");

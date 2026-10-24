@@ -80,11 +80,20 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
 
     // ----- textos -----
 
+    /** O FORMATO do pacote. Nunca afirma quem o gerou: o formato não prova procedência (ver {@link #originLabel}). */
     public static String kindLabel(ExecutionPackage p) {
         return switch (p.kind()) {
-            case STUDIO_PYTHON -> "Automação gerada pelo Studio";
+            case STUDIO_PYTHON -> "Pacote local importado (projeto Python com nekkora-rpa)";
             case LAB_GENERIC -> "Processo de laboratório (sem framework)";
         };
+    }
+
+    /**
+     * Procedência: o Agent não tem como comprovar quem gerou um pacote local (sem assinatura nem atestado), então diz
+     * isso. O gerador que o pacote declara aparece como declaração, não como fato.
+     */
+    public static String originLabel(ExecutionPackage p) {
+        return "Origem não verificada" + p.declaredGenerator().map(g -> " · gerador declarado pelo pacote: " + g).orElse(" · nenhum gerador declarado");
     }
 
     public static String modeLabel(ExecutionPackage p) {

@@ -136,6 +136,7 @@ final class ExecutionDialog extends FittedDialog {
         } else {
             kv.add("Pacote", p.name());
             kv.add("Tipo", ExecutionSetup.kindLabel(p));
+            kv.add("Origem", ExecutionSetup.originLabel(p));
             kv.add("Como recebe dados", ExecutionSetup.modeLabel(p));
             kv.addMono("Impressão digital", p.shortFingerprint());
             if (!p.origins().isEmpty()) kv.add("Sites declarados", String.join(", ", p.origins()));

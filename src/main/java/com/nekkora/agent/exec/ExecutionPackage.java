@@ -23,16 +23,20 @@ import java.util.regex.Pattern;
 /**
  * Pacote de automação local inspecionado: o que é, o que precisa e a sua IMPRESSÃO DIGITAL. Dois tipos:
  * <ul>
- *   <li>{@link Kind#STUDIO_PYTHON} — projeto gerado pelo Studio ({@code manifest.json} 1.4.0+, layout {@code automation/}
+ *   <li>{@link Kind#STUDIO_PYTHON} — projeto Python no FORMATO do gerador do Studio ({@code manifest.json} 1.4.0+, layout {@code automation/}
  *       + {@code main.py}): cada arquivo listado precisa ter o hash do manifesto (texto com LF, como o gerador calcula);</li>
  *   <li>{@link Kind#LAB_GENERIC} — processo genérico de laboratório ({@code nekkora-agent-lab.json}): um script Python que
  *       não depende do {@code nekkora_rpa} e publica {@code agent-result.json}.</li>
  * </ul>
  * O descritor diz como o pacote foi gerado e o que exige; ele NÃO autoriza a execução (a aprovação é um ato da pessoa no
  * Agent, por impressão digital). Só os arquivos listados contam e só eles são copiados para a execução.
+ * <p>
+ * PROCEDÊNCIA: o formato não prova quem gerou o pacote (o manifesto não é assinado; qualquer um pode escrevê-lo à mão).
+ * O tipo {@code STUDIO_PYTHON} nomeia o formato, nunca a origem; o campo {@code generator} do manifesto é guardado só
+ * como DECLARAÇÃO do pacote ({@link #declaredGenerator()}) e a interface o mostra como não verificado.
  */
 public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<String, String> files, String fingerprint,
-                               Map<String, String> options, String frameworkVersion, String entry, List<String> origins) {
+                               Map<String, String> options, String frameworkVersion, String entry, List<String> origins, String generator) {
 
     public enum Kind { STUDIO_PYTHON, LAB_GENERIC }
 
@@ -49,6 +53,9 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
     private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}");
     private static final Pattern FRAMEWORK = Pattern.compile("nekkora-rpa(\\[excel])?==([0-9]+\\.[0-9]+\\.[0-9]+)");
     private static final Pattern ORIGINS = Pattern.compile("(?m)^allowed_origins\\s*=\\s*\\[(.*)]\\s*$");
+
+    /** Gerador declarado exibível (ex.: {@code nekkora-studio-codegen/1.2.0}); fora disso não é mostrado. */
+    private static final Pattern GENERATOR = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/+-]{0,79}");
 
     public ExecutionPackage {
         files = java.util.Collections.unmodifiableMap(new TreeMap<>(files));
@@ -129,7 +136,7 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         verify(dir, files);
         String name = dir.getFileName() == null ? "pacote" : dir.getFileName().toString();
         return new ExecutionPackage(Kind.STUDIO_PYTHON, dir, safeName(name), mode, files, fingerprint(Kind.STUDIO_PYTHON, dir, files, STUDIO_MANIFEST),
-                options, fw.group(2), "main.py", origins(dir.resolve("config").resolve("execution.toml")));
+                options, fw.group(2), "main.py", origins(dir.resolve("config").resolve("execution.toml")), generator(m));
     }
 
     private static ExecutionPackage lab(Path dir, Map<String, Object> m) throws ExecRefused {
@@ -145,7 +152,7 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         if (!files.containsKey(entry)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
         verify(dir, files);
         return new ExecutionPackage(Kind.LAB_GENERIC, dir, name, Mode.LAB, files, fingerprint(Kind.LAB_GENERIC, dir, files, LAB_DESCRIPTOR),
-                Map.of("output", "--output"), null, entry, List.of());
+                Map.of("output", "--output"), null, entry, List.of(), generator(m));
     }
 
     private static Map<String, String> files(Map<String, Object> declared) throws ExecRefused {
@@ -240,6 +247,16 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         String n = folder.replaceAll("[^A-Za-z0-9 ._-]", "_");
         n = n.isEmpty() || !Character.isLetterOrDigit(n.charAt(0)) ? "pacote" : n;
         return n.length() > 80 ? n.substring(0, 80) : n;
+    }
+
+    /** O {@code generator} que o descritor DECLARA (não verificado); vazio se ausente ou fora do formato exibível. */
+    public Optional<String> declaredGenerator() {
+        return Optional.ofNullable(generator);
+    }
+
+    private static String generator(Map<String, Object> m) {
+        String g = JsonReader.text(m, "generator");
+        return g != null && GENERATOR.matcher(g).matches() ? g : null;
     }
 
     /** Versão exata do {@code nekkora-rpa} que o pacote exige (Studio); vazio no pacote de laboratório. */

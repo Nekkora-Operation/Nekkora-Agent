@@ -455,7 +455,7 @@ public final class AgentApp {
             public void approve() {
                 ExecutionPackage pk = setup.pkg();
                 if (pk == null) return;
-                String what = ExecutionSetup.kindLabel(pk) + " “" + pk.name() + "” · " + ExecutionSetup.modeLabel(pk) + " · impressão digital "
+                String what = ExecutionSetup.kindLabel(pk) + " “" + pk.name() + "” · " + ExecutionSetup.originLabel(pk) + " · " + ExecutionSetup.modeLabel(pk) + " · impressão digital "
                         + pk.shortFingerprint() + (pk.origins().isEmpty() ? "" : " · sites declarados: " + String.join(", ", pk.origins()));
                 if (!NekkoraConfirmationDialog.confirm(execDialog, "Aprovar este pacote?", what + ". Ao aprovar, ESTE conteúdo exato poderá ser "
                         + "executado por você nesta máquina; qualquer mudança nos arquivos exige nova aprovação. Aprovar não inicia nada.", "Aprovar")) {

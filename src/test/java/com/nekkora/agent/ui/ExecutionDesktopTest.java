@@ -110,6 +110,8 @@ class ExecutionDesktopTest {
         assertTrue(h.edt(() -> d.startButton().isEnabled()), "tudo escolhido: Iniciar habilitado");
         List<String> t = h.edt(() -> texts(d.getRootPane()));
         assertTrue(t.stream().anyMatch(x -> x.equals("Aprovação: aprovado nesta máquina")) && t.stream().anyMatch(x -> x.contains("Processo de laboratório")), t.toString());
+        assertTrue(t.stream().anyMatch(x -> x.startsWith("Origem não verificada")), "procedência dita como não verificada: " + t);
+        assertFalse(t.stream().anyMatch(x -> x.contains("gerad") && x.contains("Studio")), "a tela não afirma origem: " + t);
         assertFalse(t.stream().anyMatch(x -> x.contains(tmp.toString())), "a tela não mostra caminhos completos");
         capture(d, "D02-execucao-pronta-para-iniciar");
 
