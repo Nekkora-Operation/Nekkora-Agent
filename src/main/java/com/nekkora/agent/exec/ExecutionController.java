@@ -31,7 +31,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>bloqueio da tela e suspensão do Windows (salto do relógio) durante a execução são registrados; resultado sem
  *       prova depois de suspensão é {@code OUTCOME_UNKNOWN};</li>
  *   <li>reinício do Agent: {@link #reconcile} adota o processo que ainda é o mesmo (PID + início + executável) ou fecha o
- *       registro sem inventar resultado; nada é relançado.</li>
+ *       registro sem inventar resultado; nada é relançado;</li>
+ *   <li>F-AGT-01: depois do lançamento, falha ao gravar o {@code estado.json} nunca deixa o processo sem dono nem muda o
+ *       desfecho: a supervisão segue, o disco fica no último estado gravado (nada incerto é dado por gravado), a gravação
+ *       é tentada de novo e a falha que não passa é sinalizada ({@link RecordDiagnostics}, evento, tela).</li>
  * </ul>
  */
 public final class ExecutionController implements AutoCloseable {
@@ -47,16 +50,46 @@ public final class ExecutionController implements AutoCloseable {
         }
     }
 
-    /** O que a interface vê da execução ativa ou da última. */
-    public record Snapshot(ExecutionRecord record, long elapsedMillis, boolean running) {}
+    /**
+     * O que a interface vê da execução ativa ou da última. {@code recordSaved} falso: o estado mostrado ainda NÃO está no
+     * {@code estado.json} (F-AGT-01; a gravação é tentada de novo e a tela avisa).
+     */
+    public record Snapshot(ExecutionRecord record, long elapsedMillis, boolean running, boolean recordSaved) {
+        public Snapshot(ExecutionRecord record, long elapsedMillis, boolean running) {
+            this(record, elapsedMillis, running, true);
+        }
+    }
 
     public interface Listener {
         void changed(Snapshot s);
     }
 
+    /**
+     * Diagnóstico da gravação do {@code estado.json} (para o log do Agent): só transições, nunca caminho ou conteúdo.
+     * Uma falha aqui é ignorada.
+     */
+    public interface RecordDiagnostics {
+        /** A gravação falhou; o estado fica em memória e é tentado de novo. */
+        void delayed(ExecutionId id, ExecutionState state);
+
+        /** Uma gravação que tinha falhado foi concluída. */
+        void recovered(ExecutionId id, ExecutionState state);
+
+        /** O estado FINAL não pôde ser gravado no prazo de {@link #FINAL_SAVE_GRACE}: o disco ficou num estado anterior. */
+        void lost(ExecutionId id, ExecutionState state);
+    }
+
     public static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(60);
+    /** Por quanto tempo o supervisor insiste em gravar o estado FINAL antes de sinalizar a perda (depois, só em nova ocasião). */
+    public static final Duration FINAL_SAVE_GRACE = Duration.ofSeconds(10);
     /** Arquivo da pasta da execução com o caminho da saída (local; fora do registro e do diagnóstico). */
     static final String OUTPUT_REF = "saida.ref";
+    /**
+     * Posse do processo lançado (PID + início + resumo do executável), gravada num arquivo NOVO logo depois do lançamento
+     * e antes de gravar RUNNING: um arquivo que acabou de ser criado não pode estar aberto por outro processo. Se a
+     * gravação de RUNNING falhar e o Agent cair, a reconciliação ainda encontra o processo (F-AGT-01).
+     */
+    static final String PROCESS_REF = "processo.json";
     /** Salto do relógio de parede entre duas verificações acima disto = a máquina parou (suspensão/hibernação). */
     static final Duration SUSPENSION_GAP = Duration.ofSeconds(20);
 
@@ -67,10 +100,14 @@ public final class ExecutionController implements AutoCloseable {
     private final Path agentDir;
     private final Duration tick;
     private final Duration sessionEvery;
+    private final Duration finalGrace;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final Object lock = new Object();
     private Active active;
     private volatile ExecutionRecord last;
+    /** Estados de execuções JÁ terminadas (ou reconciliadas) que ainda não chegaram ao disco; tentados de novo. */
+    private final Map<ExecutionId, ExecutionRecord> unsaved = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile RecordDiagnostics diagnostics;
 
     /** Execução ativa (só uma). */
     private final class Active {
@@ -84,6 +121,8 @@ public final class ExecutionController implements AutoCloseable {
         final AtomicBoolean cancel = new AtomicBoolean();
         final AtomicLong bytes = new AtomicLong();
         final List<Thread> drains = new ArrayList<>();
+        /** Gravações do {@code record} que falharam desde a última que deu certo (0 = o disco tem o {@code record}). */
+        volatile int saveFailures;
 
         Active(ExecutionRecord r, Process p, ExecutionPackage pkg, ExecutionPackage.Kind kind, Path output, Duration timeout) {
             this.record = r;
@@ -101,6 +140,11 @@ public final class ExecutionController implements AutoCloseable {
     }
 
     ExecutionController(RunStore store, ApprovalStore approvals, SessionProbe session, Clock clock, Path agentDir, Duration tick, Duration sessionEvery) {
+        this(store, approvals, session, clock, agentDir, tick, sessionEvery, FINAL_SAVE_GRACE);
+    }
+
+    ExecutionController(RunStore store, ApprovalStore approvals, SessionProbe session, Clock clock, Path agentDir, Duration tick, Duration sessionEvery,
+            Duration finalGrace) {
         this.store = store;
         this.approvals = approvals;
         this.session = session;
@@ -108,10 +152,15 @@ public final class ExecutionController implements AutoCloseable {
         this.agentDir = agentDir;
         this.tick = tick;
         this.sessionEvery = sessionEvery;
+        this.finalGrace = finalGrace;
     }
 
     public void addListener(Listener l) {
         listeners.add(l);
+    }
+
+    public void recordDiagnostics(RecordDiagnostics d) {
+        this.diagnostics = d;
     }
 
     public ApprovalStore approvals() {
@@ -135,11 +184,15 @@ public final class ExecutionController implements AutoCloseable {
     /** A execução ativa, ou a última terminada nesta sessão do Agent. */
     public Optional<Snapshot> current() {
         synchronized (lock) {
-            if (active != null) return Optional.of(new Snapshot(active.record, elapsed(active), true));
+            if (active != null) return Optional.of(new Snapshot(active.record, elapsed(active), true, active.saveFailures == 0));
         }
         ExecutionRecord l = last;
-        return l == null ? Optional.empty() : Optional.of(new Snapshot(l, l.started() == null || l.ended() == null ? 0
-                : Duration.between(l.started(), l.ended()).toMillis(), false));
+        return l == null ? Optional.empty() : Optional.of(endSnapshot(l));
+    }
+
+    private Snapshot endSnapshot(ExecutionRecord l) {
+        return new Snapshot(l, l.started() == null || l.ended() == null ? 0 : Duration.between(l.started(), l.ended()).toMillis(), false,
+                !unsaved.containsKey(l.id()));
     }
 
     // ------------------------------------------------------------------------------------------- início
@@ -151,6 +204,7 @@ public final class ExecutionController implements AutoCloseable {
     public Snapshot start(Request req) throws ExecRefused {
         synchronized (lock) {
             if (active != null) throw new ExecRefused(ErrorCode.EXEC_ALREADY_RUNNING);
+            flushUnsaved();
             ExecutionId id = ExecutionId.random();
             Instant now = clock.instant();
             ExecutionPackage pkg;
@@ -210,18 +264,21 @@ public final class ExecutionController implements AutoCloseable {
             } catch (IOException | RuntimeException e) {
                 throw finish(r, ExecutionState.FAILED, ErrorCode.EXEC_LAUNCH_FAILED);
             }
+            // F-AGT-01: daqui em diante o processo EXISTE. Nada pode escapar de start() sem que ele tenha dono: uma falha ao
+            // gravar RUNNING não encerra nem relança nada — a supervisão começa igual e a gravação é tentada de novo
             ProcessOwner owner = ProcessOwner.of(p, spec.executable().toString());
+            writeProcessRef(id, owner);
             r = r.withOwner(owner).moveTo(ExecutionState.RUNNING, null, clock.instant());
-            store.save(r);
-            store.event(id, clock.instant(), "RUNNING", Map.of("pid", owner.pid()));
             Active a = new Active(r, p, pkg, pkg.kind(), output, req.timeout());
+            store.event(id, clock.instant(), "RUNNING", Map.of("pid", owner.pid()));
+            persist(a);
             drain(a, p.getInputStream(), "saida");
             drain(a, p.getErrorStream(), "erros");
             active = a;
             Thread t = new Thread(() -> supervise(a), "nekkora-agent-execucao");
             t.setDaemon(true);
             t.start();
-            Snapshot snap = new Snapshot(r, 0, true);
+            Snapshot snap = new Snapshot(r, 0, true, a.saveFailures == 0);
             notifyListeners(snap);
             return snap;
         }
@@ -291,9 +348,10 @@ public final class ExecutionController implements AutoCloseable {
             if (wall - lastWall > SUSPENSION_GAP.toMillis() + tick.toMillis()) {
                 a.record = a.record.withSuspension();
                 store.event(a.record.id(), clock.instant(), "SUSPENSION_DETECTED", Map.of("gap_ms", wall - lastWall));
-                saveQuietly(a.record);
+                persist(a);
             }
             lastWall = wall;
+            if (a.saveFailures > 0 && !done) persist(a); // F-AGT-01: o disco ficou para trás; nova tentativa a cada volta
             if (done) break;
             if (System.nanoTime() - lastSession >= sessionEvery.toNanos()) {
                 lastSession = System.nanoTime();
@@ -302,7 +360,7 @@ public final class ExecutionController implements AutoCloseable {
                     locked = now;
                     if (now) a.record = a.record.withLock();
                     store.event(a.record.id(), clock.instant(), now ? "SESSION_LOCKED" : "SESSION_UNLOCKED", Map.of());
-                    saveQuietly(a.record);
+                    persist(a);
                 }
             }
             if (a.cancel.get()) {
@@ -356,8 +414,12 @@ public final class ExecutionController implements AutoCloseable {
                 code = ErrorCode.EXEC_SUSPENDED;
             }
         }
+        // o desfecho já está decidido (protocolo, código de saída, prazo, cancelamento): a gravação só o registra, nunca o muda
         ExecutionRecord end = a.record.withExit(exit, rep.map(Launch.Reported::counts).orElse(Map.of()), a.bytes.get()).moveTo(state, code, clock.instant());
-        saveQuietly(end);
+        a.record = end;
+        persist(a);
+        boolean saved = a.saveFailures == 0;
+        if (!saved) unsaved.put(end.id(), end);
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("exit", exit == null ? "none" : exit);
         f.put("protocol", rep.isPresent());
@@ -369,7 +431,122 @@ public final class ExecutionController implements AutoCloseable {
             last = end;
         }
         store.prune();
-        notifyListeners(new Snapshot(end, end.started() == null ? 0 : Duration.between(end.started(), end.ended()).toMillis(), false));
+        notifyListeners(endSnapshot(end));
+        if (!saved) insistOnFinal(end);
+    }
+
+    /**
+     * F-AGT-02: o estado FINAL não foi gravado. O processo já acabou (a vaga de execução foi liberada); o supervisor
+     * insiste por {@link #finalGrace}. Sem sucesso, a perda é SINALIZADA (evento, diagnóstico, tela) e o estado continua
+     * guardado em memória para a próxima ocasião (novo início, encerramento do Agent). Reinício antes disso: o disco tem
+     * um estado não terminal, que a reconciliação fecha como {@code OUTCOME_UNKNOWN} — nada é presumido nem relançado.
+     */
+    private void insistOnFinal(ExecutionRecord end) {
+        long deadline = System.nanoTime() + finalGrace.toNanos();
+        while (System.nanoTime() < deadline) {
+            pause(tick);
+            if (saveUnsaved(end.id())) return;
+        }
+        if (!unsaved.containsKey(end.id())) return;
+        store.event(end.id(), clock.instant(), "RECORD_SAVE_FAILED", Map.of("state", end.state().name(), "code", ErrorCode.EXEC_STORAGE_FAILED.code()));
+        diagnose(d -> d.lost(end.id(), end.state()));
+        notifyListeners(endSnapshot(end));
+    }
+
+    /**
+     * Grava o estado em memória da execução ativa. Nunca lança: uma falha só deixa o disco PARA TRÁS (marcado em
+     * {@link Active#saveFailures} e mostrado na tela); o processo, a supervisão e o desfecho não mudam. A primeira falha
+     * e a recuperação viram evento e diagnóstico (uma linha por mudança, não por tentativa).
+     */
+    private void persist(Active a) {
+        ExecutionRecord r = a.record;
+        try {
+            store.save(r);
+        } catch (ExecRefused e) {
+            if (a.saveFailures++ == 0) {
+                store.event(r.id(), clock.instant(), "RECORD_SAVE_DELAYED", Map.of("state", r.state().name(), "code", e.code().code()));
+                diagnose(d -> d.delayed(r.id(), r.state()));
+            }
+            return;
+        }
+        if (a.saveFailures > 0) {
+            a.saveFailures = 0;
+            store.event(r.id(), clock.instant(), "RECORD_SAVE_RECOVERED", Map.of("state", r.state().name()));
+            diagnose(d -> d.recovered(r.id(), r.state()));
+        }
+    }
+
+    /** Grava um estado de execução que não está ativa (reconciliação); na falha, guarda para nova tentativa e sinaliza. */
+    private void saveOrKeep(ExecutionRecord r) {
+        try {
+            store.save(r);
+        } catch (ExecRefused e) {
+            unsaved.put(r.id(), r);
+            store.event(r.id(), clock.instant(), "RECORD_SAVE_DELAYED", Map.of("state", r.state().name(), "code", e.code().code()));
+            diagnose(d -> d.delayed(r.id(), r.state()));
+        }
+    }
+
+    /** Uma nova tentativa para um estado guardado; verdadeiro quando nada mais falta gravar para essa execução. */
+    private boolean saveUnsaved(ExecutionId id) {
+        ExecutionRecord r = unsaved.get(id);
+        if (r == null) return true;
+        try {
+            store.save(r);
+        } catch (ExecRefused e) {
+            return false;
+        }
+        if (unsaved.remove(id, r)) {
+            store.event(id, clock.instant(), "RECORD_SAVE_RECOVERED", Map.of("state", r.state().name()));
+            diagnose(d -> d.recovered(id, r.state()));
+            ExecutionRecord l = last;
+            if (l != null && l.id().equals(id)) notifyListeners(endSnapshot(l));
+        }
+        return true;
+    }
+
+    private void flushUnsaved() {
+        for (ExecutionId id : List.copyOf(unsaved.keySet())) saveUnsaved(id);
+    }
+
+    private void diagnose(java.util.function.Consumer<RecordDiagnostics> call) {
+        RecordDiagnostics d = diagnostics;
+        if (d == null) return;
+        try {
+            call.accept(d);
+        } catch (RuntimeException e) {
+            // o diagnóstico nunca derruba a supervisão
+        }
+    }
+
+    /** Posse do processo num arquivo novo, sincronizado no disco; falha aqui só reduz o rastro (o evento RUNNING tem o PID). */
+    private void writeProcessRef(ExecutionId id, ProcessOwner o) {
+        String json = "{\"pid\": " + o.pid() + ", \"start\": " + o.startMillis() + ", \"executableDigest\": "
+                + com.nekkora.agent.storage.StrictJson.quote(o.executableDigest()) + "}\n";
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(store.dir(id).resolve(PROCESS_REF), java.nio.file.StandardOpenOption.CREATE_NEW,
+                java.nio.file.StandardOpenOption.WRITE)) {
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            while (buf.hasRemaining()) ch.write(buf);
+            ch.force(true);
+        } catch (IOException | RuntimeException e) {
+            // segue: o processo continua supervisionado nesta sessão do Agent
+        }
+    }
+
+    /** A posse gravada no lançamento, só se o arquivo for pequeno, completo e com os três campos válidos. */
+    private Optional<ProcessOwner> processRef(ExecutionId id) {
+        try {
+            Path f = store.dir(id).resolve(PROCESS_REF);
+            if (!Files.isRegularFile(f, java.nio.file.LinkOption.NOFOLLOW_LINKS) || Files.size(f) > 1024) return Optional.empty();
+            Map<String, Object> m = JsonReader.object(Files.readString(f, java.nio.charset.StandardCharsets.UTF_8));
+            if (m.size() == 3 && m.get("pid") instanceof Long pid && pid > 0 && m.get("start") instanceof Long start && start >= 0
+                    && m.get("executableDigest") instanceof String exe && exe.matches("sha256:[0-9a-f]{64}")) {
+                return Optional.of(new ProcessOwner(pid, start, exe));
+            }
+        } catch (IOException | JsonReader.Invalid | RuntimeException e) {
+            // ilegível ou pela metade: sem prova de posse
+        }
+        return Optional.empty();
     }
 
     /** Espera um intervalo (execução adotada: não há {@code Process} para esperar); devolve sempre falso. */
@@ -399,14 +576,6 @@ public final class ExecutionController implements AutoCloseable {
         return (System.nanoTime() - a.startNanos) / 1_000_000;
     }
 
-    private void saveQuietly(ExecutionRecord r) {
-        try {
-            store.save(r);
-        } catch (ExecRefused e) {
-            // registro em disco falhou: o estado em memória segue; a próxima gravação tenta de novo
-        }
-    }
-
     private void notifyListeners(Snapshot s) {
         for (Listener l : listeners) {
             try {
@@ -423,19 +592,31 @@ public final class ExecutionController implements AutoCloseable {
      * Depois de um reinício do Agent: cada registro não terminado é fechado SEM inventar resultado e SEM relançar nada.
      * O processo que ainda é o mesmo (PID + início + executável) é ADOTADO (supervisão e cancelamento continuam; código de
      * saída não é mais observável). Devolve quantos registros foram tocados.
+     * <p>
+     * F-AGT-01: um registro em {@code STARTING} com a posse gravada no lançamento ({@link #PROCESS_REF}) é de um processo
+     * que FOI lançado (a gravação de RUNNING não chegou ao disco): é tratado como RUNNING com essa posse — adotado se ainda
+     * for o mesmo processo (a vaga única de execução continua ocupada), senão fechado como {@code OUTCOME_UNKNOWN}.
      */
     public int reconcile() {
+        flushUnsaved();
         int n = 0;
         for (ExecutionRecord r : store.all()) {
-            if (r.state().terminal()) continue;
+            if (r.state().terminal() || unsaved.containsKey(r.id()) || isActive(r.id())) continue;
             n++;
             store.event(r.id(), clock.instant(), "RECONCILE", Map.of("state", r.state().name()));
+            if (r.state() == ExecutionState.STARTING) {
+                Optional<ProcessOwner> launched = processRef(r.id());
+                if (launched.isPresent()) {
+                    ProcessOwner o = launched.get();
+                    r = r.withOwner(o).moveTo(ExecutionState.RUNNING, null, o.startMillis() > 0 ? Instant.ofEpochMilli(o.startMillis()) : clock.instant());
+                }
+            }
             if (r.state() == ExecutionState.RUNNING && r.owner() != null && r.owner().alive()) {
                 synchronized (lock) {
                     if (active == null) {
                         ExecutionRecord adopted = r.adoptedAfterRestart();
-                        saveQuietly(adopted);
                         Active a = new Active(adopted, null, pkgOf(r), r.kind(), outputOf(r), DEFAULT_TIMEOUT);
+                        persist(a);
                         active = a;
                         Thread t = new Thread(() -> supervise(a), "nekkora-agent-execucao");
                         t.setDaemon(true);
@@ -447,11 +628,17 @@ public final class ExecutionController implements AutoCloseable {
             }
             ExecutionState to = r.state() == ExecutionState.READY ? ExecutionState.BLOCKED : ExecutionState.OUTCOME_UNKNOWN;
             ExecutionRecord closed = r.moveTo(to, ErrorCode.EXEC_AGENT_RESTARTED, clock.instant());
-            saveQuietly(closed);
+            saveOrKeep(closed);
             store.event(r.id(), clock.instant(), to.name(), Map.of("code", ErrorCode.EXEC_AGENT_RESTARTED.code()));
             last = closed;
         }
         return n;
+    }
+
+    private boolean isActive(ExecutionId id) {
+        synchronized (lock) {
+            return active != null && active.record.id().equals(id);
+        }
     }
 
     /** Pacote da cópia da execução (para ler o protocolo); vazio se a cópia não for mais legível. */
@@ -482,26 +669,28 @@ public final class ExecutionController implements AutoCloseable {
         }
     }
 
-    /** Encerramento do Agent: a execução ativa é cancelada (a árvore possuída é encerrada) e o registro fechado. */
+    /**
+     * Encerramento do Agent: a execução ativa é cancelada (a árvore possuída é encerrada) e o registro fechado; estados
+     * ainda não gravados têm uma última tentativa.
+     */
     @Override
     public void close() {
         Active a;
         synchronized (lock) {
             a = active;
         }
-        if (a == null) return;
-        a.cancel.set(true);
-        long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
-        while (System.nanoTime() < deadline) {
-            synchronized (lock) {
-                if (active == null) return;
-            }
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
+        if (a != null) {
+            a.cancel.set(true);
+            long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+            while (System.nanoTime() < deadline && running()) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
+        flushUnsaved();
     }
 }

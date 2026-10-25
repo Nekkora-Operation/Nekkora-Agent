@@ -179,6 +179,11 @@ final class ExecutionDialog extends FittedDialog {
             if (r.exitCode() != null) rv.addMono("Código de saída", String.valueOf(r.exitCode()));
             if (r.code() != null) rv.add("Motivo", r.code().description() + " (" + r.code().code() + ")");
             run.add(rv);
+            if (!snap.get().recordSaved()) {
+                run.add(new NekkoraInlineAlert(Severity.WARNING, "Registro da execução não gravado",
+                        "O estado mostrado ainda não está no histórico em disco (" + ErrorCode.EXEC_STORAGE_FAILED.code() + "). O Agent tenta de novo; "
+                                + "a execução não é repetida nem tem o resultado alterado por isso."));
+            }
             if (running) run.add(new NekkoraParagraph("Fechar esta janela não cancela a execução. A saída do processo não é guardada pelo Agent.",
                     TextTone.SECONDARY));
         }

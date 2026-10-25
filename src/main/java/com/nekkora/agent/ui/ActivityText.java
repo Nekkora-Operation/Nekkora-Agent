@@ -19,6 +19,8 @@ final class ActivityText {
             Map.entry("OUTCOME_UNKNOWN", "Resultado desconhecido"), Map.entry("SUSPENSION_DETECTED", "Suspensão do Windows detectada"),
             Map.entry("SESSION_LOCKED", "Tela bloqueada"), Map.entry("SESSION_UNLOCKED", "Tela desbloqueada"), Map.entry("TERMINATED", "Processos encerrados"),
             Map.entry("RECONCILE", "Reconciliação após reinício"), Map.entry("ADOPTED", "Execução retomada (adotada)"),
+            Map.entry("RECORD_SAVE_DELAYED", "Registro da execução não gravado (nova tentativa)"),
+            Map.entry("RECORD_SAVE_RECOVERED", "Registro da execução gravado de novo"), Map.entry("RECORD_SAVE_FAILED", "Registro final não gravado"),
             // Framework
             Map.entry("ENGINE_STARTED", "Motor iniciado"), Map.entry("ENGINE_COMPLETED", "Motor encerrado"), Map.entry("PHASE_STARTED", "Fase iniciada"),
             Map.entry("PHASE_COMPLETED", "Fase concluída"), Map.entry("PHASE_FAILED", "Fase falhou"), Map.entry("TRANSACTION_STARTED", "Transação iniciada"),

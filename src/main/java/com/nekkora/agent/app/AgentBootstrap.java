@@ -11,6 +11,7 @@ import com.nekkora.agent.diagnostics.LogEvent;
 import com.nekkora.agent.exec.ApprovalStore;
 import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.ExecutionId;
+import com.nekkora.agent.exec.ExecutionState;
 import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.exec.SessionProbe;
 import com.nekkora.agent.obs.ActivityService;
@@ -134,6 +135,23 @@ public final class AgentBootstrap {
             @Override
             public void lost(ExecutionId id, long lost) {
                 log.warn(LogEvent.ACTIVITY_STORE_LOST, ErrorCode.OBS_STORE_FAILED, Field.of("execution", id.value()), Field.of("lost", lost));
+            }
+        });
+        // F-AGT-01: gravação do estado.json da execução — só transições no log (sem caminho nem conteúdo)
+        execution.recordDiagnostics(new ExecutionController.RecordDiagnostics() {
+            @Override
+            public void delayed(ExecutionId id, ExecutionState state) {
+                log.warn(LogEvent.EXEC_RECORD_DELAYED, ErrorCode.EXEC_STORAGE_FAILED, Field.of("execution", id.value()), Field.of("state", state));
+            }
+
+            @Override
+            public void recovered(ExecutionId id, ExecutionState state) {
+                log.info(LogEvent.EXEC_RECORD_RECOVERED, Field.of("execution", id.value()), Field.of("state", state));
+            }
+
+            @Override
+            public void lost(ExecutionId id, ExecutionState state) {
+                log.warn(LogEvent.EXEC_RECORD_LOST, ErrorCode.EXEC_STORAGE_FAILED, Field.of("execution", id.value()), Field.of("state", state));
             }
         });
         int reconciled = execution.reconcile();

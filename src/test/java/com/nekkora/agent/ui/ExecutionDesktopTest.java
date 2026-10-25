@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.ExecutionPackage;
 import com.nekkora.agent.exec.ExecutionState;
 import com.nekkora.agent.os.TrayController;
@@ -151,6 +152,58 @@ class ExecutionDesktopTest {
         capture(w, "D06-janela-principal-apos-cancelar");
         ExecutionDialog last = dialog();
         h.run(last::dispose);
+    }
+
+    @Test
+    @DisplayName("F-AGT-01 na tela: outro processo segura o estado.json no cancelamento → aviso 'registro não gravado'; solto → gravado e aviso some")
+    void registroNaoGravadoAvisado() throws Exception {
+        Path py = python();
+        Assumptions.assumeTrue(py != null, "sem Python neste ambiente");
+        Path slow = labPackage(tmp.resolve("pacote-lento"), "lab_lento.py");
+        Path out = Files.createDirectories(tmp.resolve("saida"));
+        h = DesktopHarness.start(tmp.resolve("dados"), AgentDesktopTest.ENV, new String[0], TrayController.SYSTEM);
+        MainWindow w = h.window();
+        h.later(() -> w.executionButton().doClick());
+        h.waitFor(() -> h.app.executionDialog() != null && h.app.executionDialog().isShowing(), "janela Execução local");
+        ExecutionDialog d = dialog();
+        h.waitFor(() -> h.app.executionSetup().session() != null, "sessão verificada");
+        choose(() -> h.app.selectPackage(slow));
+        choose(h.app::approveConfirmed);
+        choose(() -> h.app.selectPython(py));
+        choose(() -> h.app.selectOutput(out));
+        h.settle();
+        h.run(() -> d.startButton().doClick());
+        h.waitFor(() -> h.app.context().execution().running(), "em andamento");
+        com.nekkora.agent.exec.ExecutionId id = h.app.context().execution().current().orElseThrow().record().id();
+        Path estado = h.app.context().execution().store().dir(id).resolve("estado.json");
+        try (com.nekkora.agent.storage.FileHolder.Handle holder = com.nekkora.agent.storage.FileHolder.Handle.start(estado)) {
+            holder.hold();
+            assertTrue(h.app.context().execution().cancel());
+            h.waitFor(() -> h.app.context().execution().current().map(s -> !s.running() && !s.recordSaved()).orElse(false), "cancelada sem registro gravado");
+            h.settle();
+            assertEquals(ExecutionState.CANCELLED, h.app.context().execution().current().orElseThrow().record().state(), "o desfecho não muda");
+            List<String> t = h.edt(() -> texts(d.getRootPane()));
+            assertTrue(t.stream().anyMatch(x -> x.equals("Registro da execução não gravado")), t.toString());
+            assertTrue(h.edt(w::executionText).endsWith("registro não gravado (AGT-EXE-016)"), h.edt(w::executionText));
+            capture(d, "D13-registro-nao-gravado");
+            holder.release();
+        }
+        h.waitFor(() -> h.app.context().execution().current().map(ExecutionController.Snapshot::recordSaved).orElse(false), "registro gravado depois de solto");
+        h.settle();
+        assertFalse(h.edt(() -> texts(d.getRootPane())).stream().anyMatch(x -> x.equals("Registro da execução não gravado")), "o aviso some");
+        assertEquals(ExecutionState.CANCELLED, h.app.context().execution().store().record(id).orElseThrow().state(), "em disco: CANCELLED");
+        capture(d, "D14-registro-gravado-depois");
+        Path log = tmp.resolve("dados").resolve("logs").resolve("agent.log");
+        h.waitFor(() -> {
+            List<String> l;
+            try {
+                l = Files.exists(log) ? Files.readAllLines(log) : List.of();
+            } catch (java.io.IOException e) {
+                return false;
+            }
+            return l.stream().anyMatch(x -> x.contains("EXEC_RECORD_DELAYED") && x.contains("AGT-EXE-016")) && l.stream().anyMatch(x -> x.contains("EXEC_RECORD_RECOVERED"));
+        }, "log: atraso sinalizado e recuperação");
+        h.run(d::dispose);
     }
 
     @Test

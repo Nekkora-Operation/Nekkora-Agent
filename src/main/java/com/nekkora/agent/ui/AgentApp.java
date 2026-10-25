@@ -610,6 +610,7 @@ public final class AgentApp {
         } else if (r.code() != null) {
             b.append(" · ").append(r.code().code());
         }
+        if (!snap.get().recordSaved()) b.append(" · registro não gravado (").append(com.nekkora.agent.core.ErrorCode.EXEC_STORAGE_FAILED.code()).append(')');
         return b.toString();
     }
 

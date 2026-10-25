@@ -11,7 +11,7 @@ import java.util.Set;
 /**
  * Normalização do {@code eventos.jsonl} que o supervisor do Agent já grava (sem mudar esse arquivo nem o seu
  * significado): ciclo de vida, sessão bloqueada, suspensão, reconciliação/adoção, encerramento e desfecho. Lista fechada
- * de nomes e de campos ({@code code}, {@code exit}, {@code output_bytes}, {@code gap_ms}, {@code processes},
+ * de nomes e de campos (F-AGT-01: {@code RECORD_SAVE_*} = gravação do {@code estado.json} atrasada, recuperada ou perdida) ({@code code}, {@code exit}, {@code output_bytes}, {@code gap_ms}, {@code processes},
  * {@code protocol}); o PID, a sessão e o tipo do pacote ficam de fora (o registro da execução já os tem).
  */
 final class AgentEvents {
@@ -22,7 +22,8 @@ final class AgentEvents {
     static final String LIMIT_MARKER = com.nekkora.agent.exec.RunStore.LIMIT_MARKER;
 
     private static final Set<String> KNOWN = Set.of("STARTING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "BLOCKED", "OUTCOME_UNKNOWN",
-            "SUSPENSION_DETECTED", "SESSION_LOCKED", "SESSION_UNLOCKED", "TERMINATED", "RECONCILE", "ADOPTED", LIMIT_MARKER);
+            "SUSPENSION_DETECTED", "SESSION_LOCKED", "SESSION_UNLOCKED", "TERMINATED", "RECONCILE", "ADOPTED", "RECORD_SAVE_DELAYED", "RECORD_SAVE_RECOVERED",
+            "RECORD_SAVE_FAILED", LIMIT_MARKER);
 
     record Mapped(ActivityEvent event, String rejected, boolean limit, int unknown) {}
 
@@ -46,11 +47,12 @@ final class AgentEvents {
                     .error(com.nekkora.agent.core.ErrorCode.OBS_AGENT_EVENTS_LIMIT.code()).position(position).build(), null, true, 0);
         }
         Level level = switch (name) {
-            case "FAILED", "TIMED_OUT" -> Level.ERROR;
-            case "BLOCKED", "CANCELLED", "OUTCOME_UNKNOWN", "SUSPENSION_DETECTED", "SESSION_LOCKED", "TERMINATED", "RECONCILE" -> Level.WARNING;
+            case "FAILED", "TIMED_OUT", "RECORD_SAVE_FAILED" -> Level.ERROR;
+            case "RECORD_SAVE_DELAYED", "BLOCKED", "CANCELLED", "OUTCOME_UNKNOWN", "SUSPENSION_DETECTED", "SESSION_LOCKED", "TERMINATED", "RECONCILE" -> Level.WARNING;
             default -> Level.INFO;
         };
-        Category category = "FAILED".equals(name) || "TIMED_OUT".equals(name) ? Category.FAILURE : Category.LIFECYCLE;
+        Category category = "FAILED".equals(name) || "TIMED_OUT".equals(name) ? Category.FAILURE
+                : name.startsWith("RECORD_SAVE_") ? Category.TELEMETRY : Category.LIFECYCLE;
         ActivityEvent.Builder b = ActivityEvent.of(agentExecutionId, observed, Source.AGENT, name, level, category).occurred(at).position(position);
         if (Set.of("STARTING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "BLOCKED", "OUTCOME_UNKNOWN").contains(name)) b.status(name);
         if (m.get("state") instanceof String s && ActivityEvent.STATUS.matcher(s).matches()) b.status(s);
