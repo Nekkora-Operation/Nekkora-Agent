@@ -180,6 +180,8 @@ class PartialProgressTest {
     @Test
     @DisplayName("checkpoint bloqueado logo depois do encerramento (F-FW-03): espera curta; bloqueio que passa → lido; que não passa → CHECKPOINT_LOCKED")
     void bloqueioTransitorio() throws Exception {
+        // o bloqueio de abertura (compartilhamento negado) é do Windows; no Linux não existe e NOSHARE_READ não é suportado
+        Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"), "só Windows");
         Path o = outputWith("a2");
         Path cp = CheckpointProgress.file(o);
         java.nio.file.OpenOption noShare = com.sun.nio.file.ExtendedOpenOption.NOSHARE_READ;
