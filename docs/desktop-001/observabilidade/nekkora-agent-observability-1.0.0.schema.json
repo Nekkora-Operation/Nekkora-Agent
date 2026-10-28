@@ -18,7 +18,7 @@
     "category": {"enum": ["LIFECYCLE", "ACTIVITY", "BUSINESS", "FAILURE", "TELEMETRY"]},
     "phase": {"enum": ["INIT", "TRANSFER_DATA_IN", "PROCESS", "TRANSFER_DATA_OUT", "END"]},
     "transaction_ref": {"type": "string", "pattern": "^t-[0-9a-f]{16}$"},
-    "step_id": {"type": "string", "maxLength": 120, "pattern": "^[a-z][a-z0-9_]{0,63}(\.[a-z0-9_]{1,63}){0,7}$",
+    "step_id": {"type": "string", "maxLength": 120, "pattern": "^[a-z][a-z0-9_]{0,63}(\\.[a-z0-9_]{1,63}){0,7}$",
       "description": "Também recusado se contiver 4 ou mais dígitos seguidos."},
     "studio_step_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
     "action": {"type": "string", "pattern": "^[a-z][a-z_]{0,39}$"},

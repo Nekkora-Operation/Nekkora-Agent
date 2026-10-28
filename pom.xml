@@ -20,6 +20,8 @@
     <!-- Mesma versão do Studio no commit fixado (o POM pai do Studio a gerencia; aqui só a tornamos explícita). -->
     <flatlaf.version>3.7.2</flatlaf.version>
     <junit.version>5.11.4</junit.version>
+    <!-- Mesma versão usada nos testes da Extensão. -->
+    <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <agent.main>com.nekkora.agent.AgentMain</agent.main>
     <!-- Os testes de desktop real rodam só no perfil "desktop" (janela, bandeja e Robot). -->
     <agent.test.excludedGroups>desktop</agent.test.excludedGroups>
@@ -46,6 +48,13 @@
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Só nos testes: validador independente do JSON Schema publicado (A01). Não entra no ZIP. -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
