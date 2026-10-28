@@ -28,8 +28,10 @@ de ameaças, a matriz de autorização e os testes de isolamento, para revisão.
 | `bf843fb` | **S0** (D-SA-04 e D-SA-05) | cancelamento por identificador, pedido × confirmação e origem do pedido. Achado F-FW-04 |
 | `bd633a3` | **ISO** | testes de isolamento antes do canal (D-SA-01) e roteiro ISO-R |
 | `645e7c9` | acabamento | tela (achado na evidência real) e atribuição de pipes do ISO-R |
-| `f0ecd83` | ajuste | teste de bloqueio do Windows não roda no Linux |
-| (este) | documentos | contrato, ameaças, matriz, isolamento, `LocalControlContractTest` e evidências |
+| `f0ecd83` | ajuste | teste de bloqueio do Windows não roda no Linux. **ZIP final gerado daqui** |
+| `1348f22` | documentos | contrato, ameaças, matriz, isolamento, `LocalControlContractTest` e evidências |
+| `afe92f9` | ISO-R | atribuição dos pipes do Git Bash. É a versão do roteiro usada nas execuções reais finais (fora do ZIP) |
+| (este) | regressão | `evidencias/regressao.md` e números de fechamento |
 
 ## 2. A01: schema de observabilidade
 
@@ -175,11 +177,11 @@ principal ("progresso parcial: N de M concluídas") e a aba Atividade (alerta co
 
 | Ambiente | Resultado |
 |---|---|
-| Windows `mvnw -o verify` (`645e7c9`) | 240 casos, 0 falhas, 1 pulado (o de sempre). Base `f77e00e`: 203 |
-| Desktop `mvnw -o -Pdesktop verify` (`645e7c9`, janela real) | **263** casos, 0 falhas, 1 pulado. Base: 227 |
-| Linux Docker `eclipse-temurin:21-jdk-noble` (`f0ecd83`, sem Python) | 240 casos: **as mesmas 15 falhas herdadas** (ShortcutTest 13, AgentBootstrapTest 1, SensitiveDataLeakTest 1, dependentes do Windows), 0 erros, 36 pulados |
-| Empacotamento (`clean verify` dentro do `package-windows.ps1`, `f0ecd83`) | verde |
-| Fechamento com documentos (este commit) | ver `evidencias/regressao.md` |
+| Windows `mvnw -o verify` (`afe92f9`, fechamento) | **245** casos, 0 falhas, 1 pulado (o de sempre). Base `f77e00e`: 203 |
+| Desktop `mvnw -o -Pdesktop verify` (`afe92f9`, janela real) | **268** casos, 0 falhas, 1 pulado. Base: 227 |
+| Linux Docker `eclipse-temurin:21-jdk-noble` (`afe92f9`, sem Python) | 245 casos: **as mesmas 15 falhas herdadas** (ShortcutTest 13, AgentBootstrapTest 1, SensitiveDataLeakTest 1, dependentes do Windows), 0 erros, 36 pulados |
+| Empacotamento (`clean verify` dentro do `package-windows.ps1`, `f0ecd83`) | verde. Gera o ZIP `5fa0354e…` |
+| Histórico por fatia | `evidencias/regressao.md` |
 
 **Ambiente:** os testes com processo exigem um Python com `nekkora_rpa` **0.3.0**. A `.venv` do repositório do
 Framework está em 0.4.0, na branch F-FW. Usei `NEKKORA_TEST_PYTHON` apontando para a venv 0.3.0 que o Studio instalou
