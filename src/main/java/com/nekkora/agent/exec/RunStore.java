@@ -163,7 +163,7 @@ public final class RunStore {
     static Optional<ExecutionRecord> load(Path f) {
         try {
             Map<String, Object> m = StrictJson.parseObject(Files.readString(f, StandardCharsets.UTF_8));
-            if (!ExecutionRecord.SCHEMA.equals(m.get("schema")) || !ExecutionRecord.VERSION.equals(m.get("version"))) return Optional.empty();
+            if (!ExecutionRecord.SCHEMA.equals(m.get("schema")) || !ExecutionRecord.READABLE.contains(m.get("version"))) return Optional.empty();
             ProcessOwner owner = null;
             if (m.get("process") instanceof Map<?, ?> p && p.get("pid") instanceof Long pid && p.get("start") instanceof Long start
                     && p.get("executableDigest") instanceof String exe && exe.matches("sha256:[0-9a-f]{64}")) {
@@ -177,10 +177,33 @@ public final class RunStore {
                     (String) m.get("package"), (String) m.get("fingerprint"), ExecutionState.valueOf((String) m.get("state")), code(m.get("code")),
                     Instant.parse((String) m.get("created")), instant(m.get("started")), instant(m.get("ended")), owner,
                     m.get("exitCode") instanceof Long x ? Math.toIntExact(x) : null, counts, Math.toIntExact((Long) m.get("suspensions")),
-                    Math.toIntExact((Long) m.get("locks")), Boolean.TRUE.equals(m.get("adopted")), (Long) m.get("outputBytes")));
+                    Math.toIntExact((Long) m.get("locks")), Boolean.TRUE.equals(m.get("adopted")), (Long) m.get("outputBytes"), origin(m.get("origin")),
+                    cancellation(m.get("cancellation")), Boolean.TRUE.equals(m.get("recovered")), progress(m.get("progress"))));
         } catch (IOException | StrictJson.SyntaxException | RuntimeException e) {
             return Optional.empty();
         }
+    }
+
+    /** 1.1.0: campo ausente (registro 1.0.0) = origem desconhecida; valor fora do enum torna o registro ilegível. */
+    private static ExecutionRecord.Origin origin(Object v) {
+        return v instanceof Map<?, ?> o ? ExecutionRecord.Origin.valueOf((String) o.get("kind")) : ExecutionRecord.Origin.UNKNOWN;
+    }
+
+    private static ExecutionRecord.Cancellation cancellation(Object v) {
+        if (!(v instanceof Map<?, ?> c)) return null;
+        return new ExecutionRecord.Cancellation(Instant.parse((String) c.get("requested")), ExecutionRecord.CancelSource.valueOf((String) c.get("source")),
+                ExecutionRecord.CancelOutcome.valueOf((String) c.get("outcome")));
+    }
+
+    private static ExecutionRecord.PartialProgress progress(Object v) {
+        if (!(v instanceof Map<?, ?> p)) return null;
+        Map<String, Long> tx = new LinkedHashMap<>();
+        if (p.get("transactions") instanceof Map<?, ?> t) t.forEach((k, n) -> {
+            if (n instanceof Long x && String.valueOf(k).matches("[A-Z_]{1,40}")) tx.put(String.valueOf(k), x);
+        });
+        Object problem = p.get("problem");
+        return new ExecutionRecord.PartialProgress(Boolean.TRUE.equals(p.get("available")), tx, p.get("delivered") instanceof Long d ? d : 0,
+                problem instanceof String s && s.matches("[A-Z_]{1,40}") ? s : null);
     }
 
     private static ErrorCode code(Object v) {
@@ -218,7 +241,25 @@ public final class RunStore {
         b.append("  \"suspensions\": ").append(r.suspensions()).append(",\n");
         b.append("  \"locks\": ").append(r.locks()).append(",\n");
         b.append("  \"adopted\": ").append(r.adopted()).append(",\n");
-        b.append("  \"outputBytes\": ").append(r.outputBytes()).append("\n}\n");
+        b.append("  \"outputBytes\": ").append(r.outputBytes()).append(",\n");
+        // 1.1.0
+        b.append("  \"origin\": {\"kind\": ").append(StrictJson.quote(r.origin().name())).append("},\n");
+        if (r.cancellation() != null) {
+            ExecutionRecord.Cancellation c = r.cancellation();
+            b.append("  \"cancellation\": {\"requested\": ").append(StrictJson.quote(c.requested().toString())).append(", \"source\": ")
+                    .append(StrictJson.quote(c.source().name())).append(", \"outcome\": ").append(StrictJson.quote(c.outcome().name())).append("},\n");
+        }
+        if (r.progress() != null) {
+            ExecutionRecord.PartialProgress p = r.progress();
+            b.append("  \"progress\": {\"available\": ").append(p.available()).append(", \"transactions\": {");
+            int k = 0;
+            for (Map.Entry<String, Long> e : p.transactions().entrySet()) {
+                b.append(k++ == 0 ? "" : ", ").append(StrictJson.quote(e.getKey())).append(": ").append(e.getValue());
+            }
+            b.append("}, \"delivered\": ").append(p.delivered()).append(", \"problem\": ").append(p.problem() == null ? "null" : StrictJson.quote(p.problem()))
+                    .append("},\n");
+        }
+        b.append("  \"recovered\": ").append(r.recovered()).append("\n}\n");
         return b.toString();
     }
 
