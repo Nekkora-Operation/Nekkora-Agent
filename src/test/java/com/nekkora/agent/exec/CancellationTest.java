@@ -150,11 +150,11 @@ class CancellationTest {
         assertEquals(ExecutionState.SUCCEEDED, end.state(), "o processo terminou por conta própria: vale o protocolo");
         assertEquals(0, end.exitCode());
         assertEquals(CancelOutcome.NOT_EFFECTIVE, end.cancellation().outcome());
-        assertTrue(ExecutionSetup.cancellationLabel(end.cancellation()).matches("Solicitado pela pessoa operadora às \\d\\d:\\d\\d:\\d\\d · não efetivado \\(terminou antes\\)"),
-                ExecutionSetup.cancellationLabel(end.cancellation()));
-        assertTrue(ExecutionSetup.cancellationLabel(end.cancellation().resolved(CancelOutcome.PENDING)).endsWith(" · aguardando confirmação"));
+        assertTrue(ExecutionSetup.cancellationLabel(end.cancellation())
+                .matches("Não efetivado \\(o processo terminou antes\\) · pedido pela pessoa operadora às \\d\\d:\\d\\d:\\d\\d"), ExecutionSetup.cancellationLabel(end.cancellation()));
+        assertTrue(ExecutionSetup.cancellationLabel(end.cancellation().resolved(CancelOutcome.PENDING)).startsWith("Aguardando confirmação · pedido "));
         assertTrue(ExecutionSetup.cancellationLabel(new ExecutionRecord.Cancellation(Instant.now(), CancelSource.AGENT_SHUTDOWN, CancelOutcome.CONFIRMED))
-                .startsWith("Solicitado pelo encerramento do Agent às "));
+                .startsWith("Confirmado · pedido pelo encerramento do Agent às "));
         assertTrue(runs.events(id).stream().anyMatch(l -> l.contains("CANCEL_NOT_EFFECTIVE")));
         assertFalse(runs.events(id).stream().anyMatch(l -> l.contains("TERMINATED")), "nada foi encerrado");
     }

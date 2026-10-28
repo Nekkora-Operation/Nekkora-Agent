@@ -167,11 +167,12 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
     public static String cancellationLabel(ExecutionRecord.Cancellation c) {
         String who = c.source() == ExecutionRecord.CancelSource.AGENT_SHUTDOWN ? "pelo encerramento do Agent" : "pela pessoa operadora";
         String when = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(java.time.ZoneId.systemDefault()).format(c.requested());
-        return "Solicitado " + who + " às " + when + " · " + switch (c.outcome()) {
-            case PENDING -> "aguardando confirmação";
-            case CONFIRMED -> "confirmado";
-            case NOT_EFFECTIVE -> "não efetivado (terminou antes)";
-        };
+        // a situação vem primeiro: numa linha estreita, o que se corta é o detalhe do pedido
+        return switch (c.outcome()) {
+            case PENDING -> "Aguardando confirmação";
+            case CONFIRMED -> "Confirmado";
+            case NOT_EFFECTIVE -> "Não efetivado (o processo terminou antes)";
+        } + " · pedido " + who + " às " + when;
     }
 
     /** D-SA-05: quem PEDIU a execução (nunca quem gerou o pacote). */

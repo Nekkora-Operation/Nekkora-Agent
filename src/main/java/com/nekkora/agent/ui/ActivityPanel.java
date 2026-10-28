@@ -513,8 +513,11 @@ final class ActivityPanel extends JPanel {
             kv.add("Pedido por", ExecutionSetup.originLabel(r.origin()));
             if (r.cancellation() != null) kv.add("Cancelamento", ExecutionSetup.cancellationLabel(r.cancellation()));
             if (r.recovered()) kv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
-            // A03: o progresso verificado do checkpoint, separado do desfecho e das contagens derivadas dos eventos
-            if (r.progress() != null) kv.add("Progresso parcial verificado (não é conclusão)", ExecutionSetup.progressLabel(r.progress()));
+            // A03: o progresso verificado do checkpoint, separado do desfecho e das contagens derivadas dos eventos; num
+            // alerta (texto inteiro, quebrado em linhas) e não numa linha de valor, que corta o fim
+            if (r.progress() != null) {
+                alerts.add(new NekkoraInlineAlert(Severity.INFO, "Progresso parcial verificado (não é conclusão)", ExecutionSetup.progressLabel(r.progress())));
+            }
         }
         if (health != null && health.frameworkExecutionId() != null) kv.addMono("Execução do Framework (correlação)", health.frameworkExecutionId());
         ActivityView.Progress p = ActivityView.progress(all);

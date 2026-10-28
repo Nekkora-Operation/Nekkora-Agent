@@ -26,7 +26,8 @@ param(
     [int]$Seconds = 20,
     [Parameter(Mandatory = $true)][string]$Out,
     [switch]$Quiet,
-    [string[]]$PipesBefore
+    # pipes que já existiam ANTES de abrir o Agent (um por linha); sem ele, a referência é o início da medição
+    [string]$PipesBeforeFile
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -36,7 +37,7 @@ function Get-Pipes { try { return @([System.IO.Directory]::GetFiles('\\.\pipe\')
 
 $proc = Get-Process -Id $ProcessId -ErrorAction Stop
 $exeDir = Split-Path -Parent $proc.Path
-if (-not $PipesBefore) { $PipesBefore = Get-Pipes }
+$PipesBefore = if ($PipesBeforeFile -and (Test-Path -LiteralPath $PipesBeforeFile)) { @(Get-Content -LiteralPath $PipesBeforeFile) } else { Get-Pipes }
 $before = [System.Collections.Generic.HashSet[string]]::new([string[]]$PipesBefore)
 $tcp = @{}; $udp = @{}; $reparse = @{}; $newPipes = @{}; $samples = 0
 $deadline = (Get-Date).AddSeconds($Seconds)
@@ -58,8 +59,21 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 500
 }
 $alive = [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
-$pipeList = @($newPipes.Keys | Sort-Object)
-$isolated = ($tcp.Count -eq 0) -and ($udp.Count -eq 0) -and ($reparse.Count -eq 0) -and ((-not $Quiet) -or $pipeList.Count -eq 0)
+# Atribuição dos pipes novos SEM abri-los (abrir conectaria ao pipe de outro programa): pelo PID que o criador põe no
+# nome (mojo.<pid>.… do Chromium, uv\N-<pid> do libuv/Node, PSHost.….<pid>.… do PowerShell; qualquer número do nome que
+# seja o PID de um processo vivo). Com o PID do Agent → canal do Agent; com o de outro processo → fora do Agent (só a
+# contagem e o nome do processo vão para o relatório); sem PID reconhecível → sem atribuição (com -Quiet, conta contra).
+$agentPipes = @(); $unattributed = @(); $others = @{}
+$me = [Environment]::UserName
+foreach ($p in @($newPipes.Keys | Sort-Object)) {
+    $nums = @([regex]::Matches($p, '\d{2,7}') | ForEach-Object { [int64]$_.Value } | Where-Object { $_ -gt 4 -and $_ -lt 4194304 })
+    if ($nums -contains $ProcessId) { $agentPipes += $p.Replace($me, '<usuario>'); continue }
+    $owner = $null
+    foreach ($n in $nums) { $q = Get-Process -Id $n -ErrorAction SilentlyContinue; if ($q) { $owner = $q.ProcessName; break } }
+    if ($owner) { $others[$owner] = 1 + $(if ($others.ContainsKey($owner)) { $others[$owner] } else { 0 }) } else { $unattributed += $p.Replace($me, '<usuario>') }
+}
+$pipeList = @($newPipes.Keys)
+$isolated = ($tcp.Count -eq 0) -and ($udp.Count -eq 0) -and ($reparse.Count -eq 0) -and ($agentPipes.Count -eq 0) -and ((-not $Quiet) -or $unattributed.Count -eq 0)
 $report = [ordered]@{
     schema         = 'nekkora-agent/isolation-check'
     version        = '1.0.0'
@@ -71,11 +85,14 @@ $report = [ordered]@{
     tcp            = @($tcp.Keys | Sort-Object)
     udp            = @($udp.Keys | Sort-Object)
     af_unix_or_reparse = @($reparse.Keys | Sort-Object)
-    new_named_pipes = $pipeList
-    new_named_pipes_attributed_to_agent = [bool]$Quiet
+    new_named_pipes_total = $pipeList.Count
+    new_named_pipes_agent = @($agentPipes)
+    new_named_pipes_other_processes = $others
+    new_named_pipes_unattributed = @($unattributed)
     isolated       = $isolated
 }
 $report | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Out 'isolamento.json') -Encoding utf8
-Write-Host ("ISO-R: {0} amostras · TCP {1} · UDP {2} · AF_UNIX/reparse {3} · pipes novos {4}{5} → {6}" -f $samples, $tcp.Count, $udp.Count, $reparse.Count,
-    $pipeList.Count, $(if ($Quiet) { ' (atribuídos ao Agent)' } else { ' (não atribuídos: execução em paralelo)' }), $(if ($isolated) { 'ISOLADO' } else { 'CANAL ENCONTRADO' }))
+Write-Host ("ISO-R: {0} amostras · TCP {1} · UDP {2} · AF_UNIX/reparse {3} · pipes novos {4} (do Agent {5}, de outros processos {6}, sem atribuição {7}) → {8}" -f `
+    $samples, $tcp.Count, $udp.Count, $reparse.Count, $pipeList.Count, $agentPipes.Count, ($pipeList.Count - $agentPipes.Count - $unattributed.Count),
+    $unattributed.Count, $(if ($isolated) { 'ISOLADO' } else { 'CANAL ENCONTRADO' }))
 if ($isolated) { exit 0 } else { exit 1 }

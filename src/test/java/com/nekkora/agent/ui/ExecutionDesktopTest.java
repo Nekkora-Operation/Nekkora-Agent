@@ -248,7 +248,7 @@ class ExecutionDesktopTest {
         List<String> t = h.edt(() -> texts(d.getRootPane()));
         assertTrue(t.stream().anyMatch(x -> x.equals("Progresso parcial (não é conclusão)")), t.toString());
         assertTrue(t.stream().anyMatch(x -> x.contains(" concluídas") && x.contains("Planilha sem confirmação de consolidação.")), t.toString());
-        assertTrue(t.stream().anyMatch(x -> x.startsWith("Solicitado pela pessoa operadora às ") && x.endsWith(" · confirmado")),
+        assertTrue(t.stream().anyMatch(x -> x.startsWith("Confirmado · pedido pela pessoa operadora às ")),
                 t.toString());
         assertTrue(t.stream().anyMatch(x -> x.equals("Estado: Cancelada")), t.toString());
         String line = h.edt(w::executionText);
@@ -256,6 +256,15 @@ class ExecutionDesktopTest {
         assertFalse(t.stream().anyMatch(x -> x.contains(tmp.toString())), "a tela não mostra caminhos completos");
         capture(d, "D15-cancelamento-progresso-parcial");
         capture(w, "D16-janela-principal-progresso-parcial");
+        // aba Atividade: o mesmo progresso num alerta (texto inteiro), a origem e o cancelamento
+        h.run(() -> d.tabs().setSelectedIndex(1));
+        // (a condição do waitFor já roda na EDT)
+        h.waitFor(() -> texts(d.getRootPane()).stream().anyMatch(x -> x.equals("Progresso parcial verificado (não é conclusão)")),
+                "alerta de progresso parcial na aba Atividade");
+        h.settle();
+        List<String> a = h.edt(() -> texts(d.getRootPane()));
+        assertTrue(a.stream().anyMatch(x -> x.contains(" concluídas") && x.endsWith("Planilha sem confirmação de consolidação.")), a.toString());
+        capture(d, "D17-atividade-progresso-parcial");
         h.run(d::dispose);
     }
 
