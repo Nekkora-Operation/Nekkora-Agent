@@ -178,7 +178,13 @@ final class ExecutionDialog extends FittedDialog {
             if (r.locks() > 0) rv.add("Bloqueios de tela", String.valueOf(r.locks()));
             if (r.exitCode() != null) rv.addMono("Código de saída", String.valueOf(r.exitCode()));
             if (r.code() != null) rv.add("Motivo", r.code().description() + " (" + r.code().code() + ")");
+            if (r.recovered()) rv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
+            if (!r.counts().isEmpty()) rv.add("Resultado publicado", countsLabel(r.counts()));
             run.add(rv);
+            if (r.progress() != null) {
+                // A03: parcial, separado do desfecho; nunca apresentado como conclusão
+                run.add(new NekkoraInlineAlert(Severity.INFO, "Progresso parcial (não é conclusão)", ExecutionSetup.progressLabel(r.progress())));
+            }
             if (!snap.get().recordSaved()) {
                 run.add(new NekkoraInlineAlert(Severity.WARNING, "Registro da execução não gravado",
                         "O estado mostrado ainda não está no histórico em disco (" + ErrorCode.EXEC_STORAGE_FAILED.code() + "). O Agent tenta de novo; "
@@ -200,6 +206,13 @@ final class ExecutionDialog extends FittedDialog {
         start.getAccessibleContext().setAccessibleDescription(s.canStart() ? "Inicia a execução supervisionada" : "Indisponível: faltam escolhas");
         body.revalidate();
         body.repaint();
+    }
+
+    /** Contagens do resultado final publicado pelo processo ("SUCCEEDED 11 · FAILED_TECHNICAL 1"). */
+    static String countsLabel(java.util.Map<String, Long> counts) {
+        StringBuilder b = new StringBuilder();
+        new java.util.TreeMap<>(counts).forEach((k, v) -> b.append(b.isEmpty() ? "" : " · ").append(k).append(' ').append(v));
+        return b.toString();
     }
 
     static Status status(ExecutionState s) {

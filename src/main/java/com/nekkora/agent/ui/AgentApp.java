@@ -610,6 +610,11 @@ public final class AgentApp {
         } else if (r.code() != null) {
             b.append(" · ").append(r.code().code());
         }
+        // A03: parcial nunca é apresentado como conclusão
+        if (!snap.get().running() && r.progress() != null && r.progress().available()) {
+            b.append(" · progresso parcial: ").append(r.progress().transactions().getOrDefault("SUCCEEDED", 0L)).append(" de ").append(r.progress().total())
+                    .append(" concluídas");
+        }
         if (!snap.get().recordSaved()) b.append(" · registro não gravado (").append(com.nekkora.agent.core.ErrorCode.EXEC_STORAGE_FAILED.code()).append(')');
         return b.toString();
     }

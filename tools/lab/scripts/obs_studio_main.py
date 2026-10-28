@@ -8,7 +8,9 @@ Os eventos válidos saem do próprio ``nekkora_rpa`` (``EventLogger`` + ``JsonlE
   CPF, e-mail, token, senha, caminho de cliente, valor de planilha, URL com consulta, traceback; campos desconhecidos;
   JSON aninhado, enorme e corrompido) e despeja os mesmos sentinelas em stdout/stderr — nada disso pode chegar à
   atividade, ao histórico, à tela ou à exportação do Agent;
-* ``mode = "slow"``: ``items`` transações com ``delay_ms`` entre ações (queda/adoção/suspensão no meio).
+* ``mode = "slow"``: ``items`` transações com ``delay_ms`` entre ações (queda/adoção/suspensão no meio);
+* ``checkpoint = true`` (A03): cada transição da transação vai também para ``execucao/checkpoint.json`` pelo
+  ``CheckpointStore`` REAL do Framework (IN_PROGRESS → SUCCEEDED/COMMITTED), como o engine faz.
 
 Dados FICTÍCIOS. Não abre navegador nem rede.
 """
@@ -19,6 +21,8 @@ import time
 import uuid
 from pathlib import Path
 
+from nekkora_rpa.core.checkpoints import CheckpointRecord, CheckpointStore
+from nekkora_rpa.core.contracts import DeliveryStatus, TransactionStatus
 from nekkora_rpa.observability.events import EventCode, Phase
 from nekkora_rpa.observability.logger import EventLogger, JsonlEventSink
 
@@ -53,6 +57,7 @@ def main() -> int:
             print(s)
             print(s, file=sys.stderr)
     log = EventLogger("ex-" + uuid.uuid4().hex[:20], "0.3.0", [JsonlEventSink(events)])
+    store = CheckpointStore(run / "checkpoint.json", "laboratorio_obs") if CFG.get("checkpoint") else None
     log.emit(EventCode.ENGINE_STARTED)
     for ph in (Phase.INIT, Phase.TRANSFER_DATA_IN):
         log.emit(EventCode.PHASE_STARTED, phase=ph)
@@ -61,6 +66,8 @@ def main() -> int:
     for i in range(items):
         tx = "tx-%020x" % (i + 1)
         log.emit(EventCode.TRANSACTION_STARTED, phase=Phase.PROCESS, transaction_id=tx, attempt=1)
+        if store is not None:
+            store.put(tx, CheckpointRecord(status=TransactionStatus.IN_PROGRESS, attempts=1, execution_id=log.execution_id))
         for step, action in STEPS:
             log.emit(EventCode.ACTION_STARTED, phase=Phase.PROCESS, transaction_id=tx, step_id=step, action=action)
             t = time.monotonic()
@@ -77,6 +84,8 @@ def main() -> int:
             )
         if mode == "sentinel":
             hostis(events, log.execution_id)
+        if store is not None:
+            store.put(tx, CheckpointRecord(status=TransactionStatus.SUCCEEDED, delivery=DeliveryStatus.COMMITTED, attempts=1, execution_id=log.execution_id))
         log.emit(EventCode.TRANSACTION_COMPLETED, phase=Phase.TRANSFER_DATA_OUT, transaction_id=tx, attempt=1, outcome="SUCCEEDED")
     log.emit(EventCode.PHASE_STARTED, phase=Phase.END)
     log.emit(EventCode.ENGINE_COMPLETED, phase=Phase.END, outcome="COMPLETED", count=items)

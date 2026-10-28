@@ -111,6 +111,67 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         return s.problem() == ErrorCode.EXEC_SESSION_LOCKED ? "Tela bloqueada: a execução não começa" : s.problem().description();
     }
 
+    /** Estados de transação do Framework, no plural, na ordem em que aparecem no texto do progresso parcial. */
+    private static final java.util.Map<String, String> TX_LABELS = new java.util.LinkedHashMap<>();
+
+    static {
+        TX_LABELS.put("SUCCEEDED", "concluídas");
+        TX_LABELS.put("BUSINESS_REJECTED", "rejeitadas pelo negócio");
+        TX_LABELS.put("FAILED_TECHNICAL", "com falha técnica");
+        TX_LABELS.put("SKIPPED", "puladas");
+        TX_LABELS.put("CANCELLED", "canceladas");
+        TX_LABELS.put("IN_PROGRESS", "interrompidas em andamento (desfecho desconhecido)");
+        TX_LABELS.put("OUTCOME_UNKNOWN", "de desfecho desconhecido");
+        TX_LABELS.put("PENDING", "pendentes");
+    }
+
+    /**
+     * A03: o progresso parcial em texto. Sempre diz que é parcial e que a planilha não tem confirmação de consolidação;
+     * indisponível nunca vira "nada foi feito".
+     */
+    public static String progressLabel(ExecutionRecord.PartialProgress p) {
+        if (!p.available()) {
+            String why = switch (String.valueOf(p.problem())) {
+                case CheckpointProgress.MISSING -> "o checkpoint do Framework não existe";
+                case CheckpointProgress.INTEGRITY -> "o checkpoint do Framework não confere com a integridade gravada";
+                case CheckpointProgress.TOO_LARGE -> "o checkpoint do Framework é grande demais para conferir";
+                case CheckpointProgress.UNSUPPORTED -> "o checkpoint do Framework é de versão não suportada";
+                case CheckpointProgress.NO_OUTPUT -> "a pasta de saída da execução não é conhecida";
+                default -> "o checkpoint do Framework não pôde ser lido";
+            };
+            return "Indisponível: " + why + ". Isto não significa que nada foi feito.";
+        }
+        if (p.total() == 0) return "Nenhuma transação registrada no checkpoint do Framework.";
+        StringBuilder b = new StringBuilder();
+        java.util.Set<String> shown = new java.util.HashSet<>();
+        TX_LABELS.forEach((k, label) -> {
+            Long n = p.transactions().get(k);
+            if (n != null && n > 0) {
+                b.append(b.isEmpty() ? "" : " · ").append(n).append(' ').append(label);
+                shown.add(k);
+            }
+        });
+        p.transactions().forEach((k, n) -> {
+            if (!shown.contains(k) && n > 0) b.append(b.isEmpty() ? "" : " · ").append(n).append(' ').append(k);
+        });
+        b.append(" · ").append(p.delivered()).append(" entregues à saída. Planilha sem confirmação de consolidação.");
+        return b.toString();
+    }
+
+    /** D-SA-04: o pedido de cancelamento e a situação dele (pedir não é confirmar). */
+    public static String cancellationLabel(ExecutionRecord.Cancellation c) {
+        String who = c.source() == ExecutionRecord.CancelSource.AGENT_SHUTDOWN ? "pelo encerramento do Agent" : "pela pessoa operadora";
+        String when = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(java.time.ZoneId.systemDefault()).format(c.requested());
+        return "Solicitado " + who + " às " + when + " · " + switch (c.outcome()) {
+            case PENDING -> "aguardando confirmação";
+            case CONFIRMED -> "confirmado (processo encerrado pelo Agent)";
+            case NOT_EFFECTIVE -> "não efetivado: o processo terminou antes";
+        };
+    }
+
+    /** A02: de onde veio o desfecho quando o fim do processo não foi observado. */
+    public static final String RECOVERED_LABEL = "Lido do resultado publicado pela automação depois do reinício do Agent (fim do processo não observado)";
+
     /** "1 min 05 s" (sem horário: só a duração). */
     public static String duration(long millis) {
         long s = Math.max(0, millis / 1000);

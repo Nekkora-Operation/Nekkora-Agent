@@ -428,6 +428,9 @@ public final class ExecutionController implements AutoCloseable {
         // o desfecho já está decidido (protocolo, código de saída, prazo, cancelamento): a gravação só o registra, nunca o muda
         ExecutionRecord end = a.record.withExit(exit, rep.map(Launch.Reported::counts).orElse(Map.of()), a.bytes.get()).moveTo(state, code, clock.instant());
         if (recovered) end = end.recoveredFromProtocol();
+        // A03: sem resultado final do processo (cancelado, prazo, desconhecido, falha sem protocolo), o progresso parcial
+        // VERIFICADO fica no registro, separado das contagens do protocolo; o estado continua o que foi decidido acima
+        if (a.kind == ExecutionPackage.Kind.STUDIO_PYTHON && (forced != null || rep.isEmpty())) end = withPartialProgress(end);
         a.record = end;
         persist(a);
         boolean saved = a.saveFailures == 0;
@@ -662,6 +665,7 @@ public final class ExecutionController implements AutoCloseable {
             }
             ExecutionState to = r.state() == ExecutionState.READY ? ExecutionState.BLOCKED : ExecutionState.OUTCOME_UNKNOWN;
             ExecutionRecord closed = r.moveTo(to, ErrorCode.EXEC_AGENT_RESTARTED, clock.instant());
+            if (r.state() == ExecutionState.RUNNING && r.kind() == ExecutionPackage.Kind.STUDIO_PYTHON) closed = withPartialProgress(closed);
             saveOrKeep(closed);
             store.event(r.id(), clock.instant(), to.name(), Map.of("code", ErrorCode.EXEC_AGENT_RESTARTED.code()));
             last = closed;
@@ -682,6 +686,24 @@ public final class ExecutionController implements AutoCloseable {
         } catch (ExecRefused e) {
             return null;
         }
+    }
+
+    /**
+     * A03: o progresso parcial conferido do checkpoint do Framework (ou o motivo de não haver) anexado ao registro, com um
+     * evento só de números e códigos. Nunca muda o estado.
+     */
+    private ExecutionRecord withPartialProgress(ExecutionRecord r) {
+        ExecutionRecord.PartialProgress p = CheckpointProgress.read(store.output(r.id()).orElse(null));
+        Map<String, Object> f = new LinkedHashMap<>();
+        f.put("available", p.available());
+        if (p.available()) {
+            f.put("transactions", p.total());
+            f.put("delivered", p.delivered());
+        } else {
+            f.put("problem", p.problem());
+        }
+        store.event(r.id(), clock.instant(), "PARTIAL_PROGRESS", f);
+        return r.withProgress(p);
     }
 
     /** A cópia da execução, só se ainda for exatamente o pacote registrado (mesma impressão digital); senão vazio. */
