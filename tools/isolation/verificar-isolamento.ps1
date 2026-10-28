@@ -65,12 +65,25 @@ $alive = [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
 # contagem e o nome do processo vão para o relatório); sem PID reconhecível → sem atribuição (com -Quiet, conta contra).
 $agentPipes = @(); $unattributed = @(); $others = @{}
 $me = [Environment]::UserName
+# formatos conhecidos, com o PID do criador no lugar certo do nome (o processo pode já ter terminado: shells do Git Bash
+# de outras sessões criam e fecham pipes msys/cygwin o tempo todo)
+$known = [ordered]@{
+    'chromium (mojo)'   = '^(?:LOCAL\\)?mojo\.(\d+)\.'
+    'libuv/node'        = '^uv\\\d+-(\d+)$'
+    'powershell'        = '^PSHost\.\d+\.(\d+)\.'
+    'msys (Git Bash)'   = '^msys-[0-9a-f]+-(\d+)-'
+    'cygwin/msys'       = '^[0-9a-f]+-(\d+)-pipe-nt-0x[0-9A-Fa-f]+$'
+}
+function Add-Other([string]$name) { $script:others[$name] = 1 + $(if ($script:others.ContainsKey($name)) { $script:others[$name] } else { 0 }) }
 foreach ($p in @($newPipes.Keys | Sort-Object)) {
     $nums = @([regex]::Matches($p, '\d{2,7}') | ForEach-Object { [int64]$_.Value } | Where-Object { $_ -gt 4 -and $_ -lt 4194304 })
     if ($nums -contains $ProcessId) { $agentPipes += $p.Replace($me, '<usuario>'); continue }
+    $kind = $null
+    foreach ($k in $known.Keys) { $m = [regex]::Match($p, $known[$k]); if ($m.Success -and [int64]$m.Groups[1].Value -ne $ProcessId) { $kind = $k; break } }
+    if ($kind) { Add-Other $kind; continue }
     $owner = $null
     foreach ($n in $nums) { $q = Get-Process -Id $n -ErrorAction SilentlyContinue; if ($q) { $owner = $q.ProcessName; break } }
-    if ($owner) { $others[$owner] = 1 + $(if ($others.ContainsKey($owner)) { $others[$owner] } else { 0 }) } else { $unattributed += $p.Replace($me, '<usuario>') }
+    if ($owner) { Add-Other $owner } else { $unattributed += $p.Replace($me, '<usuario>') }
 }
 $pipeList = @($newPipes.Keys)
 $isolated = ($tcp.Count -eq 0) -and ($udp.Count -eq 0) -and ($reparse.Count -eq 0) -and ($agentPipes.Count -eq 0) -and ((-not $Quiet) -or $unattributed.Count -eq 0)
