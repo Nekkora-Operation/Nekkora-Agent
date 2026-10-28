@@ -1,0 +1,7 @@
+﻿{"at": "2026-10-28T14:28:23.083059400Z", "event": "STARTING", "session": 1, "mode": "LIST", "kind": "STUDIO_PYTHON"}
+{"at": "2026-10-28T14:28:23.139554400Z", "event": "RUNNING", "pid": 46920}
+{"at": "2026-10-28T14:28:35.615477600Z", "event": "RECONCILE", "state": "RUNNING"}
+{"at": "2026-10-28T14:28:35.650529100Z", "event": "PROTOCOL_REJECTED", "reason": "NO_PROTOCOL"}
+{"at": "2026-10-28T14:28:35.671560700Z", "event": "PARTIAL_PROGRESS", "available": true, "transactions": 9, "delivered": 8}
+{"at": "2026-10-28T14:28:35.703012400Z", "event": "OUTCOME_UNKNOWN", "code": "AGT-EXE-025"}
+

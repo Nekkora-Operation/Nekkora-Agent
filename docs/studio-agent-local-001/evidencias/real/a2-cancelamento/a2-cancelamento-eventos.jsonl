@@ -1,0 +1,8 @@
+﻿{"at": "2026-10-28T14:25:17.570340Z", "event": "STARTING", "mode": "LIST", "session": 1, "kind": "STUDIO_PYTHON"}
+{"at": "2026-10-28T14:25:17.635883600Z", "event": "RUNNING", "pid": 55936}
+{"at": "2026-10-28T14:25:31.409036500Z", "event": "CANCEL_REQUESTED", "source": "AGENT_SHUTDOWN"}
+{"at": "2026-10-28T14:25:31.464253400Z", "event": "TERMINATED", "processes": 12}
+{"at": "2026-10-28T14:25:31.488161700Z", "event": "CANCEL_CONFIRMED", "source": "AGENT_SHUTDOWN"}
+{"at": "2026-10-28T14:25:31.513135900Z", "event": "PARTIAL_PROGRESS", "available": true, "transactions": 11, "delivered": 10}
+{"at": "2026-10-28T14:25:31.535170900Z", "event": "CANCELLED", "exit": 1, "protocol": false, "output_bytes": 0, "code": "AGT-EXE-024"}
+

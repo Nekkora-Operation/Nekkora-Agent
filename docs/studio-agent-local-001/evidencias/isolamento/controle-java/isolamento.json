@@ -1,0 +1,29 @@
+﻿{
+    "schema":  "nekkora-agent/isolation-check",
+    "version":  "1.0.0",
+    "measured_utc":  "2026-10-28T13:55:57.7261325Z",
+    "seconds":  5,
+    "samples":  6,
+    "agent_alive_at_end":  true,
+    "quiet":  true,
+    "tcp":  [
+                "Listen 127.0.0.1:54785 -\u003e 0.0.0.0:0"
+            ],
+    "udp":  [
+                "::ffff:127.0.0.1:60559"
+            ],
+    "af_unix_or_reparse":  [
+                               "\u003cisoctl\u003e\\controle.sock"
+                           ],
+    "new_named_pipes_total":  9,
+    "new_named_pipes_agent":  [
+
+                              ],
+    "new_named_pipes_other_processes":  {
+                                            "Docker Desktop":  9
+                                        },
+    "new_named_pipes_unattributed":  [
+
+                                     ],
+    "isolated":  false
+}

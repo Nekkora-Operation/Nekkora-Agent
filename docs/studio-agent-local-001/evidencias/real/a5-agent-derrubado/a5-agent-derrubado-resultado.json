@@ -1,0 +1,90 @@
+﻿{
+    "schema":  "nekkora-e2e-005/agent-run",
+    "version":  "1.0.0",
+    "label":  "a5-agent-derrubado",
+    "agent_zip_sha256":  "5fa0354ee4d993bb478133e18038ce9e5b5fa0242c347759cff9b6b6549b6c84",
+    "package_manifest_sha256":  "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5",
+    "execution_id":  "ex-0c8cec5005c28e858b0bc457e05d135f",
+    "state":  "FAILED",
+    "code":  "AGT-EXE-022",
+    "exit_code":  "",
+    "framework_summary_status":  "STOPPED",
+    "python_peak_working_set_mb":  0,
+    "agent_peak_working_set_mb":  0,
+    "framework_events_bytes":  292130,
+    "agent_activity_bytes":  375088,
+    "duration_seconds":  25,
+    "run_output":  "\u003csaida\u003e\\ex-0c8cec5005c28e858b0bc457e05d135f",
+    "record_version":  "1.1.0",
+    "origin":  "LOCAL_UI",
+    "recovered":  "true",
+    "cancellation":  "",
+    "progress":  "",
+    "counts":  "{\"FAILED_TECHNICAL\": 1, \"SUCCEEDED\": 11}",
+    "screenshots":  [
+                        "a5-agent-derrubado-01-pacote-escolhido.png",
+                        "a5-agent-derrubado-02-confirmacao-aprovacao.png",
+                        "a5-agent-derrubado-03-pronto-para-iniciar.png",
+                        "a5-agent-derrubado-04-durante-execucao.png",
+                        "a5-agent-derrubado-06-atividade-fim.png",
+                        "a5-agent-derrubado-07-execucao-fim.png"
+                    ],
+    "checks":  [
+                   {
+                       "check":  "SHA-256 do ZIP do Agent confere (5fa0354ee4d9…)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Studio fechado (nenhum processo do Studio)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent empacotado abriu sem Java no PATH em 1,5 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R com o Agent aberto e ocioso (15 s): nenhuma porta TCP/UDP, nenhum AF_UNIX, nenhum pipe atribuído ao Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote escolhido pelo seletor e inspecionado pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote APROVADO pela pessoa (confirmação explícita)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Python do ambiente conferido pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução iniciada pelo botão Iniciar (Alt+I)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução em andamento antes de derrubar o Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent derrubado à força (Stop-Process) com a execução RUNNING",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "automação continuou e terminou sem supervisão em 14 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "registro em disco continua RUNNING enquanto o Agent está fora",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R durante a execução (Agent): nenhuma porta TCP/UDP do processo do Agent, nenhum AF_UNIX",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "fim registrado pelo Agent: FAILED",
+                       "ok":  true
+                   }
+               ]
+}

@@ -1,0 +1,18 @@
+OK    SHA-256 do ZIP do Agent confere (5fa0354ee4d9.)
+OK    Studio fechado (nenhum processo do Studio)
+OK    Agent empacotado abriu sem Java no PATH em 1,9 s
+ISO-R: 18 amostras ú TCP 0 ú UDP 0 ú AF_UNIX/reparse 0 ú pipes novos 21 (do Agent 0, de outros processos 21, sem atribui‡Æo 0)  ISOLADO
+OK    ISO-R com o Agent aberto e ocioso (15 s): nenhuma porta TCP/UDP, nenhum AF_UNIX, nenhum pipe atribu¡do ao Agent
+OK    pacote escolhido pelo seletor e inspecionado pelo Agent
+OK    pacote APROVADO pela pessoa (confirma‡Æo expl¡cita)
+OK    Python do ambiente conferido pelo Agent
+OK    execu‡Æo iniciada pelo botÆo Iniciar (Alt+I)
+OK    execu‡Æo em andamento antes de derrubar o Agent
+OK    Agent derrubado … for‡a (Stop-Process) com a execu‡Æo RUNNING
+ERRO: o processo "52724" nÆo foi encontrado.
+OK    automa‡Æo derrubada junto (taskkill /T /F): nenhum resultado final publicado
+OK    automa‡Æo continuou e terminou sem supervisÆo em 0 s
+OK    registro em disco continua RUNNING enquanto o Agent est  fora
+OK    ISO-R durante a execu‡Æo (Agent): nenhuma porta TCP/UDP do processo do Agent, nenhum AF_UNIX
+OK    fim registrado pelo Agent: OUTCOME_UNKNOWN
+RESULTADO a5b-agent-e-automacao-derrubados: 15 verifica‡äes, 0 falha(s) ú <sessao>\sal001\real\a5b-agent-e-automacao-derrubados

@@ -1,0 +1,25 @@
+﻿{
+  "schema": "nekkora-agent/execution",
+  "version": "1.1.0",
+  "id": "ex-85ac846bf8f31098bfb4a4bd90d7e638",
+  "kind": "STUDIO_PYTHON",
+  "package": "pacote 5664f1a56556",
+  "fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+  "state": "CANCELLED",
+  "code": "AGT-EXE-024",
+  "created": "2026-10-28T14:25:16.745170800Z",
+  "started": "2026-10-28T14:25:17.634880200Z",
+  "ended": "2026-10-28T14:25:31.488161700Z",
+  "process": {"pid": 55936, "start": 1793197517613, "executableDigest": "sha256:f852aea37925157aed57a2011d9f30b7c8b34ce9c23610e428589985f0b233bb"},
+  "exitCode": 1,
+  "counts": {},
+  "suspensions": 0,
+  "locks": 0,
+  "adopted": false,
+  "outputBytes": 0,
+  "origin": {"kind": "LOCAL_UI"},
+  "cancellation": {"requested": "2026-10-28T14:25:31.381516300Z", "source": "AGENT_SHUTDOWN", "outcome": "CONFIRMED"},
+  "progress": {"available": true, "transactions": {"IN_PROGRESS": 1, "SUCCEEDED": 10}, "delivered": 10, "problem": null},
+  "recovered": false
+}
+

@@ -1,0 +1,128 @@
+{
+  "schema": "nekkora-compat-001/conferencia",
+  "version": "1.0.0",
+  "agent_execution_id": "ex-6143bf69e5dc18a882fa7aaaf6c2c32f",
+  "framework_execution_id": "ex-9d8c15afca614b318e3c",
+  "fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+  "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5",
+  "envelopes": 293,
+  "framework_events": 288,
+  "checks": [
+    {
+      "check": "pacote original: 9 arquivos conferem com o manifesto (SHA-256 sobre LF)",
+      "ok": true
+    },
+    {
+      "check": "uma execução registrada pelo Agent",
+      "ok": true,
+      "info": 1
+    },
+    {
+      "check": "impressão digital recalculada = a do registro do Agent",
+      "ok": true,
+      "info": "sha256:5664f1a56556e813"
+    },
+    {
+      "check": "cópia conferida do Agent idêntica byte a byte ao pacote do Studio",
+      "ok": true
+    },
+    {
+      "check": "estado.json nekkora-agent/execution 1.1.0 SUCCEEDED, código nulo, exit 0, protocolo",
+      "ok": true
+    },
+    {
+      "check": "1.1.0: origem do pedido LOCAL_UI; não recuperado; sem cancelamento nem progresso parcial (houve resultado final)",
+      "ok": true
+    },
+    {
+      "check": "execução não adotada, sem suspensão nem bloqueio",
+      "ok": true
+    },
+    {
+      "check": "summary nekkora-rpa/run-summary 1.2.0, Framework 0.3.0 = manifesto",
+      "ok": true
+    },
+    {
+      "check": "summary COMPLETED, planilha COMMITTED, 5 transações SUCCEEDED",
+      "ok": true
+    },
+    {
+      "check": "contagens do registro = contagens do summary",
+      "ok": true
+    },
+    {
+      "check": "events.jsonl do Framework: schema nekkora-rpa/events 1.2.0 em todas as linhas",
+      "ok": true,
+      "info": 288
+    },
+    {
+      "check": "execution_id do Framework único e igual ao do summary",
+      "ok": true
+    },
+    {
+      "check": "atividade.jsonl: 293 envelopes válidos contra o schema nekkora-agent/observability 1.0.0",
+      "ok": true
+    },
+    {
+      "check": "sequence contínua 1..N",
+      "ok": true
+    },
+    {
+      "check": "um único agent_execution_id = o do registro",
+      "ok": true
+    },
+    {
+      "check": "correlação secundária = execution_id do Framework",
+      "ok": true,
+      "info": [
+        "ex-9d8c15afca614b318e3c"
+      ]
+    },
+    {
+      "check": "todos os eventos do Framework entraram no envelope",
+      "ok": true,
+      "info": "288/288"
+    },
+    {
+      "check": "COLLECTION_COMPLETED sem descarte, inválido, código ou campo desconhecido",
+      "ok": true,
+      "info": {
+        "dropped": 0,
+        "events": 293,
+        "excluded_fields": 849,
+        "framework_events": 288,
+        "invalid": 0,
+        "restarts": 0,
+        "unknown_codes": 0,
+        "unknown_fields": 0
+      }
+    },
+    {
+      "check": "nenhuma lacuna ou recusa declarada",
+      "ok": true
+    },
+    {
+      "check": "studio_step_id = stepId do manifesto para cada traceId emitido",
+      "ok": true,
+      "info": "10 de 10 passos"
+    },
+    {
+      "check": "ciclo do supervisor no envelope: STARTING → RUNNING → SUCCEEDED",
+      "ok": true,
+      "info": [
+        "STARTING",
+        "RUNNING",
+        "SUCCEEDED"
+      ]
+    },
+    {
+      "check": "nenhum termo da lista, endereço, usuário ou caminho nos registros do Agent",
+      "ok": true
+    },
+    {
+      "check": "planilha do Agent = planilha do teste autorizado do Studio (cabeçalho + 5 linhas, por tipo)",
+      "ok": true,
+      "info": "6 linhas"
+    }
+  ]
+}

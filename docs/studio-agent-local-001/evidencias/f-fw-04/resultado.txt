@@ -1,0 +1,10 @@
+F-FW-04: os.replace do checkpoint do Framework 0.3.0 x leitor concorrente (Windows 11, 2026-10-28T13:43:22Z)
+rodada 1 leitor=none: escritas=1318 falhas=0 
+rodada 1 leitor=nio: escritas=1556 falhas=1174 leituras=23895 erros=0
+rodada 1 leitor=io: escritas=1443 falhas=1077 leituras=23258 erros=315
+rodada 2 leitor=none: escritas=1413 falhas=0 
+rodada 2 leitor=nio: escritas=1123 falhas=857 leituras=20365 erros=0
+rodada 2 leitor=io: escritas=1372 falhas=1063 leituras=22837 erros=272
+rodada 3 leitor=none: escritas=1215 falhas=0 
+rodada 3 leitor=nio: escritas=1341 falhas=1003 leituras=21619 erros=0
+rodada 3 leitor=io: escritas=1281 falhas=967 leituras=21489 erros=266

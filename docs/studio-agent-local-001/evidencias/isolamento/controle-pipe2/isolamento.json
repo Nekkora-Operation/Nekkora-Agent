@@ -1,0 +1,32 @@
+﻿{
+    "schema":  "nekkora-agent/isolation-check",
+    "version":  "1.0.0",
+    "measured_utc":  "2026-10-28T14:22:35.1539406Z",
+    "seconds":  3,
+    "samples":  3,
+    "agent_alive_at_end":  true,
+    "quiet":  true,
+    "tcp":  [
+
+            ],
+    "udp":  [
+
+            ],
+    "af_unix_or_reparse":  [
+
+                           ],
+    "new_named_pipes_total":  11,
+    "new_named_pipes_agent":  [
+                                  "nk-iso-controle-9420",
+                                  "PSHost.134376709473886183.9420.DefaultAppDomain.powershell"
+                              ],
+    "new_named_pipes_other_processes":  {
+                                            "chromium (mojo)":  5,
+                                            "msys (Git Bash)":  3,
+                                            "powershell":  1
+                                        },
+    "new_named_pipes_unattributed":  [
+
+                                     ],
+    "isolated":  false
+}
