@@ -510,6 +510,8 @@ final class ActivityPanel extends JPanel {
             // sucesso com código (ex.: adotada depois de reinício) é uma observação, não o motivo de uma falha
             if (r.code() != null) kv.add(r.state() == com.nekkora.agent.exec.ExecutionState.SUCCEEDED ? "Observação" : "Motivo técnico",
                     r.code().description() + " (" + r.code().code() + ")");
+            kv.add("Pedido por", ExecutionSetup.originLabel(r.origin()));
+            if (r.cancellation() != null) kv.add("Cancelamento", ExecutionSetup.cancellationLabel(r.cancellation()));
             if (r.recovered()) kv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
             // A03: o progresso verificado do checkpoint, separado do desfecho e das contagens derivadas dos eventos
             if (r.progress() != null) kv.add("Progresso parcial verificado (não é conclusão)", ExecutionSetup.progressLabel(r.progress()));

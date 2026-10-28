@@ -178,6 +178,8 @@ final class ExecutionDialog extends FittedDialog {
             if (r.locks() > 0) rv.add("Bloqueios de tela", String.valueOf(r.locks()));
             if (r.exitCode() != null) rv.addMono("Código de saída", String.valueOf(r.exitCode()));
             if (r.code() != null) rv.add("Motivo", r.code().description() + " (" + r.code().code() + ")");
+            if (r.cancellation() != null) rv.add("Cancelamento", ExecutionSetup.cancellationLabel(r.cancellation()));
+            rv.add("Pedido por", ExecutionSetup.originLabel(r.origin()));
             if (r.recovered()) rv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
             if (!r.counts().isEmpty()) rv.add("Resultado publicado", countsLabel(r.counts()));
             run.add(rv);

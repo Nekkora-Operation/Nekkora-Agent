@@ -111,18 +111,22 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         return s.problem() == ErrorCode.EXEC_SESSION_LOCKED ? "Tela bloqueada: a execução não começa" : s.problem().description();
     }
 
-    /** Estados de transação do Framework, no plural, na ordem em que aparecem no texto do progresso parcial. */
-    private static final java.util.Map<String, String> TX_LABELS = new java.util.LinkedHashMap<>();
+    /** Estados de transação do Framework (singular, plural), na ordem em que aparecem no texto do progresso parcial. */
+    private static final java.util.Map<String, String[]> TX_LABELS = new java.util.LinkedHashMap<>();
 
     static {
-        TX_LABELS.put("SUCCEEDED", "concluídas");
-        TX_LABELS.put("BUSINESS_REJECTED", "rejeitadas pelo negócio");
-        TX_LABELS.put("FAILED_TECHNICAL", "com falha técnica");
-        TX_LABELS.put("SKIPPED", "puladas");
-        TX_LABELS.put("CANCELLED", "canceladas");
-        TX_LABELS.put("IN_PROGRESS", "interrompidas em andamento (desfecho desconhecido)");
-        TX_LABELS.put("OUTCOME_UNKNOWN", "de desfecho desconhecido");
-        TX_LABELS.put("PENDING", "pendentes");
+        TX_LABELS.put("SUCCEEDED", new String[] {"concluída", "concluídas"});
+        TX_LABELS.put("BUSINESS_REJECTED", new String[] {"rejeitada pelo negócio", "rejeitadas pelo negócio"});
+        TX_LABELS.put("FAILED_TECHNICAL", new String[] {"com falha técnica", "com falha técnica"});
+        TX_LABELS.put("SKIPPED", new String[] {"pulada", "puladas"});
+        TX_LABELS.put("CANCELLED", new String[] {"cancelada", "canceladas"});
+        TX_LABELS.put("IN_PROGRESS", new String[] {"interrompida em andamento (desfecho desconhecido)", "interrompidas em andamento (desfecho desconhecido)"});
+        TX_LABELS.put("OUTCOME_UNKNOWN", new String[] {"de desfecho desconhecido", "de desfecho desconhecido"});
+        TX_LABELS.put("PENDING", new String[] {"pendente", "pendentes"});
+    }
+
+    private static String plural(long n, String one, String many) {
+        return n + " " + (n == 1 ? one : many);
     }
 
     /**
@@ -137,6 +141,7 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
                 case CheckpointProgress.TOO_LARGE -> "o checkpoint do Framework é grande demais para conferir";
                 case CheckpointProgress.UNSUPPORTED -> "o checkpoint do Framework é de versão não suportada";
                 case CheckpointProgress.NO_OUTPUT -> "a pasta de saída da execução não é conhecida";
+                case CheckpointProgress.LOCKED -> "o checkpoint do Framework continuou bloqueado pelo Windows";
                 default -> "o checkpoint do Framework não pôde ser lido";
             };
             return "Indisponível: " + why + ". Isto não significa que nada foi feito.";
@@ -147,14 +152,14 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         TX_LABELS.forEach((k, label) -> {
             Long n = p.transactions().get(k);
             if (n != null && n > 0) {
-                b.append(b.isEmpty() ? "" : " · ").append(n).append(' ').append(label);
+                b.append(b.isEmpty() ? "" : " · ").append(plural(n, label[0], label[1]));
                 shown.add(k);
             }
         });
         p.transactions().forEach((k, n) -> {
             if (!shown.contains(k) && n > 0) b.append(b.isEmpty() ? "" : " · ").append(n).append(' ').append(k);
         });
-        b.append(" · ").append(p.delivered()).append(" entregues à saída. Planilha sem confirmação de consolidação.");
+        b.append(" · ").append(plural(p.delivered(), "entregue", "entregues")).append(" à saída. Planilha sem confirmação de consolidação.");
         return b.toString();
     }
 
@@ -164,8 +169,17 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         String when = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss").withZone(java.time.ZoneId.systemDefault()).format(c.requested());
         return "Solicitado " + who + " às " + when + " · " + switch (c.outcome()) {
             case PENDING -> "aguardando confirmação";
-            case CONFIRMED -> "confirmado (processo encerrado pelo Agent)";
-            case NOT_EFFECTIVE -> "não efetivado: o processo terminou antes";
+            case CONFIRMED -> "confirmado";
+            case NOT_EFFECTIVE -> "não efetivado (terminou antes)";
+        };
+    }
+
+    /** D-SA-05: quem PEDIU a execução (nunca quem gerou o pacote). */
+    public static String originLabel(ExecutionRecord.Origin o) {
+        return switch (o) {
+            case LOCAL_UI -> "Janela do Agent (pessoa operadora)";
+            case STUDIO_LOCAL -> "Studio nesta máquina (canal local)";
+            case UNKNOWN -> "Não registrada (execução anterior a esta versão)";
         };
     }
 

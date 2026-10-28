@@ -3,11 +3,14 @@ package com.nekkora.agent.exec;
 import com.nekkora.agent.exec.ExecutionRecord.PartialProgress;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -39,15 +42,43 @@ public final class CheckpointProgress {
     public static final String INTEGRITY = "CHECKPOINT_INTEGRITY";
     public static final String UNSUPPORTED = "CHECKPOINT_UNSUPPORTED";
     public static final String NO_OUTPUT = "OUTPUT_UNKNOWN";
+    public static final String LOCKED = "CHECKPOINT_LOCKED";
+    /** Quanto esperar um bloqueio transitório do Windows logo depois do encerramento do processo. */
+    static final Duration LOCK_PATIENCE = Duration.ofSeconds(3);
 
     static Path file(Path output) {
         return output.resolve("execucao").resolve("checkpoint.json");
     }
 
-    /** O progresso verificado, ou indisponível com o motivo. Nunca lança. */
+    /**
+     * O progresso verificado, ou indisponível com o motivo. Nunca lança. Só para processo JÁ terminado: ler o checkpoint de
+     * um processo vivo faz o {@code os.replace} do Framework falhar no Windows. Logo depois de um encerramento forçado o
+     * Windows ainda pode negar a abertura por alguns milissegundos (F-FW-03): a leitura é tentada de novo por até
+     * {@link #LOCK_PATIENCE}; persistindo, o motivo é {@link #LOCKED}.
+     */
     public static PartialProgress read(Path output) {
+        return read(output, LOCK_PATIENCE);
+    }
+
+    static PartialProgress read(Path output, Duration patience) {
         if (output == null) return PartialProgress.unavailable(NO_OUTPUT);
-        Path f = file(output);
+        long deadline = System.nanoTime() + patience.toNanos();
+        while (true) {
+            try {
+                return readOnce(file(output));
+            } catch (FileSystemException e) {
+                if (System.nanoTime() >= deadline) return PartialProgress.unavailable(LOCKED);
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return PartialProgress.unavailable(LOCKED);
+                }
+            }
+        }
+    }
+
+    private static PartialProgress readOnce(Path f) throws FileSystemException {
         try {
             if (!Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS)) return PartialProgress.unavailable(MISSING);
             if (Files.size(f) > JsonReader.MAX_CHARS) return PartialProgress.unavailable(TOO_LARGE);
@@ -70,6 +101,10 @@ public final class CheckpointProgress {
                 if ("COMMITTED".equals(t.get("delivery"))) delivered++;
             }
             return new PartialProgress(true, byStatus, delivered, null);
+        } catch (NoSuchFileException e) {
+            return PartialProgress.unavailable(MISSING);
+        } catch (FileSystemException e) {
+            throw e; // acesso negado / em uso por outro processo: transitório logo depois do encerramento
         } catch (IOException | JsonReader.Invalid | NoSuchAlgorithmException | RuntimeException e) {
             return PartialProgress.unavailable(INVALID);
         }

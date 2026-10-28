@@ -81,6 +81,11 @@ public final class ExecutionController implements AutoCloseable {
     }
 
     public static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(60);
+    /**
+     * D-SA-05: origem dos pedidos que entram por {@link #start}. Nesta versão a única porta é a janela do Agent; o canal
+     * local (D-SA-01), quando existir, registra a sua própria origem. Origem do PEDIDO, nunca autoria do pacote.
+     */
+    static final ExecutionRecord.Origin ORIGIN = ExecutionRecord.Origin.LOCAL_UI;
     /** Por quanto tempo o supervisor insiste em gravar o estado FINAL antes de sinalizar a perda (depois, só em nova ocasião). */
     public static final Duration FINAL_SAVE_GRACE = Duration.ofSeconds(10);
     /** Arquivo da pasta da execução com o caminho da saída (local; fora do registro e do diagnóstico). */
@@ -120,6 +125,8 @@ public final class ExecutionController implements AutoCloseable {
         final long startNanos;
         final Duration timeout;
         final AtomicBoolean cancel = new AtomicBoolean();
+        /** D-SA-04: o pedido de cancelamento (só o primeiro vale); o supervisor o aplica ao registro (escritor único). */
+        volatile ExecutionRecord.Cancellation cancelRequest;
         final AtomicLong bytes = new AtomicLong();
         final List<Thread> drains = new ArrayList<>();
         /** Gravações do {@code record} que falharam desde a última que deu certo (0 = o disco tem o {@code record}). */
@@ -213,11 +220,11 @@ public final class ExecutionController implements AutoCloseable {
                 pkg = ExecutionPackage.inspect(req.packageDir());
             } catch (ExecRefused e) {
                 throw blocked(new ExecutionRecord(id, null, "pacote", "sha256:" + "0".repeat(64), ExecutionState.READY, null, now, null, null, null, null,
-                        Map.of(), 0, 0, false, 0), e.code());
+                        Map.of(), 0, 0, false, 0).withOrigin(ORIGIN), e.code());
             }
             // no registro, o pacote é identificado só pelo tipo e pela impressão digital (o nome da pasta pode ser de um cliente)
             ExecutionRecord r = new ExecutionRecord(id, pkg.kind(), "pacote " + pkg.shortFingerprint(), pkg.fingerprint(), ExecutionState.READY, null, now,
-                    null, null, null, null, Map.of(), 0, 0, false, 0);
+                    null, null, null, null, Map.of(), 0, 0, false, 0).withOrigin(ORIGIN);
             // a impressão digital conferida AGORA precisa ser a que a pessoa escolheu e aprovou
             if (!pkg.fingerprint().equals(req.fingerprint())) throw blocked(r, ErrorCode.EXEC_PACKAGE_CHANGED);
             if (!approvals.approved(pkg)) throw blocked(r, ErrorCode.EXEC_NOT_APPROVED);
@@ -285,13 +292,52 @@ public final class ExecutionController implements AutoCloseable {
         }
     }
 
-    /** Pede o cancelamento da execução ativa (o supervisor encerra a árvore possuída). */
+    /** Resposta a um pedido de cancelamento por identificador (D-SA-04). Aceitar o pedido não é confirmar o cancelamento. */
+    public enum CancelResult {
+        /** Pedido registrado agora; a confirmação ({@code CANCELLED}) ou não ({@code NOT_EFFECTIVE}) vem pelo registro. */
+        REQUESTED,
+        /** Idempotente: já havia um pedido para esta execução; nada muda. */
+        ALREADY_REQUESTED,
+        /** A execução já terminou; o estado final é o do registro. */
+        ALREADY_ENDED,
+        /** A execução existe mas não está em andamento nesta sessão do Agent (registro aberto à espera de reconciliação). */
+        NOT_ACTIVE,
+        /** Não há execução com este identificador no histórico (nunca existiu ou foi removida pela retenção). */
+        UNKNOWN_EXECUTION;
+
+        public boolean accepted() {
+            return this == REQUESTED || this == ALREADY_REQUESTED;
+        }
+    }
+
+    /** Pede o cancelamento da execução ativa, pela janela do Agent (o supervisor encerra a árvore possuída). */
     public boolean cancel() {
+        ExecutionId id;
         synchronized (lock) {
             if (active == null) return false;
-            active.cancel.set(true);
-            return true;
+            id = active.record.id();
         }
+        return cancel(id, ExecutionRecord.CancelSource.LOCAL_UI).accepted();
+    }
+
+    /**
+     * D-SA-04: pede o cancelamento DESTA execução. Só a execução ativa pode ser cancelada; um segundo pedido é idempotente
+     * (o primeiro instante e a primeira origem ficam). O pedido entra no registro como {@code PENDING}; o supervisor
+     * confirma ({@code CONFIRMED}, estado {@code CANCELLED}) depois de encerrar a árvore possuída, ou registra
+     * {@code NOT_EFFECTIVE} se o processo terminou antes por conta própria (o estado é então o do protocolo).
+     */
+    public CancelResult cancel(ExecutionId id, ExecutionRecord.CancelSource source) {
+        synchronized (lock) {
+            if (active != null && active.record.id().equals(id)) {
+                if (active.cancelRequest != null) return CancelResult.ALREADY_REQUESTED;
+                active.cancelRequest = new ExecutionRecord.Cancellation(clock.instant(), source, ExecutionRecord.CancelOutcome.PENDING);
+                active.cancel.set(true);
+                return CancelResult.REQUESTED;
+            }
+        }
+        Optional<ExecutionRecord> r = store.record(id);
+        if (r.isEmpty()) return CancelResult.UNKNOWN_EXECUTION;
+        return r.get().state().terminal() ? CancelResult.ALREADY_ENDED : CancelResult.NOT_ACTIVE;
     }
 
     private ExecRefused blocked(ExecutionRecord r, ErrorCode why) {
@@ -365,6 +411,9 @@ public final class ExecutionController implements AutoCloseable {
                 }
             }
             if (a.cancel.get()) {
+                // D-SA-04: o pedido fica gravado (PENDING) ANTES de encerrar a árvore, com o progresso verificado até
+                // aqui (A03); a confirmação só vem depois do encerramento
+                applyCancelRequest(a);
                 forced = ExecutionState.CANCELLED;
                 forcedCode = ErrorCode.EXEC_CANCELLED;
                 break;
@@ -428,6 +477,14 @@ public final class ExecutionController implements AutoCloseable {
         // o desfecho já está decidido (protocolo, código de saída, prazo, cancelamento): a gravação só o registra, nunca o muda
         ExecutionRecord end = a.record.withExit(exit, rep.map(Launch.Reported::counts).orElse(Map.of()), a.bytes.get()).moveTo(state, code, clock.instant());
         if (recovered) end = end.recoveredFromProtocol();
+        if (end.cancellation() == null && a.cancelRequest != null) end = end.withCancellation(a.cancelRequest); // pedido chegou na última volta
+        if (end.cancellation() != null) {
+            // pedido e confirmação separados: CANCELLED = o Agent encerrou a árvore; senão o processo terminou antes
+            ExecutionRecord.CancelOutcome o = state == ExecutionState.CANCELLED ? ExecutionRecord.CancelOutcome.CONFIRMED
+                    : ExecutionRecord.CancelOutcome.NOT_EFFECTIVE;
+            end = end.withCancellation(end.cancellation().resolved(o));
+            store.event(end.id(), clock.instant(), "CANCEL_" + o.name(), Map.of("source", end.cancellation().source().name()));
+        }
         // A03: sem resultado final do processo (cancelado, prazo, desconhecido, falha sem protocolo), o progresso parcial
         // VERIFICADO fica no registro, separado das contagens do protocolo; o estado continua o que foi decidido acima
         if (a.kind == ExecutionPackage.Kind.STUDIO_PYTHON && (forced != null || rep.isEmpty())) end = withPartialProgress(end);
@@ -689,8 +746,23 @@ public final class ExecutionController implements AutoCloseable {
     }
 
     /**
+     * Grava o pedido de cancelamento como PENDING (uma vez). O checkpoint NÃO é lido aqui: o processo ainda está vivo e,
+     * no Windows, um leitor faz o {@code os.replace} do Framework falhar (medido: 77% das gravações em laço com um leitor
+     * concorrente) — o observador derrubaria a automação. O progresso é lido só depois do encerramento.
+     */
+    private void applyCancelRequest(Active a) {
+        ExecutionRecord.Cancellation c = a.cancelRequest;
+        if (c == null || a.record.cancellation() != null) return;
+        a.record = a.record.withCancellation(c);
+        store.event(a.record.id(), clock.instant(), "CANCEL_REQUESTED", Map.of("source", c.source().name()));
+        persist(a);
+        notifyListeners(new Snapshot(a.record, elapsed(a), true, a.saveFailures == 0));
+    }
+
+    /**
      * A03: o progresso parcial conferido do checkpoint do Framework (ou o motivo de não haver) anexado ao registro, com um
-     * evento só de números e códigos. Nunca muda o estado.
+     * evento só de números e códigos. Nunca muda o estado. Só é chamado com o processo JÁ terminado (fim observado, árvore
+     * encerrada ou processo ausente na reconciliação): ler o checkpoint de um processo vivo pode fazê-lo falhar.
      */
     private ExecutionRecord withPartialProgress(ExecutionRecord r) {
         ExecutionRecord.PartialProgress p = CheckpointProgress.read(store.output(r.id()).orElse(null));
@@ -747,7 +819,7 @@ public final class ExecutionController implements AutoCloseable {
             a = active;
         }
         if (a != null) {
-            a.cancel.set(true);
+            cancel(a.record.id(), ExecutionRecord.CancelSource.AGENT_SHUTDOWN);
             long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
             while (System.nanoTime() < deadline && running()) {
                 try {

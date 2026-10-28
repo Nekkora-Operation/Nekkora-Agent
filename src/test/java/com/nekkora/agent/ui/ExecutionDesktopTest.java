@@ -207,6 +207,59 @@ class ExecutionDesktopTest {
     }
 
     @Test
+    @DisplayName("A03 + D-SA-04/05 na tela: cancelamento real no meio → 'Progresso parcial (não é conclusão)', cancelamento confirmado e origem do pedido")
+    void cancelamentoComProgressoParcial() throws Exception {
+        Path py = python();
+        Assumptions.assumeTrue(py != null, "sem Python neste ambiente");
+        Path pkg = com.nekkora.agent.exec.ObsStudioPackage.create(tmp.resolve("pacote-studio"), "{\"mode\": \"slow\", \"items\": 40, \"delay_ms\": 150, "
+                + "\"checkpoint\": true}");
+        Path out = Files.createDirectories(tmp.resolve("saida"));
+        h = DesktopHarness.start(tmp.resolve("dados"), AgentDesktopTest.ENV, new String[0], TrayController.SYSTEM);
+        MainWindow w = h.window();
+        h.later(() -> w.executionButton().doClick());
+        h.waitFor(() -> h.app.executionDialog() != null && h.app.executionDialog().isShowing(), "janela Execução local");
+        ExecutionDialog d = dialog();
+        h.waitFor(() -> h.app.executionSetup().session() != null, "sessão verificada");
+        choose(() -> h.app.selectPackage(pkg));
+        choose(h.app::approveConfirmed);
+        choose(() -> h.app.selectPython(py));
+        choose(() -> h.app.selectOutput(out));
+        h.settle();
+        h.run(() -> d.startButton().doClick());
+        h.waitFor(() -> h.app.context().execution().running(), "em andamento");
+        com.nekkora.agent.exec.ExecutionId id = h.app.context().execution().current().orElseThrow().record().id();
+        Path run = out.resolve(id.value());
+        // pelo diário de eventos (só acréscimos): abrir o checkpoint de um processo vivo faria o os.replace do Framework falhar
+        h.waitFor(() -> {
+            try {
+                return Files.readAllLines(run.resolve("execucao").resolve("events.jsonl"), StandardCharsets.UTF_8).stream()
+                        .filter(l -> l.contains("\"TRANSACTION_COMPLETED\"")).count() >= 3;
+            } catch (java.io.IOException | RuntimeException e) {
+                return false;
+            }
+        }, "três transações concluídas");
+        assertTrue(h.edt(() -> texts(d.getRootPane())).stream().anyMatch(x -> x.equals("Janela do Agent (pessoa operadora)")), "origem do pedido visível");
+        assertTrue(h.app.context().execution().cancel()); // a confirmação do botão é o diálogo do sistema; a ação é a mesma
+        h.waitFor(() -> !h.app.context().execution().running(), "cancelada");
+        h.settle();
+        com.nekkora.agent.exec.ExecutionRecord r = h.app.context().execution().current().orElseThrow().record();
+        assertEquals(ExecutionState.CANCELLED, r.state());
+        assertTrue(r.progress() != null && r.progress().available(), String.valueOf(r.progress()));
+        List<String> t = h.edt(() -> texts(d.getRootPane()));
+        assertTrue(t.stream().anyMatch(x -> x.equals("Progresso parcial (não é conclusão)")), t.toString());
+        assertTrue(t.stream().anyMatch(x -> x.contains(" concluídas") && x.contains("Planilha sem confirmação de consolidação.")), t.toString());
+        assertTrue(t.stream().anyMatch(x -> x.startsWith("Solicitado pela pessoa operadora às ") && x.endsWith(" · confirmado")),
+                t.toString());
+        assertTrue(t.stream().anyMatch(x -> x.equals("Estado: Cancelada")), t.toString());
+        String line = h.edt(w::executionText);
+        assertTrue(line.startsWith("Cancelada · AGT-EXE-024 · progresso parcial: ") && line.endsWith(" concluídas"), line);
+        assertFalse(t.stream().anyMatch(x -> x.contains(tmp.toString())), "a tela não mostra caminhos completos");
+        capture(d, "D15-cancelamento-progresso-parcial");
+        capture(w, "D16-janela-principal-progresso-parcial");
+        h.run(d::dispose);
+    }
+
+    @Test
     @DisplayName("sair com execução ativa: confirmação com Voltar como padrão (nada muda); Encerrar execução e sair cancela só a árvore possuída")
     void sairComExecucao() throws Exception {
         Path py = python();

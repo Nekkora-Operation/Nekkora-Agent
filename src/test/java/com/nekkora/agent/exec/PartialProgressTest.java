@@ -71,7 +71,7 @@ class PartialProgressTest {
         assertTrue(p.available(), String.valueOf(p.problem()));
         assertEquals(Map.of("SUCCEEDED", 7L, "IN_PROGRESS", 1L), p.transactions());
         assertEquals(7, p.delivered());
-        assertEquals("7 concluídas · 1 interrompidas em andamento (desfecho desconhecido) · 7 entregues à saída. Planilha sem confirmação de consolidação.",
+        assertEquals("7 concluídas · 1 interrompida em andamento (desfecho desconhecido) · 7 entregues à saída. Planilha sem confirmação de consolidação.",
                 ExecutionSetup.progressLabel(p));
         PartialProgress a5 = CheckpointProgress.read(outputWith("a5"));
         assertEquals(Map.of("SUCCEEDED", 11L, "FAILED_TECHNICAL", 1L), a5.transactions());
@@ -157,8 +157,8 @@ class PartialProgressTest {
         approvals.approve(p, Clock.systemUTC().instant());
         ExecutionController.Snapshot s = controller.start(new ExecutionController.Request(p.dir(), p.fingerprint(), python, null, out, Duration.ofMinutes(3)));
         Path cp = CheckpointProgress.file(out.resolve(s.record().id().value()));
-        waitFor(() -> CheckpointProgress.read(cp.getParent().getParent()).transactions().getOrDefault("SUCCEEDED", 0L) >= 3, Duration.ofSeconds(60),
-                "três transações concluídas");
+        // espera pelo diário de eventos (só acréscimos): abrir o checkpoint de um processo vivo faria o os.replace falhar
+        waitFor(() -> completedTransactions(out.resolve(s.record().id().value())) >= 3, Duration.ofSeconds(60), "três transações concluídas");
         assertTrue(controller.cancel());
         waitFor(() -> !controller.running(), Duration.ofSeconds(30), "cancelamento confirmado");
         ExecutionRecord r = runs.record(s.record().id()).orElseThrow();
@@ -175,6 +175,44 @@ class PartialProgressTest {
         List<String> ev = runs.events(r.id());
         assertTrue(ev.stream().anyMatch(l -> l.contains("PARTIAL_PROGRESS")), ev.toString());
         assertTrue(ev.get(ev.size() - 1).contains("\"CANCELLED\""), ev.toString());
+    }
+
+    @Test
+    @DisplayName("checkpoint bloqueado logo depois do encerramento (F-FW-03): espera curta; bloqueio que passa → lido; que não passa → CHECKPOINT_LOCKED")
+    void bloqueioTransitorio() throws Exception {
+        Path o = outputWith("a2");
+        Path cp = CheckpointProgress.file(o);
+        java.nio.file.OpenOption noShare = com.sun.nio.file.ExtendedOpenOption.NOSHARE_READ;
+        try (java.nio.channels.SeekableByteChannel lock = Files.newByteChannel(cp, java.nio.file.StandardOpenOption.READ, noShare)) {
+            PartialProgress p = CheckpointProgress.read(o, Duration.ofMillis(300));
+            assertFalse(p.available());
+            assertEquals(CheckpointProgress.LOCKED, p.problem(), "bloqueio que não passa: motivo próprio, não 'inválido'");
+            assertTrue(ExecutionSetup.progressLabel(p).contains("bloqueado"));
+        }
+        java.nio.channels.SeekableByteChannel lock = Files.newByteChannel(cp, java.nio.file.StandardOpenOption.READ, noShare);
+        Thread release = new Thread(() -> {
+            try {
+                Thread.sleep(400);
+                lock.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        release.start();
+        PartialProgress p = CheckpointProgress.read(o, Duration.ofSeconds(3));
+        release.join();
+        assertTrue(p.available(), "bloqueio transitório: lido depois de solto (" + p.problem() + ")");
+        assertEquals(Map.of("SUCCEEDED", 7L, "IN_PROGRESS", 1L), p.transactions());
+    }
+
+    /** Transações concluídas pelo diário do Framework (arquivo só de acréscimos; seguro de ler com o processo vivo). */
+    static long completedTransactions(Path run) {
+        try {
+            return Files.readAllLines(run.resolve("execucao").resolve("events.jsonl"), StandardCharsets.UTF_8).stream()
+                    .filter(l -> l.contains("\"TRANSACTION_COMPLETED\"")).count();
+        } catch (java.io.IOException | RuntimeException e) {
+            return 0;
+        }
     }
 
     static void waitFor(BooleanSupplier c, Duration max, String what) throws Exception {
