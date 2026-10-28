@@ -118,11 +118,23 @@ public final class Launch {
             return exitCode == 0 ? new Outcome(ExecutionState.OUTCOME_UNKNOWN, ErrorCode.EXEC_NO_PROTOCOL)
                     : new Outcome(ExecutionState.FAILED, ErrorCode.EXEC_EXIT_NONZERO);
         }
-        Reported x = r.get();
-        boolean ok = pkg.kind() == ExecutionPackage.Kind.STUDIO_PYTHON
-                ? "COMPLETED".equals(x.status()) && (pkg.mode() != ExecutionPackage.Mode.LIST || "COMMITTED".equals(x.outputStatus())) && exitCode == 0
-                : "SUCCEEDED".equals(x.status()) && exitCode == 0;
+        boolean ok = reportsSuccess(pkg, r.get()) && exitCode == 0;
         return ok ? new Outcome(ExecutionState.SUCCEEDED, null) : new Outcome(ExecutionState.FAILED, ErrorCode.EXEC_REPORTED_FAILURE);
+    }
+
+    /**
+     * A02: fim do processo NÃO observado (Agent reiniciado; sem código de saída). Só um protocolo já CONFERIDO por
+     * {@link ProtocolEvidence#verify} chega aqui; o critério de sucesso é o mesmo de {@link #classify}, sem o código de saída.
+     */
+    public static Outcome classifyVerified(ExecutionPackage pkg, ProtocolEvidence.Verdict v) {
+        if (!v.accepted()) throw new IllegalArgumentException("protocolo não conferido");
+        return reportsSuccess(pkg, v.reported()) ? new Outcome(ExecutionState.SUCCEEDED, null) : new Outcome(ExecutionState.FAILED, ErrorCode.EXEC_REPORTED_FAILURE);
+    }
+
+    private static boolean reportsSuccess(ExecutionPackage pkg, Reported x) {
+        return pkg.kind() == ExecutionPackage.Kind.STUDIO_PYTHON
+                ? "COMPLETED".equals(x.status()) && (pkg.mode() != ExecutionPackage.Mode.LIST || "COMMITTED".equals(x.outputStatus()))
+                : "SUCCEEDED".equals(x.status());
     }
 
     public record Outcome(ExecutionState state, ErrorCode code) {}

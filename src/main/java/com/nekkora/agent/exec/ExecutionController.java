@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>bloqueio da tela e suspensão do Windows (salto do relógio) durante a execução são registrados; resultado sem
  *       prova depois de suspensão é {@code OUTCOME_UNKNOWN};</li>
  *   <li>reinício do Agent: {@link #reconcile} adota o processo que ainda é o mesmo (PID + início + executável) ou fecha o
- *       registro sem inventar resultado; nada é relançado;</li>
+ *       registro sem inventar resultado; nada é relançado. A02: se o processo terminou enquanto o Agent estava fora, o
+ *       protocolo publicado decide o desfecho só depois de conferido ({@link ProtocolEvidence}); senão {@code OUTCOME_UNKNOWN};</li>
  *   <li>F-AGT-01: depois do lançamento, falha ao gravar o {@code estado.json} nunca deixa o processo sem dono nem muda o
  *       desfecho: a supervisão segue, o disco fica no último estado gravado (nada incerto é dado por gravado), a gravação
  *       é tentada de novo e a falha que não passa é sinalizada ({@link RecordDiagnostics}, evento, tela).</li>
@@ -395,15 +396,25 @@ public final class ExecutionController implements AutoCloseable {
         Optional<Launch.Reported> rep = a.pkg == null ? Optional.empty() : Launch.reported(a.kind, a.output);
         ExecutionState state;
         ErrorCode code;
+        boolean recovered = false;
         if (forced != null) {
             state = forced;
             code = forcedCode;
         } else if (a.process == null) {
-            // adotada depois de reinício: sem código de saída; só o protocolo publicado pode dizer o resultado
-            Launch.Outcome o = rep.isPresent() && a.pkg != null ? Launch.classify(a.pkg, rep, 0) : new Launch.Outcome(ExecutionState.OUTCOME_UNKNOWN,
-                    ErrorCode.EXEC_AGENT_RESTARTED);
-            state = o.state();
-            code = o.code() == null ? ErrorCode.EXEC_AGENT_RESTARTED : o.code();
+            // adotada depois de reinício: sem código de saída; só o protocolo CONFERIDO pode dizer o resultado (A02)
+            ProtocolEvidence.Verdict v = verdict(a.record);
+            if (v.accepted()) {
+                Launch.Outcome o = Launch.classifyVerified(a.pkg, v);
+                state = o.state();
+                code = o.code();
+                rep = Optional.of(v.reported());
+                recovered = true;
+            } else {
+                store.event(a.record.id(), clock.instant(), "PROTOCOL_REJECTED", Map.of("reason", v.rejection().name()));
+                state = ExecutionState.OUTCOME_UNKNOWN;
+                code = ErrorCode.EXEC_AGENT_RESTARTED;
+                rep = Optional.empty(); // contagens de um protocolo não conferido não entram no registro
+            }
         } else {
             Launch.Outcome o = Launch.classify(a.pkg, rep, exit == null ? -1 : exit);
             state = o.state();
@@ -416,6 +427,7 @@ public final class ExecutionController implements AutoCloseable {
         }
         // o desfecho já está decidido (protocolo, código de saída, prazo, cancelamento): a gravação só o registra, nunca o muda
         ExecutionRecord end = a.record.withExit(exit, rep.map(Launch.Reported::counts).orElse(Map.of()), a.bytes.get()).moveTo(state, code, clock.instant());
+        if (recovered) end = end.recoveredFromProtocol();
         a.record = end;
         persist(a);
         boolean saved = a.saveFailures == 0;
@@ -423,6 +435,7 @@ public final class ExecutionController implements AutoCloseable {
         Map<String, Object> f = new LinkedHashMap<>();
         f.put("exit", exit == null ? "none" : exit);
         f.put("protocol", rep.isPresent());
+        if (recovered) f.put("recovered", true);
         f.put("output_bytes", a.bytes.get());
         if (code != null) f.put("code", code.code());
         store.event(end.id(), clock.instant(), state.name(), f);
@@ -626,6 +639,27 @@ public final class ExecutionController implements AutoCloseable {
                     }
                 }
             }
+            if (r.state() == ExecutionState.RUNNING) {
+                // A02: o processo terminou enquanto o Agent estava fora. Um protocolo publicado, COMPLETO e COERENTE decide
+                // o desfecho (sem código de saída: o fim não foi observado); qualquer dúvida mantém OUTCOME_UNKNOWN
+                ProtocolEvidence.Verdict v = verdict(r);
+                if (v.accepted()) {
+                    ExecutionPackage pkg = verifiedCopy(r);
+                    Launch.Outcome o = Launch.classifyVerified(pkg, v);
+                    ExecutionRecord closed = r.withExit(null, v.reported().counts(), r.outputBytes()).moveTo(o.state(), o.code(), clock.instant())
+                            .recoveredFromProtocol();
+                    saveOrKeep(closed);
+                    Map<String, Object> f = new LinkedHashMap<>();
+                    f.put("exit", "none");
+                    f.put("protocol", true);
+                    f.put("recovered", true);
+                    if (o.code() != null) f.put("code", o.code().code());
+                    store.event(r.id(), clock.instant(), o.state().name(), f);
+                    last = closed;
+                    continue;
+                }
+                store.event(r.id(), clock.instant(), "PROTOCOL_REJECTED", Map.of("reason", v.rejection().name()));
+            }
             ExecutionState to = r.state() == ExecutionState.READY ? ExecutionState.BLOCKED : ExecutionState.OUTCOME_UNKNOWN;
             ExecutionRecord closed = r.moveTo(to, ErrorCode.EXEC_AGENT_RESTARTED, clock.instant());
             saveOrKeep(closed);
@@ -648,6 +682,17 @@ public final class ExecutionController implements AutoCloseable {
         } catch (ExecRefused e) {
             return null;
         }
+    }
+
+    /** A cópia da execução, só se ainda for exatamente o pacote registrado (mesma impressão digital); senão vazio. */
+    private ExecutionPackage verifiedCopy(ExecutionRecord r) {
+        ExecutionPackage p = pkgOf(r);
+        return p != null && p.fingerprint().equals(r.fingerprint()) ? p : null;
+    }
+
+    /** A02: o protocolo da execução conferido (cópia íntegra do pacote, pasta de saída validada, posterior ao lançamento). */
+    private ProtocolEvidence.Verdict verdict(ExecutionRecord r) {
+        return ProtocolEvidence.verify(verifiedCopy(r), store.output(r.id()).orElse(null), r.started());
     }
 
     /** A pasta de saída anotada no início (sem ela, a adoção só pode terminar em OUTCOME_UNKNOWN). */

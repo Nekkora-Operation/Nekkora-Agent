@@ -1,0 +1,117 @@
+{
+  "schema": "nekkora-rpa/run-summary",
+  "version": "1.2.0",
+  "execution_id": "ex-9542a4f62e624cbfb253",
+  "framework_version": "0.3.0",
+  "status": "STOPPED",
+  "stop_code": "TARGET_NOT_FOUND",
+  "stop_detail": "consecutive_failures",
+  "cleanup_ok": true,
+  "counts": {
+    "SUCCEEDED": 11,
+    "FAILED_TECHNICAL": 1
+  },
+  "transactions": [
+    {
+      "transaction_id": "tx-6cf555e5ecd0f79b85f8",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-c41e1758dda98627fffb",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-15e4c235d1ce6dc7d7bc",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-0ac277d4371048a53c15",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-f92cbc5a7c108f9dfc78",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-8aaeac12c6bbeb3919e3",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-01ce11446d7b97208af0",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-b0df43494e2fd29fc047",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-23846bb600c9038ee975",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-02f006fed2ea7148aa88",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-3e56a3f45e4783718bec",
+      "status": "SUCCEEDED",
+      "error_code": null,
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    },
+    {
+      "transaction_id": "tx-ca39629245c66636be9d",
+      "status": "FAILED_TECHNICAL",
+      "error_code": "TARGET_NOT_FOUND",
+      "detail": null,
+      "attempts": 1,
+      "delivery": "COMMITTED"
+    }
+  ],
+  "output": {
+    "status": "WITHHELD",
+    "rows": 11,
+    "detail": "incomplete_run"
+  }
+}

@@ -209,7 +209,7 @@ class ExecutionPersistenceTest {
     }
 
     @Test
-    @DisplayName("F-AGT-01 persistente: o registro não volta → o processo segue supervisionado até o fim, nada é relançado; reinício fecha como OUTCOME_UNKNOWN")
+    @DisplayName("F-AGT-01 persistente: o registro não volta → o processo segue supervisionado até o fim, nada é relançado; reinício lê o protocolo publicado (A02)")
     void falhaPersistenteDepoisDoLancamento() throws Exception {
         Scripted w = new Scripted();
         w.fail = n -> n >= 2;
@@ -228,15 +228,18 @@ class ExecutionPersistenceTest {
         assertEquals(ExecutionState.STARTING, onDisk(s.record().id()).state(), "nada incerto é dado por gravado: o disco fica no último estado gravado");
         controller.close();
         controller = null;
-        // reinício com o disco bom: o STARTING é fechado sem inventar resultado e sem relançar
+        // reinício com o disco bom: o STARTING (com a posse gravada) é fechado sem relançar. A02: o processo publicou o
+        // resultado estruturado na pasta de saída desta execução antes do reinício → o desfecho vem do protocolo conferido,
+        // marcado como recuperado e sem código de saída (o fim não foi observado). Antes da A02: OUTCOME_UNKNOWN.
         ExecutionController restarted = controller(store(AtomicWriter.DEFAULT));
         try {
             assertEquals(1, restarted.reconcile());
             assertFalse(restarted.running(), "o processo já terminou: nada a adotar");
             Thread.sleep(1500);
             ExecutionRecord r = onDisk(s.record().id());
-            assertEquals(ExecutionState.OUTCOME_UNKNOWN, r.state(), "sem prova gravada, nada é presumido");
-            assertEquals(ErrorCode.EXEC_AGENT_RESTARTED, r.code());
+            assertEquals(ExecutionState.SUCCEEDED, r.state(), "protocolo publicado e conferido decide; nada presumido além dele");
+            assertTrue(r.recovered(), "desfecho lido do protocolo depois do reinício");
+            assertEquals(null, r.exitCode(), "nenhum código de saída inventado");
             assertEquals(s.record().owner(), r.owner(), "o processo lançado continua rastreável no registro fechado");
             assertEquals(1, lines(out.resolve("efeitos.txt")), "nada foi relançado");
         } finally {

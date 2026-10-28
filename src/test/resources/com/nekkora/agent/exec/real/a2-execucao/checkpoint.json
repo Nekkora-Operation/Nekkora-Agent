@@ -1,0 +1,75 @@
+{
+ "body": {
+  "process_name": "biografias_da_wikipedia",
+  "salt": "4dea7ff6b4cd7fbd2d7aea42cd20f3fa",
+  "schema": "nekkora-rpa/checkpoint",
+  "transactions": {
+   "tx-302e080a552996015337": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:55.899Z"
+   },
+   "tx-45e1399b7bbd6fcef28f": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:54.814Z"
+   },
+   "tx-719684f60c8d928383e9": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:52.229Z"
+   },
+   "tx-96f74589e21f1ce703ab": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:49.684Z"
+   },
+   "tx-de542a40ae25b9104bc2": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:53.503Z"
+   },
+   "tx-e3da37ec505e0caf60ba": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:57.261Z"
+   },
+   "tx-e7057d37087aca7ca2f8": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:41:50.899Z"
+   },
+   "tx-ef25b494d9cd50d5b864": {
+    "attempts": 1,
+    "delivery": "NOT_DELIVERED",
+    "execution_id": "ex-0dc06a100655484da0d9",
+    "side_effects": 0,
+    "status": "IN_PROGRESS",
+    "updated_utc": "2026-10-28T12:41:57.264Z"
+   }
+  },
+  "version": "1.1.0"
+ },
+ "integrity": "sha256:14b4a7a1622e4e49e29b39aae8f7969aef6b9817eb050ac81315cb56242861e6"
+}
