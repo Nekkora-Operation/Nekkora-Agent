@@ -27,12 +27,18 @@ final class JdkHttpTransport implements HttpTransport {
     private final HttpClient client;
 
     JdkHttpTransport() {
-        this.client = HttpClient.newBuilder()
+        this(null);
+    }
+
+    /** {@code ssl} nulo = o contexto padrão da JVM (produção). Os testes passam um contexto que confia num certificado de teste. */
+    JdkHttpTransport(javax.net.ssl.SSLContext ssl) {
+        HttpClient.Builder b = HttpClient.newBuilder()
                 .connectTimeout(CONNECT_TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .version(HttpClient.Version.HTTP_1_1)
-                .proxy(HttpClient.Builder.NO_PROXY)
-                .build();
+                .proxy(HttpClient.Builder.NO_PROXY);
+        if (ssl != null) b.sslContext(ssl);
+        this.client = b.build();
     }
 
     @Override

@@ -279,34 +279,38 @@ public final class ActivityService implements AutoCloseable {
 
     /** Cota total: mantém a atividade das execuções mais novas; das mais antigas terminadas fica só o aviso. */
     void enforceQuota() {
-        // primeira passada poupa o que tem entrega pendente à Platform; a segunda só age se a cota continuar ultrapassada
-        if (quotaPass(true)) quotaPass(false);
-    }
-
-    /** Uma passada da cota; devolve se o total continuou acima dela. */
-    private boolean quotaPass(boolean spareRetained) {
         long total = 0;
-        boolean newest = true; // a execução mais recente nunca perde o detalhe, mesmo sozinha acima da cota
-        for (ExecutionRecord r : store.all()) {
+        List<ExecutionRecord> all = store.all(); // da mais nova para a mais antiga
+        Map<ExecutionId, Long> sizes = new java.util.HashMap<>();
+        for (ExecutionRecord r : all) {
             Path f = store.dir(r.id()).resolve(ActivityLog.FILE);
-            long size;
             try {
-                size = Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS) ? Files.size(f) : 0;
+                long size = Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS) ? Files.size(f) : 0;
+                sizes.put(r.id(), size);
+                total += size;
             } catch (IOException e) {
-                continue;
+                // tamanho desconhecido: fica de fora (nem conta, nem é reduzida)
             }
-            total += size;
-            boolean spare = spareRetained && retained.test(r.id());
-            if (!newest && total > maxTotal && r.state().terminal() && !open.containsKey(r.id()) && size > 4096 && !spare) {
-                purge(r.id());
-                total -= size;
-            }
-            newest = false;
         }
-        return total > maxTotal;
+        if (total <= maxTotal) return;
+        // candidatas, das mais antigas para as mais novas; a execução mais recente nunca perde o detalhe, mesmo sozinha acima da cota
+        List<ExecutionRecord> candidates = new java.util.ArrayList<>();
+        for (int i = all.size() - 1; i >= 1; i--) {
+            ExecutionRecord r = all.get(i);
+            if (r.state().terminal() && !open.containsKey(r.id()) && sizes.getOrDefault(r.id(), 0L) > 4096) candidates.add(r);
+        }
+        // AGENT-PLATFORM-001: primeiro as que não têm entrega pendente à Platform; só se ainda faltar espaço, as pendentes
+        // (o HISTORY_PURGED diz até que sequência apagou e o transporte declara essa perda com a faixa exata)
+        for (boolean pendingToo : new boolean[] {false, true}) {
+            for (ExecutionRecord r : candidates) {
+                if (total <= maxTotal) return;
+                if (retained.test(r.id()) != pendingToo) continue;
+                if (purge(r.id())) total -= sizes.get(r.id());
+            }
+        }
     }
 
-    private void purge(ExecutionId id) {
+    private boolean purge(ExecutionId id) {
         Path dir = store.dir(id);
         Path f = dir.resolve(ActivityLog.FILE);
         try {
@@ -317,8 +321,9 @@ public final class ActivityService implements AutoCloseable {
             Path tmp = dir.resolve(ActivityLog.FILE + ".tmp");
             Files.writeString(tmp, ActivityCodec.encode(e) + "\n", StandardCharsets.UTF_8);
             Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            return true;
         } catch (IOException | RuntimeException ex) {
-            // fica para a próxima verificação
+            return false; // fica para a próxima verificação
         }
     }
 

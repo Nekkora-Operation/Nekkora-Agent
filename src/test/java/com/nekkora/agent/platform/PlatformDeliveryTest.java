@@ -415,6 +415,33 @@ class PlatformDeliveryTest {
     }
 
     @Test
+    @DisplayName("D13: a cota local apagou eventos sem ACK: a faixa exata (até purged_until_sequence) é declarada, nunca escondida")
+    void localPurgeIsDeclaredWithTheExactRange() throws Exception {
+        Lab lab = ready();
+        ExecutionId id = lab.execution(ExecutionState.SUCCEEDED, lab.clock.instant());
+        lab.events(id, 1, 4);
+        lab.link(id, authorization(lab));
+        lab.tick(1);
+        assertEquals(4, lab.svc.delivery(id).settledThrough());
+        lab.events(id, 5, 10);
+        // a retenção local troca o arquivo por um único HISTORY_PURGED (como ActivityService.purge grava)
+        String purged = com.nekkora.agent.obs.ActivityCodec.encode(com.nekkora.agent.obs.ActivityEvent.of(id.value(), lab.clock.instant(),
+                com.nekkora.agent.obs.ActivityEvent.Source.COLLECTOR, "HISTORY_PURGED", com.nekkora.agent.obs.ActivityEvent.Level.INFO,
+                com.nekkora.agent.obs.ActivityEvent.Category.TELEMETRY).error(ErrorCode.OBS_HISTORY_PURGED.code()).count("purged_until_sequence", 10).build()
+                .withSequence(11));
+        Files.writeString(lab.activity(id), purged + "\n");
+        lab.settle();
+        FakeGateway.Run run = lab.gw.run(id.value());
+        assertEquals(1, run.declared.size());
+        assertEquals(5, run.declared.get(0)[0]);
+        assertEquals(10, run.declared.get(0)[1]);
+        assertEquals(4, run.stored, "o apagado nunca conta como recebido");
+        assertEquals(11, run.settled);
+        assertEquals(DeliveryView.State.DELIVERED, lab.svc.delivery(id).state());
+        assertEquals(6, lab.svc.delivery(id).declared());
+    }
+
+    @Test
     @DisplayName("D12: o progresso que não pode ser gravado não conta: nada é dado por entregue e o reenvio é seguro")
     void progressWriteFailureDoesNotAdvance() throws Exception {
         Lab lab = ready();
