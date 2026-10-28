@@ -24,6 +24,10 @@ import org.junit.jupiter.api.Test;
  * ({@link ArchitectureTest#noNetworkOrShellUsageInProductionCode}) procurava o texto {@code java.net.Socket} e deixava
  * passar {@code ServerSocket}, {@code ServerSocketChannel}, {@code SocketChannel}, {@code DatagramSocket} e
  * {@code UnixDomainSocketAddress} (ISO-02 prova isso); este fecha as lacunas.
+ * <p>
+ * AGENT-PLATFORM-001: o transporte para a Platform ({@code com.nekkora.agent.platform}) passa a SE CONECTAR, e só ele, só
+ * pelo cliente HTTPS do JDK ({@code java.net.http}). Nada escuta: nem o transporte, nem nenhum outro código. Todas as demais
+ * formas continuam proibidas também no transporte (socket bruto, UDS, pipe, servidor HTTP, RMI, JMX).
  */
 class NetworkIsolationTest {
     static final Path BASE = Path.of(System.getProperty("agent.basedir", "."));
@@ -58,18 +62,21 @@ class NetworkIsolationTest {
 
     /** Módulos que dariam porta de depuração, JMX, RMI, HTTP ou JNDI à imagem empacotada. */
     static final Set<String> FORBIDDEN_MODULES = Set.of("jdk.jdwp.agent", "jdk.management.agent", "java.management.rmi", "java.rmi", "jdk.httpserver",
-            "java.net.http", "java.naming", "jdk.naming.rmi", "jdk.net", "jdk.sctp");
+            "java.naming", "jdk.naming.rmi", "jdk.net", "jdk.sctp");
 
     static List<String> scan(String name, String text) {
         List<String> out = new ArrayList<>();
+        boolean transport = name.replace('\\', '/').startsWith("platform/");
         for (Map.Entry<String, String> e : FORBIDDEN.entrySet()) {
+            // só o cliente HTTPS do JDK, só no transporte (ver ArchitectureTest.networkIsRefusedOutsideTheTransport)
+            if (transport && e.getKey().equals("java.net.http")) continue;
             if (text.contains(e.getKey())) out.add(name + ": " + e.getValue() + " (" + e.getKey() + ")");
         }
         return out;
     }
 
     @Test
-    @DisplayName("ISO-01: nenhum código de produção escuta ou se conecta (TCP, UDP, loopback, Unix Domain Socket, pipe, RMI, JMX, HTTP)")
+    @DisplayName("ISO-01: nenhum código de produção escuta; só o transporte se conecta, e só por HTTPS (TCP, UDP, loopback, UDS, pipe, RMI, JMX, HTTP)")
     void productionCodeHasNoChannel() throws IOException {
         List<String> violations = new ArrayList<>();
         int files = 0;
@@ -105,6 +112,11 @@ class NetworkIsolationTest {
         // só a escuta TCP com InetAddress era pega; UDS (escuta e conexão), ServerSocket clássico, UDP, pipe, curinga, JMX e servidor HTTP passavam
         assertEquals(8, missedByOld, "lacunas do guarda antigo documentadas");
         assertTrue(scan("ok", "Files.readString(path); ProcessHandle.current().pid();").isEmpty(), "sem falso positivo no código comum");
+        // AGENT-PLATFORM-001: o cliente HTTPS é recusado fora do transporte, e o transporte continua sem escuta nem socket bruto
+        assertFalse(scan("exec/X.java", "java.net.http.HttpClient.newHttpClient()").isEmpty(), "cliente HTTP fora do transporte");
+        assertTrue(scan("platform/X.java", "java.net.http.HttpClient.newHttpClient()").isEmpty(), "cliente HTTPS no transporte");
+        assertFalse(scan("platform/X.java", "var s = ServerSocketChannel.open();").isEmpty(), "escuta no transporte");
+        assertFalse(scan("platform/X.java", "import com.sun.net.httpserver.HttpServer;").isEmpty(), "servidor HTTP no transporte");
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.exec.SessionProbe;
 import com.nekkora.agent.obs.ActivityService;
 import com.nekkora.agent.os.ShortcutLauncher;
+import com.nekkora.agent.platform.PlatformService;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.storage.AgentDataDir;
 import com.nekkora.agent.storage.AtomicWriter;
@@ -53,13 +54,26 @@ public final class AgentBootstrap {
             ShortcutLauncher launcher,
             ShortcutPolicy.FileProbe probe,
             boolean windows,
-            AtomicWriter writer) {
+            AtomicWriter writer,
+            PlatformFactory platform) {
+
+        public Environment(AgentDataDir.Location location, Map<String, String> env, Clock clock, Optional<Instant> processStart, ShortcutLauncher launcher,
+                           ShortcutPolicy.FileProbe probe, boolean windows, AtomicWriter writer) {
+            this(location, env, clock, processStart, launcher, probe, windows, writer, PlatformService::system);
+        }
 
         public static Environment system() {
             return new Environment(AgentDataDir.locateCurrent(), System.getenv(), Clock.systemUTC(),
                     ProcessHandle.current().info().startInstant(), ShortcutLauncher.system(), ShortcutPolicy.FileProbe.DEFAULT,
-                    ShortcutPolicy.isWindows(), AtomicWriter.DEFAULT);
+                    ShortcutPolicy.isWindows(), AtomicWriter.DEFAULT, PlatformService::system);
         }
+    }
+
+    /** Como o transporte é criado (os testes trocam o HTTPS e a guarda de segredos). */
+    @FunctionalInterface
+    public interface PlatformFactory {
+        PlatformService create(java.nio.file.Path dir, java.util.function.Supplier<String> configuredUrl, RunStore runs, PlatformService.ActivityAccess activity,
+                               boolean windows, AtomicWriter writer, Clock clock, String agentVersion);
     }
 
     private AgentBootstrap() {}
@@ -155,14 +169,31 @@ public final class AgentBootstrap {
             }
         });
         int reconciled = execution.reconcile();
+        // AGENT-PLATFORM-001: transporte para a Platform. Só LÊ os fatos gravados (estado.json e atividade.jsonl) e grava o
+        // próprio progresso em <dados>/plataforma; não chama o executor nem é chamado por ele. A execução local não depende dele
+        PlatformService platform = e.platform().create(dir.root().resolve("plataforma"), () -> config.current().platformUrl(), runs,
+                activity::durableThrough, e.windows(), e.writer(), e.clock(), agentVersion(build));
+        platform.diagnostics(new PlatformLog(log));
+        runs.retention(platform::retains);
+        activity.retention(platform::retains);
+        platform.load();
         activity.start(); // retoma a coleta pendente (inclusive da execução adotada) a partir das posições gravadas
+        platform.start();
         if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
                 Field.of("adopted", execution.running()));
 
         // a abertura do arquivo de log é assíncrona: espera o resultado para a primeira tela já mostrar o estado real
         log.flush(1000);
         return new Ready(new AgentContext(build, dir, lock, log, journal, config, machine, options, e.clock(),
-                e.processStart(), e.launcher(), e.probe(), e.windows(), execution, activity));
+                e.processStart(), e.launcher(), e.probe(), e.windows(), execution, activity, platform));
+    }
+
+    /** {@code versão+commit} no formato que a Platform aceita ({@code [0-9A-Za-z.+-]{1,40}}), só informativo. */
+    static String agentVersion(BuildInfo b) {
+        String v = BuildInfo.UNKNOWN.equals(b.commitShort()) ? b.version() : b.version() + "+" + b.commitShort();
+        v = v.replaceAll("[^0-9A-Za-z.+-]", "");
+        if (v.isEmpty()) v = "desconhecida";
+        return v.length() > 40 ? v.substring(0, 40) : v;
     }
 
     private static String shortHash(String h) {

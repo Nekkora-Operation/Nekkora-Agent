@@ -20,6 +20,8 @@
     <!-- Mesma versão do Studio no commit fixado (o POM pai do Studio a gerencia; aqui só a tornamos explícita). -->
     <flatlaf.version>3.7.2</flatlaf.version>
     <junit.version>5.11.4</junit.version>
+    <!-- AGENT-PLATFORM-001: DPAPI do Windows para o segredo da máquina (só no módulo de transporte). -->
+    <jna.version>5.17.0</jna.version>
     <!-- Mesma versão usada nos testes da Extensão. -->
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <agent.main>com.nekkora.agent.AgentMain</agent.main>
@@ -43,6 +45,11 @@
       <groupId>com.formdev</groupId>
       <artifactId>flatlaf</artifactId>
       <version>${flatlaf.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna-platform</artifactId>
+      <version>${jna.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

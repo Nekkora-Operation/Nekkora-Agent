@@ -590,6 +590,11 @@ final class ActivityLog {
         return events.size();
     }
 
+    /** Maior sequência com gravação SINCRONIZADA confirmada no disco (o que já sobrevive a uma queda do sistema). */
+    synchronized long syncedSequence() {
+        return syncedSequence;
+    }
+
     synchronized long bytes() {
         return bytes;
     }

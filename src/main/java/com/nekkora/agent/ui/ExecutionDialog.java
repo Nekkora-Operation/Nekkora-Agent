@@ -6,6 +6,8 @@ import com.nekkora.agent.exec.ExecutionPackage;
 import com.nekkora.agent.exec.ExecutionRecord;
 import com.nekkora.agent.exec.ExecutionSetup;
 import com.nekkora.agent.exec.ExecutionState;
+import com.nekkora.agent.platform.DeliveryView;
+import com.nekkora.agent.platform.PlatformService;
 import com.nekkora.tokens.Spacing;
 import com.nekkora.ui.button.NekkoraButton;
 import com.nekkora.ui.container.NekkoraCard;
@@ -17,6 +19,7 @@ import com.nekkora.ui.data.NekkoraKeyValueView;
 import com.nekkora.ui.data.NekkoraStatusBadge;
 import com.nekkora.ui.feedback.NekkoraInlineAlert;
 import com.nekkora.ui.icon.IconName;
+import com.nekkora.ui.input.NekkoraComboBox;
 import com.nekkora.ui.navigation.NekkoraTabs;
 import com.nekkora.ui.typography.NekkoraParagraph;
 import com.nekkora.ui.typography.TextTone;
@@ -46,7 +49,24 @@ final class ExecutionDialog extends FittedDialog {
         void start();
 
         void cancelRun();
+
+        /** AGENT-PLATFORM-001: autorização da Platform escolhida para a próxima execução ({@code null} = só local). */
+        default void selectAuthorization(java.util.UUID authorizationId) {}
     }
+
+    /**
+     * AGENT-PLATFORM-001: o que a tela mostra do canal. {@code choices}: autorizações guardadas que citam a impressão do
+     * pacote escolhido; {@code selected}: a escolhida ({@code null} = só local); {@code delivery}: envio da execução
+     * mostrada, separado do desfecho dela.
+     */
+    record PlatformRow(boolean paired, List<PlatformService.AuthorizationChoice> choices, java.util.UUID selected, DeliveryView delivery) {
+        static final PlatformRow NONE = new PlatformRow(false, List.of(), null, DeliveryView.notLinked());
+    }
+
+    /** Item da lista de registro: uma autorização ou "só local". */
+    record Choice(java.util.UUID authorizationId, String label, boolean usable) {}
+
+    static final Choice LOCAL_ONLY = new Choice(null, "Não registrar: execução só local", true);
 
     static final String TITLE = "Execução local";
 
@@ -63,11 +83,22 @@ final class ExecutionDialog extends FittedDialog {
 
     private final ActivityPanel activity;
     private final NekkoraTabs tabs = new NekkoraTabs();
+    private final NekkoraComboBox<Choice> registration = new NekkoraComboBox<>();
+    private List<Choice> shownChoices = List.of();
+    private boolean updatingChoices;
+    private PlatformRow platformRow = PlatformRow.NONE;
 
     ExecutionDialog(Component parent, Actions actions, ActivityPanel.Data activityData) {
         super(parent, TITLE);
-        setDescription("Executa nesta máquina, na sua sessão, uma automação local aprovada por você. Nada começa sozinho e "
-                + "a Platform não participa.");
+        setDescription("Executa nesta máquina, na sua sessão, uma automação local aprovada por você. Nada começa sozinho. Com esta "
+                + "máquina pareada e uma autorização da Platform para o pacote, a execução pode ser registrada nela; a execução não depende da Platform.");
+        registration.setLabelProvider(Choice::label);
+        registration.getAccessibleContext().setAccessibleName("Registro na Platform");
+        registration.addActionListener(e -> {
+            if (updatingChoices) return;
+            Choice c = registration.getSelectedValue();
+            actions.selectAuthorization(c == null || !c.usable() ? null : c.authorizationId());
+        });
         setDialogSize(Size.LARGE);
         pkg.addActionListener(e -> actions.choosePackage());
         approve.addActionListener(e -> actions.approve());
@@ -126,6 +157,11 @@ final class ExecutionDialog extends FittedDialog {
 
     /** Redesenha com as escolhas atuais e a execução ativa ou a última. {@code busy}: uma ação está em andamento. */
     void render(ExecutionSetup s, Optional<ExecutionController.Snapshot> snap, boolean busy) {
+        render(s, snap, busy, platformRow);
+    }
+
+    void render(ExecutionSetup s, Optional<ExecutionController.Snapshot> snap, boolean busy, PlatformRow pr) {
+        this.platformRow = pr == null ? PlatformRow.NONE : pr;
         boolean running = snap.map(ExecutionController.Snapshot::running).orElse(false);
         activity.snapshot(snap);
         NekkoraKeyValueView kv = new NekkoraKeyValueView();
@@ -152,6 +188,11 @@ final class ExecutionDialog extends FittedDialog {
         }
         if (p != null && p.needsInput()) kv.add("Entrada", ExecutionSetup.shortName(s.input()));
         kv.add("Pasta de saída", ExecutionSetup.shortName(s.output()));
+        if (p != null && platformRow.paired()) {
+            updateChoices(platformRow);
+            if (platformRow.choices().isEmpty()) kv.add("Platform", "Sem autorização da Platform para este pacote: execução só local");
+            else kv.add("Platform", registration);
+        }
         NekkoraStack setup = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
         setup.add(kv);
         List<ErrorCode> missing = s.missing();
@@ -182,6 +223,12 @@ final class ExecutionDialog extends FittedDialog {
             rv.add("Pedido por", ExecutionSetup.originLabel(r.origin()));
             if (r.recovered()) rv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
             if (!r.counts().isEmpty()) rv.add("Resultado publicado", countsLabel(r.counts()));
+            // AGENT-PLATFORM-001: o envio é outra dimensão (automação concluída ≠ envio concluído)
+            if (platformRow.delivery().state() != DeliveryView.State.NOT_LINKED || platformRow.paired()) {
+                NekkoraStatusBadge d = new NekkoraStatusBadge(PlatformText.deliveryStatus(platformRow.delivery()), PlatformText.delivery(platformRow.delivery()));
+                d.getAccessibleContext().setAccessibleName("Envio à Platform: " + PlatformText.delivery(platformRow.delivery()));
+                rv.add("Envio à Platform", d);
+            }
             run.add(rv);
             if (r.progress() != null) {
                 // A03: parcial, separado do desfecho; nunca apresentado como conclusão
@@ -203,11 +250,35 @@ final class ExecutionDialog extends FittedDialog {
         python.setEnabled(idle);
         input.setEnabled(idle && p != null && p.needsInput());
         output.setEnabled(idle);
+        registration.setEnabled(idle);
         start.setEnabled(idle && s.canStart());
         cancelRun.setEnabled(running && !busy);
         start.getAccessibleContext().setAccessibleDescription(s.canStart() ? "Inicia a execução supervisionada" : "Indisponível: faltam escolhas");
         body.revalidate();
         body.repaint();
+    }
+
+    /** Troca os itens da lista só quando mudam (a tela redesenha a cada mudança da execução). */
+    private void updateChoices(PlatformRow pr) {
+        List<Choice> next = new java.util.ArrayList<>();
+        next.add(LOCAL_ONLY);
+        for (PlatformService.AuthorizationChoice c : pr.choices()) next.add(new Choice(c.authorizationId(), PlatformText.choice(c), c.usable()));
+        Choice want = next.stream().filter(c -> c.authorizationId() != null && c.authorizationId().equals(pr.selected())).findFirst().orElse(LOCAL_ONLY);
+        updatingChoices = true;
+        try {
+            if (!next.equals(shownChoices)) {
+                registration.removeAllItems();
+                for (Choice c : next) registration.addItem(c);
+                shownChoices = List.copyOf(next);
+            }
+            if (!want.equals(registration.getSelectedValue())) registration.setSelectedItem(want);
+        } finally {
+            updatingChoices = false;
+        }
+    }
+
+    NekkoraComboBox<Choice> registrationField() {
+        return registration;
     }
 
     /** Contagens do resultado final publicado pelo processo ("SUCCEEDED 11 · FAILED_TECHNICAL 1"). */

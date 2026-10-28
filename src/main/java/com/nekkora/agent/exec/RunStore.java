@@ -31,8 +31,12 @@ public final class RunStore {
     /** Última linha do {@code eventos.jsonl} quando o limite é atingido (OBS-001: a perda deixa de ser silenciosa). */
     public static final String LIMIT_MARKER = "EVENTS_LIMIT_REACHED";
 
+    /** AGENT-PLATFORM-001: execuções terminadas com entrega pendente guardadas além de {@link #KEEP}, no máximo. */
+    public static final int KEEP_PENDING_DELIVERY = 200;
+
     private final Path root;
     private final AtomicWriter writer;
+    private volatile java.util.function.Predicate<ExecutionId> retained = id -> false;
 
     public RunStore(Path root, AtomicWriter writer) {
         this.root = root;
@@ -154,10 +158,25 @@ public final class RunStore {
         return new Listing(out, unreadable, failed);
     }
 
-    /** Apaga as execuções terminadas mais antigas além de {@link #KEEP} (só pastas do Agent: cópia do pacote e registro). */
+    /**
+     * AGENT-PLATFORM-001: execuções com entrega pendente à Platform. A limpeza não as apaga (até
+     * {@link #KEEP_PENDING_DELIVERY} além das {@link #KEEP}): nada é descartado antes da confirmação.
+     */
+    public void retention(java.util.function.Predicate<ExecutionId> pendingDelivery) {
+        this.retained = pendingDelivery == null ? id -> false : pendingDelivery;
+    }
+
+    /**
+     * Apaga as execuções terminadas mais antigas além de {@link #KEEP} (só pastas do Agent: cópia do pacote e registro). As
+     * que têm entrega pendente à Platform ficam, até o limite {@link #KEEP_PENDING_DELIVERY}.
+     */
     public void prune() {
         List<ExecutionRecord> done = all().stream().filter(r -> r.state().terminal()).toList();
-        for (int i = KEEP; i < done.size(); i++) deleteTree(dir(done.get(i).id()));
+        int spared = 0;
+        for (int i = KEEP; i < done.size(); i++) {
+            if (retained.test(done.get(i).id()) && spared++ < KEEP_PENDING_DELIVERY) continue;
+            deleteTree(dir(done.get(i).id()));
+        }
     }
 
     static Optional<ExecutionRecord> load(Path f) {

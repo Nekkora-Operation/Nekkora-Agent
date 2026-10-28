@@ -6,6 +6,7 @@ licenças estão na pasta `legal\` do pacote (e, para o runtime Java, em `runtim
 | Componente | Versão | Origem | Licença | Texto no pacote |
 |---|---|---|---|---|
 | FlatLaf | 3.7.2 | `com.formdev:flatlaf` (Maven Central) | Apache License 2.0 | `legal\FlatLaf-LICENSE-Apache-2.0.txt` |
+| JNA e JNA Platform | 5.17.0 | `net.java.dev.jna:jna` e `net.java.dev.jna:jna-platform` (Maven Central) | Apache License 2.0 (oferecida também sob LGPL 2.1; o Agent a usa sob a Apache 2.0) | `legal\JNA-LICENSE-Apache-2.0.txt` |
 | Fonte Inter | a da biblioteca Nekkora Swing UI | dentro de `nekkora-swing-ui` | SIL Open Font License 1.1 | `legal\OFL-Inter.txt` |
 | Fonte Sora | a da biblioteca Nekkora Swing UI | dentro de `nekkora-swing-ui` | SIL Open Font License 1.1 | `legal\OFL-Sora.txt` |
 | Fonte JetBrains Mono | a da biblioteca Nekkora Swing UI | dentro de `nekkora-swing-ui` | SIL Open Font License 1.1 | `legal\OFL-JetBrainsMono.txt` |

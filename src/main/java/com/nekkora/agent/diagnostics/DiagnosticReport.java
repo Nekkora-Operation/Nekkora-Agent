@@ -32,6 +32,8 @@ public final class DiagnosticReport {
             "Versão do Java, nome, versão e arquitetura do sistema operacional",
             "Situação da bandeja, da configuração, dos logs, da trava e do diretório de dados (somente estados)",
             "Estados de integração desta versão e situação dos atalhos (sem os destinos)",
+            "Platform: situação do vínculo e da comunicação, identificadores lógicos do Agent e do Worker, contagens de envios e o "
+                    + "último código de problema (sem credencial, código de pareamento, endereço completo ou conteúdo de execução)",
             "Códigos de erro desta sessão, com contagem e horário",
             "Início da sessão, duração e tempo de inicialização",
             "Execução local: estado e código da última, tipo do pacote, tempos e contagens (sem nome do pacote, caminhos, entradas "
@@ -57,13 +59,23 @@ public final class DiagnosticReport {
             List<ErrorJournal.Entry> errors,
             Instant sessionStart,
             Long startupMillis,
-            ExecFacts execution) {
+            ExecFacts execution,
+            PlatformFacts platformLink) {
 
         public Facts {
             Objects.requireNonNull(build);
             Objects.requireNonNull(machineName);
             errors = List.copyOf(errors);
             execution = execution == null ? ExecFacts.NONE : execution;
+            platformLink = platformLink == null ? PlatformFacts.NONE : platformLink;
+        }
+
+        /** Sem fatos do canal com a Platform (compatível com a DESKTOP-001). */
+        public Facts(BuildInfo build, String javaVersion, String javaVendor, String osName, String osVersion, String osArch, Optional<String> machineName,
+                TrayState tray, ConfigStore.State config, AgentLog.State logs, AgentDataDir.Kind dataDir, boolean lockHeld, ShortcutState studio,
+                ShortcutState platform, List<ErrorJournal.Entry> errors, Instant sessionStart, Long startupMillis, ExecFacts execution) {
+            this(build, javaVersion, javaVendor, osName, osVersion, osArch, machineName, tray, config, logs, dataDir, lockHeld, studio, platform, errors,
+                    sessionStart, startupMillis, execution, PlatformFacts.NONE);
         }
 
         /** Sem dados de execução local (compatível com a AGENT-001). */
@@ -83,6 +95,15 @@ public final class DiagnosticReport {
     public record ExecFacts(String state, String code, String packageKind, boolean running, Long elapsedMillis, int suspensions, int locks,
                             boolean adopted, int records, String session) {
         public static final ExecFacts NONE = new ExecFacts("NENHUMA", null, null, false, null, 0, 0, false, 0, "NAO_VERIFICADA");
+    }
+
+    /**
+     * AGENT-PLATFORM-001 — canal com a Platform, só enumerados, números, identificadores lógicos (não são segredo) e o código do
+     * último problema. Nunca credencial, código de pareamento, endereço completo nem conteúdo de execução.
+     */
+    public record PlatformFacts(String link, String connectivity, String agentId, String workerId, int pendingRuns, long pendingEvents, int blockedRuns,
+                                int incompleteRuns, int authorizations, boolean secretStore, String problem) {
+        public static final PlatformFacts NONE = new PlatformFacts("NAO_INFORMADO", "NAO_INFORMADO", null, null, 0, 0, 0, 0, 0, false, null);
     }
 
     private DiagnosticReport() {}
@@ -129,6 +150,20 @@ public final class DiagnosticReport {
             kv(j, 2, key(all[i]), q(all[i].diagnosticValue()), i < all.length - 1);
         }
         close(j, 1, true);
+        PlatformFacts pf = f.platformLink();
+        open(j, 1, "canalPlatform");
+        kv(j, 2, "vinculo", q(SafeText.token(pf.link(), 30)), true);
+        kv(j, 2, "comunicacao", q(SafeText.token(pf.connectivity(), 30)), true);
+        kv(j, 2, "agent", pf.agentId() == null ? "null" : q(SafeText.token(pf.agentId(), 36)), true);
+        kv(j, 2, "worker", pf.workerId() == null ? "null" : q(SafeText.token(pf.workerId(), 36)), true);
+        kv(j, 2, "enviosPendentes", String.valueOf(pf.pendingRuns()), true);
+        kv(j, 2, "eventosPendentes", String.valueOf(pf.pendingEvents()), true);
+        kv(j, 2, "enviosParados", String.valueOf(pf.blockedRuns()), true);
+        kv(j, 2, "historicoIncompleto", String.valueOf(pf.incompleteRuns()), true);
+        kv(j, 2, "autorizacoesGuardadas", String.valueOf(pf.authorizations()), true);
+        kv(j, 2, "protecaoDoSistema", String.valueOf(pf.secretStore()), true);
+        kv(j, 2, "ultimoProblema", pf.problem() == null ? "null" : q(SafeText.token(pf.problem(), 20)), false);
+        close(j, 1, true);
         open(j, 1, "atalhos");
         kv(j, 2, "studio", q(f.studio().diagnosticValue()), true);
         kv(j, 2, "platform", q(f.platform().diagnosticValue()), false);
@@ -167,9 +202,6 @@ public final class DiagnosticReport {
 
     private static String key(IntegrationStatus s) {
         return switch (s) {
-            case PAIRING -> "vinculo";
-            case LINK -> "agentWorkerOrganizacao";
-            case CONNECTION -> "conexao";
             case LICENSE -> "licenca";
             case EXECUTION -> "execucao";
         };

@@ -11,6 +11,7 @@ import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.obs.ActivityService;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
+import com.nekkora.agent.platform.PlatformService;
 import com.nekkora.agent.storage.AgentConfig;
 import com.nekkora.agent.storage.AgentDataDir;
 import com.nekkora.agent.storage.ConfigStore;
@@ -43,13 +44,15 @@ public final class AgentContext implements AutoCloseable {
     private final boolean windows;
     private final ExecutionController execution;
     private final ActivityService activity;
+    private final PlatformService platform;
     private volatile TrayState tray = TrayState.PENDING;
     private volatile Long startupMillis;
     private boolean closed;
 
     AgentContext(BuildInfo build, AgentDataDir dataDir, InstanceLock lock, AgentLog log, ErrorJournal journal, ConfigStore config,
             Optional<String> machineName, AgentOptions options, Clock clock, Optional<Instant> processStart,
-            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows, ExecutionController execution, ActivityService activity) {
+            ShortcutLauncher launcher, ShortcutPolicy.FileProbe probe, boolean windows, ExecutionController execution, ActivityService activity,
+            PlatformService platform) {
         this.build = build;
         this.dataDir = dataDir;
         this.lock = lock;
@@ -66,6 +69,12 @@ public final class AgentContext implements AutoCloseable {
         this.windows = windows;
         this.execution = execution;
         this.activity = activity;
+        this.platform = platform;
+    }
+
+    /** Transporte para a Platform (AGENT-PLATFORM-001): só leitura dos fatos locais; a tela lê o retrato dele. */
+    public PlatformService platform() {
+        return platform;
     }
 
     /** Atividade local das execuções (OBS-001): linha do tempo e histórico, só leitura. */
@@ -167,7 +176,15 @@ public final class AgentContext implements AutoCloseable {
                 System.getProperty("java.version", ""), System.getProperty("java.vendor", ""),
                 System.getProperty("os.name", ""), System.getProperty("os.version", ""), System.getProperty("os.arch", ""),
                 machineName, tray, config.state(), log.state(), dataDir.kind(), lock.isHeld(),
-                studioView(c).state(), platformView(c).state(), journal.snapshot(), sessionStart, startupMillis, executionFacts());
+                studioView(c).state(), platformView(c).state(), journal.snapshot(), sessionStart, startupMillis, executionFacts(), platformFacts());
+    }
+
+    /** Fatos do canal com a Platform para o diagnóstico (lista fechada, sem segredo nem endereço). */
+    private DiagnosticReport.PlatformFacts platformFacts() {
+        com.nekkora.agent.platform.PlatformStatus s = platform.status();
+        return new DiagnosticReport.PlatformFacts(s.link().name(), s.paired() ? s.connectivity().name() : "SEM_VINCULO", s.agentId(), s.workerId(), s.pendingRuns(),
+                s.pendingEvents(), s.blocked().size(), s.incompleteRuns(), s.authorizations(), s.secretStoreAvailable(),
+                s.problem() == null ? null : s.problem().code());
     }
 
     /** Fatos da execução local para o diagnóstico (lista fechada; fora da EDT: consulta a sessão). */
@@ -189,6 +206,7 @@ public final class AgentContext implements AutoCloseable {
         closed = true;
         execution.close(); // uma execução ainda ativa é cancelada (só a árvore possuída) antes de liberar a trava
         activity.close(); // o que faltar ler é retomado na próxima abertura, a partir das posições gravadas
+        platform.close(); // o progresso já está no disco; a entrega continua na próxima abertura de settledThrough + 1
         log.close();
         lock.close();
     }

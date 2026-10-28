@@ -30,7 +30,10 @@ class DiagnosticReportTest {
             "ambiente", "java", "fornecedorJava", "sistema", "versaoSistema", "arquitetura",
             "maquina", "nomeIncluido", "nome", "nomeDisponivel",
             "estado", "bandeja", "configuracao", "logs", "diretorioDados", "instanciaUnica",
-            "integracao", "vinculo", "agentWorkerOrganizacao", "conexao", "licenca", "execucao",
+            "integracao", "licenca", "execucao",
+            // AGENT-PLATFORM-001: canal com a Platform (sem credencial, código, endereço nem conteúdo)
+            "canalPlatform", "vinculo", "comunicacao", "agent", "worker", "enviosPendentes", "eventosPendentes", "enviosParados", "historicoIncompleto",
+            "autorizacoesGuardadas", "protecaoDoSistema", "ultimoProblema",
             "atalhos", "studio", "platform",
             "erros", "codigo", "ocorrencias", "ultima",
             "sessao", "inicio", "duracaoSegundos", "inicializacaoMs",

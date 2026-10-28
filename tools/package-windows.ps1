@@ -28,7 +28,9 @@ Set-Location $root
 #  - jdk.unsupported: ExtendedOpenOption.NOSHARE_DELETE (trava) e FlatLaf
 #  - java.prefs: Preferences (o ThemeManager a usa; o Agent a redireciona para memória)
 #  - jdk.accessibility: Java Access Bridge (leitores de tela no Windows)
-$Modules = @('java.base', 'java.desktop', 'java.prefs', 'java.logging', 'jdk.unsupported', 'jdk.accessibility')
+#  - java.net.http: cliente HTTPS do canal da máquina (AGENT-PLATFORM-001; só o pacote com.nekkora.agent.platform o usa)
+#  - jdk.crypto.ec: curvas elípticas do TLS (ECDHE/X25519 e certificados EC) no JDK 21 (carregado como provedor)
+$Modules = @('java.base', 'java.desktop', 'java.prefs', 'java.logging', 'jdk.unsupported', 'jdk.accessibility', 'java.net.http', 'jdk.crypto.ec')
 
 function Invoke-Checked([string]$what, [scriptblock]$block) {
     & $block
@@ -109,6 +111,8 @@ function Export-Entry([string]$jar, [string]$entry, [string]$target) {
 $flat = Get-ChildItem "$pkg\input\lib\flatlaf-*.jar" | Select-Object -First 1
 $ui = Get-ChildItem "$pkg\input\lib\nekkora-swing-ui-*.jar" | Select-Object -First 1
 Export-Entry $flat.FullName 'META-INF/LICENSE' (Join-Path $legal 'FlatLaf-LICENSE-Apache-2.0.txt')
+$jna = Get-ChildItem "$pkg\input\lib\jna-[0-9]*.jar" | Select-Object -First 1
+Export-Entry $jna.FullName 'META-INF/AL2.0' (Join-Path $legal 'JNA-LICENSE-Apache-2.0.txt')
 foreach ($f in 'Inter', 'JetBrainsMono', 'Sora') { Export-Entry $ui.FullName "com/nekkora/ui/fonts/OFL-$f.txt" (Join-Path $legal "OFL-$f.txt") }
 # o runtime já traz runtime\legal\ (OpenJDK, GPLv2 com Classpath Exception) gerado pelo jlink
 

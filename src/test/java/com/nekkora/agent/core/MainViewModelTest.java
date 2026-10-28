@@ -35,10 +35,10 @@ class MainViewModelTest {
 
     @Test
     void integrationStatesAreTheFixedNotAvailableTexts() {
+        // AGENT-PLATFORM-001: vínculo, comunicação e envios são dinâmicos (card "Platform"); fixos ficam licença e execução remota
         MainViewModel vm = model(Optional.of("LAB-01"), TrayState.ACTIVE, null);
-        assertEquals(List.of("Não pareado", "Não vinculado", "Sem conexão com a Platform", "Não verificada", "Indisponível nesta versão"),
-                vm.integration().stream().map(IntegrationStatus::value).toList());
-        assertTrue(IntegrationStatus.EXPLANATION.contains("ainda não está disponível nesta versão"));
+        assertEquals(List.of("Não verificada", "Indisponível nesta versão"), vm.integration().stream().map(IntegrationStatus::value).toList());
+        assertTrue(IntegrationStatus.EXPLANATION.contains("a Platform não envia execuções a esta máquina nesta versão"));
     }
 
     @Test

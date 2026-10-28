@@ -2,6 +2,7 @@ package com.nekkora.agent.ui;
 
 import com.nekkora.agent.core.IntegrationStatus;
 import com.nekkora.agent.core.MainViewModel;
+import com.nekkora.agent.platform.PlatformStatus;
 import com.nekkora.tokens.Spacing;
 import com.nekkora.ui.NekkoraFrame;
 import com.nekkora.ui.brand.NekkoraLogo;
@@ -55,6 +56,15 @@ final class MainWindow extends NekkoraFrame {
         void execution();
 
         void exit();
+
+        /** AGENT-PLATFORM-001: controles mínimos do canal com a Platform. */
+        default void pair() {}
+
+        default void rotate() {}
+
+        default void removeLink() {}
+
+        default void blocked() {}
     }
 
     static final int WIDTH = 540;
@@ -65,6 +75,12 @@ final class MainWindow extends NekkoraFrame {
     private final NekkoraCaption versionCaption = new NekkoraCaption("", TextTone.SECONDARY);
     private final NekkoraCard statusCard = new NekkoraCard("Esta máquina", null);
     private final NekkoraCard shortcutsCard = new NekkoraCard("Atalhos", null);
+    private final NekkoraCard platformCard = new NekkoraCard("Platform", null);
+    private final NekkoraButton pair = NekkoraButton.secondary("Parear…");
+    private final NekkoraButton rotate = NekkoraButton.ghost("Nova credencial…");
+    private final NekkoraButton removeLink = NekkoraButton.ghost("Remover vínculo local…");
+    private final NekkoraButton blockedButton = NekkoraButton.secondary("Ver envios parados…");
+    private PlatformStatus platformStatus;
     private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma nesta sessão", TextTone.SECONDARY);
     private final NekkoraButton execution = NekkoraButton.secondary("Execução local…");
     private final NekkoraParagraph closeHint = new NekkoraParagraph("", TextTone.MUTED);
@@ -101,6 +117,12 @@ final class MainWindow extends NekkoraFrame {
         execution.setMnemonic(KeyEvent.VK_E);
         execution.getAccessibleContext().setAccessibleDescription("Escolher, aprovar, iniciar e acompanhar uma automação local");
         exit.addActionListener(e -> listener.exit());
+        pair.addActionListener(e -> listener.pair());
+        rotate.addActionListener(e -> listener.rotate());
+        removeLink.addActionListener(e -> listener.removeLink());
+        blockedButton.addActionListener(e -> listener.blocked());
+        pair.getAccessibleContext().setAccessibleDescription("Liga esta máquina à organização na Platform com um código de pareamento");
+        removeLink.getAccessibleContext().setAccessibleDescription("Apaga a credencial guardada nesta máquina; na Platform nada muda");
         studio.setMnemonic(KeyEvent.VK_T);
         platform.setMnemonic(KeyEvent.VK_P);
         settings.setMnemonic(KeyEvent.VK_C);
@@ -121,7 +143,9 @@ final class MainWindow extends NekkoraFrame {
 
         body.setPadding(Spacing.SPACE_7);
         // DESKTOP-001: a execução local é uma linha em "Esta máquina" e um botão nas ações (a janela continua compacta)
-        body.addAll(header, notices, statusCard, shortcutsCard, actions, closeHint);
+        // AGENT-PLATFORM-001: o canal com a Platform tem card próprio (vínculo, comunicação e envios; nunca desfecho de automação)
+        platformCard.setVisible(false);
+        body.addAll(header, notices, statusCard, platformCard, shortcutsCard, actions, closeHint);
         scroll = NekkoraScrollPane.verticalOnly(body);
         scroll.setBorder(null);
         getContentPane().add(scroll, BorderLayout.CENTER);
@@ -162,6 +186,77 @@ final class MainWindow extends NekkoraFrame {
         closeHint.setText(vm.closeHint());
         body.revalidate();
         body.repaint();
+    }
+
+    /** Card "Platform": vínculo, comunicação, envios e bloqueios (na EDT). */
+    void renderPlatform(PlatformStatus st) {
+        this.platformStatus = st;
+        NekkoraKeyValueView rows = new NekkoraKeyValueView();
+        NekkoraStatusBadge link = new NekkoraStatusBadge(PlatformText.linkStatus(st.link()), PlatformText.link(st.link()));
+        link.getAccessibleContext().setAccessibleName("Vínculo: " + PlatformText.link(st.link()));
+        rows.add("Vínculo", link);
+        if (st.host() != null) rows.add("Endereço", st.host());
+        if (st.paired()) {
+            NekkoraStatusBadge conn = new NekkoraStatusBadge(PlatformText.connectivityStatus(st), PlatformText.connectivity(st));
+            conn.getAccessibleContext().setAccessibleName("Comunicação: " + PlatformText.connectivity(st));
+            rows.add("Comunicação", conn);
+            rows.add("Identificação", PlatformText.identity(st));
+            rows.add("Envios", PlatformText.deliveries(st));
+            rows.add("Último sincronismo", PlatformText.lastSync(st));
+            if (st.incompleteRuns() > 0) rows.add("Histórico incompleto", st.incompleteRuns() + (st.incompleteRuns() == 1 ? " execução" : " execuções")
+                    + " com perda local declarada");
+        }
+        NekkoraStack content = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
+        content.add(rows);
+        if (!st.blocked().isEmpty()) {
+            content.add(new NekkoraInlineAlert(Severity.WARNING, "Envio parado", st.blocked().size() + (st.blocked().size() == 1 ? " execução precisa" : " execuções precisam")
+                    + " de decisão para continuar o envio. A automação não é afetada."));
+        } else if (st.problem() != null && st.link() != PlatformStatus.LinkState.PAIRED) {
+            content.add(new NekkoraInlineAlert(st.link() == PlatformStatus.LinkState.NOT_PAIRED ? Severity.INFO : Severity.WARNING, "Platform",
+                    PlatformText.problem(st.problem())));
+        } else if (st.problem() != null) {
+            content.add(new NekkoraParagraph(PlatformText.problem(st.problem()), TextTone.SECONDARY));
+        }
+        NekkoraStack buttons = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
+        boolean any = false;
+        if (st.link() == PlatformStatus.LinkState.NOT_PAIRED) {
+            buttons.add(pair);
+            any = true;
+        }
+        if (st.link() == PlatformStatus.LinkState.PAIRED || st.link() == PlatformStatus.LinkState.REFUSED) {
+            buttons.add(rotate);
+            any = true;
+        }
+        if (st.link() == PlatformStatus.LinkState.REFUSED || st.link() == PlatformStatus.LinkState.DESTINATION_CHANGED
+                || st.link() == PlatformStatus.LinkState.CONTRACT_REFUSED) {
+            buttons.add(removeLink);
+            any = true;
+        }
+        if (!st.blocked().isEmpty()) {
+            buttons.add(blockedButton);
+            any = true;
+        }
+        if (any) content.add(buttons);
+        platformCard.setContent(content);
+        platformCard.setVisible(true);
+        body.revalidate();
+        body.repaint();
+    }
+
+    PlatformStatus platformStatus() {
+        return platformStatus;
+    }
+
+    NekkoraButton pairButton() {
+        return pair;
+    }
+
+    NekkoraButton rotateButton() {
+        return rotate;
+    }
+
+    NekkoraButton removeLinkButton() {
+        return removeLink;
     }
 
     private static JComponent shortcutRow(NekkoraButton button, MainViewModel.Shortcut s) {

@@ -99,11 +99,11 @@ class AgentDesktopTest {
         assertTrue(b.width <= 560 && b.height <= 720, "janela compacta: " + b);
         assertEquals("Nekkora Agent", h.edt(w::getTitle));
         List<String> t = h.edt(() -> texts(w.getRootPane()));
-        for (String expected : List.of("LAB-AGENT-01", "0.1.0", "Não pareado", "Não vinculado", "Sem conexão com a Platform",
+        for (String expected : List.of("LAB-AGENT-01", "0.1.0", "Não pareado", "Parear…",
                 "Não verificada", "Indisponível nesta versão", "Execução pela Platform", "Execução local")) {
             assertTrue(t.stream().anyMatch(s -> s.contains(expected)), "falta '" + expected + "' em " + t);
         }
-        assertTrue(t.stream().anyMatch(s -> s.contains("ainda não está disponível nesta versão")));
+        assertTrue(t.stream().anyMatch(s -> s.contains("a Platform não envia execuções a esta máquina nesta versão")));
         h.settle();
         capture(w, "A02-janela-inicial");
         String log = log();

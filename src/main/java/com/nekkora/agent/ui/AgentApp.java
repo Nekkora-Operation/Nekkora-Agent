@@ -19,6 +19,9 @@ import com.nekkora.agent.exec.PythonRuntime;
 import com.nekkora.agent.os.ShortcutLauncher;
 import com.nekkora.agent.os.ShortcutPolicy;
 import com.nekkora.agent.os.TrayController;
+import com.nekkora.agent.platform.Destination;
+import com.nekkora.agent.platform.PlatformService;
+import com.nekkora.agent.platform.PlatformStatus;
 import com.nekkora.agent.storage.AgentConfig;
 import com.nekkora.agent.storage.AtomicWriter;
 import com.nekkora.agent.storage.ConfigStore;
@@ -86,6 +89,9 @@ public final class AgentApp {
     private ExecutionDialog execDialog;
     private boolean execBusy;
     private String lastFinished;
+    // AGENT-PLATFORM-001: autorização escolhida para a próxima execução (null = só local) e o último retrato desenhado
+    private java.util.UUID chosenAuthorization;
+    private PlatformStatus shownPlatform;
 
     public AgentApp(AgentContext ctx, TrayController.Port trayPort, Terminator terminator) {
         this.ctx = Objects.requireNonNull(ctx);
@@ -108,6 +114,8 @@ public final class AgentApp {
             if (execDialog != null && execDialog.isDisplayable()) execDialog.activityPanel().changed(id);
         }));
         renderExecution();
+        ctx.platform().addListener(() -> SwingUtilities.invokeLater(this::renderPlatform));
+        renderPlatform();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
         if (tray.state().code() == null) {
@@ -164,7 +172,90 @@ public final class AgentApp {
             public void exit() {
                 AgentApp.this.exit();
             }
+
+            @Override
+            public void pair() {
+                openPairing(PairingDialog.Mode.PAIR);
+            }
+
+            @Override
+            public void rotate() {
+                openPairing(PairingDialog.Mode.ROTATE);
+            }
+
+            @Override
+            public void removeLink() {
+                AgentApp.this.removeLink();
+            }
+
+            @Override
+            public void blocked() {
+                openBlocked();
+            }
         };
+    }
+
+    // ----- Platform (AGENT-PLATFORM-001) -----
+
+    /** Card "Platform" e linha de envio do diálogo de execução; redesenha só quando o retrato mudou. Na EDT. */
+    void renderPlatform() {
+        PlatformStatus st = ctx.platform().status();
+        if (st.equals(shownPlatform)) return;
+        shownPlatform = st;
+        if (window != null) window.renderPlatform(st);
+        if (execDialog != null && execDialog.isDisplayable()) renderExecution();
+    }
+
+    void openPairing(PairingDialog.Mode mode) {
+        if (exiting.get() || bringActiveDialogToFront()) return;
+        String url = ctx.config().current().platformUrl();
+        String host = mode == PairingDialog.Mode.ROTATE ? ctx.platform().status().host() : Destination.parse(url).map(Destination::host).orElse(null);
+        PairingDialog[] holder = new PairingDialog[1];
+        holder[0] = new PairingDialog(window, mode, host, ctx.platform().status().secretStoreAvailable(), code -> background(
+                () -> mode == PairingDialog.Mode.PAIR ? ctx.platform().pair(url, code) : ctx.platform().rotate(code),
+                a -> {
+                    if (holder[0].isDisplayable()) holder[0].finished(a.problem());
+                    renderPlatform();
+                }));
+        activeDialog = holder[0];
+        holder[0].showDialog();
+        activeDialog = null;
+    }
+
+    void removeLink() {
+        if (!NekkoraConfirmationDialog.confirmDanger(window, "Remover o vínculo local?", "A credencial guardada nesta máquina é apagada. Na Platform nada "
+                + "muda: a revogação do Agent é feita lá. Envios pendentes deste vínculo ficam guardados e não são enviados por um vínculo novo.",
+                "Remover vínculo")) {
+            return;
+        }
+        background(() -> ctx.platform().removeLocalLink(), a -> renderPlatform());
+    }
+
+    void openBlocked() {
+        if (exiting.get() || bringActiveDialogToFront()) return;
+        BlockedDeliveriesDialog d = new BlockedDeliveriesDialog(window, ctx.platform().status().blocked(), id -> {
+            if (!NekkoraConfirmationDialog.confirmDanger(activeDialog, "Declarar a perda?", "O número em que o envio parou passa a ser perda definitiva: "
+                    + "a Platform mostrará o histórico desta execução como incompleto. A decisão não pode ser desfeita.", "Declarar perda")) {
+                return;
+            }
+            ctx.platform().abandonBlocked(id);
+        });
+        activeDialog = d;
+        d.showDialog();
+        activeDialog = null;
+    }
+
+    /** O que o diálogo de execução mostra do canal (sem rede: cache de autorizações e progresso em memória). */
+    private ExecutionDialog.PlatformRow platformRow(java.util.Optional<ExecutionController.Snapshot> snap) {
+        PlatformStatus st = ctx.platform().status();
+        ExecutionPackage pk = setup.pkg();
+        java.util.List<PlatformService.AuthorizationChoice> choices = pk == null || !st.paired() ? java.util.List.of()
+                : ctx.platform().authorizationsFor(pk.fingerprint());
+        if (chosenAuthorization != null && choices.stream().noneMatch(c -> c.usable() && c.authorizationId().equals(chosenAuthorization))) {
+            chosenAuthorization = null;
+        }
+        return new ExecutionDialog.PlatformRow(st.paired(), choices, chosenAuthorization,
+                snap.map(x -> ctx.platform().delivery(x.record().id())).orElse(com.nekkora.agent.platform.DeliveryView.notLinked()));
     }
 
     private TrayController.Actions trayActions() {
@@ -485,16 +576,36 @@ public final class AgentApp {
             public void start() {
                 busy(() -> {
                     ExecutionSetup s = refreshedSession(setup);
+                    java.util.UUID auth = chosenAuthorization;
                     s.request(ExecutionController.DEFAULT_TIMEOUT).ifPresent(req -> {
+                        // AGENT-PLATFORM-001: a autorização escolhida é conferida e gravada ANTES do início; recusada, nada começa
+                        // (a pessoa escolhe de novo, inclusive "só local") — nunca vira execução só local sem ela saber
+                        if (auth != null && s.pkg() != null) {
+                            PlatformService.Action a = ctx.platform().prepare(auth, s.pkg().fingerprint());
+                            if (!a.accepted()) {
+                                ctx.log().warn(LogEvent.EXEC_BLOCKED, a.problem());
+                                SwingUtilities.invokeLater(() -> toast(Severity.WARNING, "Autorização da Platform não vale mais",
+                                        PlatformText.problem(a.problem()) + " Escolha outra ou “Não registrar”."));
+                                return;
+                            }
+                        }
                         try {
                             ExecutionController.Snapshot snap = ctx.execution().start(req);
                             ctx.log().info(LogEvent.EXEC_STARTED, Field.of("kind", snap.record().kind()), Field.of("pid", snap.record().owner().pid()));
+                            if (auth != null) ctx.platform().link(snap.record().id());
                         } catch (ExecRefused e) {
                             ctx.log().warn(LogEvent.EXEC_BLOCKED, e.code());
+                            if (auth != null) ctx.platform().discardIntent();
                         }
                     });
                     return s;
                 });
+            }
+
+            @Override
+            public void selectAuthorization(java.util.UUID authorizationId) {
+                chosenAuthorization = authorizationId;
+                renderExecution();
             }
 
             @Override
@@ -515,6 +626,10 @@ public final class AgentApp {
             try {
                 ExecutionPackage pk = ExecutionPackage.inspect(dir);
                 ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
+                // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
+                java.util.List<PlatformService.AuthorizationChoice> usable = ctx.platform().authorizationsFor(pk.fingerprint()).stream()
+                        .filter(PlatformService.AuthorizationChoice::usable).toList();
+                chosenAuthorization = usable.size() == 1 ? usable.get(0).authorizationId() : null;
                 return setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
@@ -590,7 +705,7 @@ public final class AgentApp {
     void renderExecution() {
         java.util.Optional<ExecutionController.Snapshot> snap = ctx.execution().current();
         if (window != null) window.renderExecution(executionLine(snap));
-        if (execDialog != null && execDialog.isDisplayable()) execDialog.render(setup, snap, execBusy);
+        if (execDialog != null && execDialog.isDisplayable()) execDialog.render(setup, snap, execBusy, platformRow(snap));
         snap.filter(x -> !x.running() && x.record().state().terminal()).ifPresent(x -> {
             ExecutionRecord r = x.record();
             if (r.id().value().equals(lastFinished) || r.owner() == null) return;

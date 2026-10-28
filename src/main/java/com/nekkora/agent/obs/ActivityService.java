@@ -76,6 +76,8 @@ public final class ActivityService implements AutoCloseable {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final Map<ExecutionId, long[]> storeState = new ConcurrentHashMap<>();
     private volatile StoreDiagnostics diagnostics;
+    /** AGENT-PLATFORM-001: execuções com entrega pendente à Platform (a cota as poupa enquanto puder). */
+    private volatile java.util.function.Predicate<ExecutionId> retained = id -> false;
     private ScheduledExecutorService exec;
 
     public ActivityService(RunStore store, Clock clock) {
@@ -96,6 +98,27 @@ public final class ActivityService implements AutoCloseable {
     public void storeDiagnostics(StoreDiagnostics d) {
         this.diagnostics = d;
     }
+
+    /**
+     * AGENT-PLATFORM-001: execuções cuja atividade ainda não foi confirmada pela Platform. A cota total as poupa: primeiro
+     * saem as demais; só se ainda assim a cota for ultrapassada elas também são reduzidas ao {@code HISTORY_PURGED} (que diz
+     * até que sequência apagou, e o transporte declara essa perda com a faixa exata, em vez de esconder).
+     */
+    public void retention(java.util.function.Predicate<ExecutionId> pendingDelivery) {
+        this.retained = pendingDelivery == null ? id -> false : pendingDelivery;
+    }
+
+    /**
+     * AGENT-PLATFORM-001: maior sequência já SINCRONIZADA no disco de uma execução com a coleta aberta (vazio = a coleta não
+     * está aberta e o que está no arquivo vale). O transporte só entrega o que já sobrevive a uma queda do sistema.
+     */
+    public java.util.OptionalLong durableThrough(ExecutionId id) {
+        ActivityCollector c = open.get(id);
+        return c == null ? java.util.OptionalLong.empty() : java.util.OptionalLong.of(c.log().syncedSequence());
+    }
+
+    /** Nome do histórico de atividade na pasta da execução (o transporte o lê, nunca grava). */
+    public static final String FILE = ActivityLog.FILE;
 
     /** Ouvinte para o supervisor: cada execução que ele noticia passa a ser coletada (barato; nunca bloqueia). */
     public ExecutionController.Listener controllerListener() {
@@ -256,6 +279,12 @@ public final class ActivityService implements AutoCloseable {
 
     /** Cota total: mantém a atividade das execuções mais novas; das mais antigas terminadas fica só o aviso. */
     void enforceQuota() {
+        // primeira passada poupa o que tem entrega pendente à Platform; a segunda só age se a cota continuar ultrapassada
+        if (quotaPass(true)) quotaPass(false);
+    }
+
+    /** Uma passada da cota; devolve se o total continuou acima dela. */
+    private boolean quotaPass(boolean spareRetained) {
         long total = 0;
         boolean newest = true; // a execução mais recente nunca perde o detalhe, mesmo sozinha acima da cota
         for (ExecutionRecord r : store.all()) {
@@ -267,9 +296,14 @@ public final class ActivityService implements AutoCloseable {
                 continue;
             }
             total += size;
-            if (!newest && total > maxTotal && r.state().terminal() && !open.containsKey(r.id()) && size > 4096) purge(r.id());
+            boolean spare = spareRetained && retained.test(r.id());
+            if (!newest && total > maxTotal && r.state().terminal() && !open.containsKey(r.id()) && size > 4096 && !spare) {
+                purge(r.id());
+                total -= size;
+            }
             newest = false;
         }
+        return total > maxTotal;
     }
 
     private void purge(ExecutionId id) {
