@@ -10,6 +10,7 @@ Uso (python -I):
   pessoa.py preparar  <id> <impressao-64-hex>      identidade, organização, Worker, autorização e código de pareamento
   pessoa.py consultar <id> <agentExecutionId>      execução na Platform (correlação, desfecho, completude, eventos)
   pessoa.py revogar   <id>                         revoga o Agent (ADMINISTRATIVE, com step-up)
+  pessoa.py autorizar <id> <impressao-64-hex>      publica outra versão com esta impressão e autoriza o mesmo Worker
   pessoa.py rotacao   <id>                         gera um código de rotação (arquivo, como o de pareamento)
   pessoa.py sql       <id>                         lê SQL da entrada padrão e roda como administrador do banco descartável
 """
@@ -291,6 +292,32 @@ def revogar(i):
     print(json.dumps({'agentRevogado': agent, 'motivo': 'ADMINISTRATIVE'}, indent=2))
 
 
+def autorizar(i, fingerprint):
+    seg, env, out = lab(i)
+    p = json.loads((seg / 'pessoa.json').read_text(encoding='utf-8'))
+    if len(fingerprint) != 64 or any(ch not in '0123456789abcdef' for ch in fingerprint):
+        raise SystemExit('impressão: 64 hex minúsculos (sem sha256:)')
+    member = sql(env, f"SELECT m.membership_id FROM organization_memberships m JOIN identity_users iu ON iu.user_id = m.user_id "
+                      f"JOIN identities i ON i.identity_id = iu.identity_id WHERE i.email = '{p['email']}' AND m.organization_id = '{p['org']}'")
+    ver = str(uuid.uuid4())
+    command = (f"jsonb_build_object('contract_version',1,'artifact',jsonb_build_object('reference','laboratorio-obs-studio','sha256','{'0' * 64}'),"
+               f"'agent_package',jsonb_build_object('fingerprint_rule','nekkora-agent/package-fingerprint/1','fingerprint','{fingerprint}'),"
+               f"'runtime','python3.12','entrypoint','main.py','arguments','[]'::jsonb,'parameters','{{}}'::jsonb,'secret_bindings','{{}}'::jsonb)")
+    sql(env, "BEGIN;\n" f"SELECT set_config('nekkora.organization_id', '{p['org']}', true);\n"
+             f"INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
+             f"VALUES ('{ver}', '{p['org']}', '{p['workspace']}', '{p['automation']}', 1, {command}, '{member}');\n"
+             f"UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '{member}' WHERE automation_version_id = '{ver}';\n"
+             "COMMIT;\n")
+    b = login(seg, env, p)
+    until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + 30 * 86400))
+    st, j = b.call('POST', f"/api/v1/o/{p['org']}/workspaces/{p['workspace']}/local-run-authorizations",
+                   {'workerId': p['worker'], 'automationVersionId': ver, 'validUntil': until})
+    expect(st, 201, 'autorização de execução local')
+    resumo = {'versao_publicada': ver, 'autorizacao': j['authorizationId'], 'impressao_autorizada': fingerprint, 'valida_ate': until}
+    (out / f'pessoa-autorizacao-{fingerprint[:12]}.json').write_text(json.dumps(resumo, indent=2) + '\n', encoding='utf-8')
+    print(json.dumps(resumo, indent=2))
+
+
 def rotacao(i):
     seg, env, out = lab(i)
     p = json.loads((seg / 'pessoa.json').read_text(encoding='utf-8'))
@@ -313,6 +340,8 @@ if __name__ == '__main__':
         consultar(a[1], a[2])
     elif a[0] == 'revogar':
         revogar(a[1])
+    elif a[0] == 'autorizar':
+        autorizar(a[1], a[2])
     elif a[0] == 'rotacao':
         rotacao(a[1])
     elif a[0] == 'sql':

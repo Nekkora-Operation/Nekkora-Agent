@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   AGENT-PLATFORM-001 — jornada integrada do Agent EMPACOTADO (processo real) com a API REAL do laboratório descartável.
 
@@ -7,7 +7,7 @@
   (trava da linha da execução no banco + pausa do nginx para perder a resposta depois do commit). Nada aqui é simulado.
 
   J1  Agent empacotado (cópia de laboratório que confia SÓ no certificado do laboratório; validação TLS normal) abre.
-  J2  Pareamento pela janela (Alt+R): o código é DIGITADO no campo de senha, nunca exibido nem registrado; o arquivo do
+  J2  Pareamento pela janela (Alt+A): o código é DIGITADO no campo de senha, nunca exibido nem registrado; o arquivo do
       código é apagado em seguida. A credencial é gerada e guardada pelo Agent (DPAPI).
   J3  Execução local real pela janela: pacote de laboratório (formato Studio, eventos reais do nekkora_rpa 0.3.0, dados
       fictícios), aprovado pela pessoa; a autorização da Platform vem pré-escolhida (única válida para a impressão).
@@ -28,7 +28,7 @@ param(
     [string]$Id = 'agentlab-001',
     [Parameter(Mandatory = $true)][string]$Python
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue' # comandos nativos (docker, python) escrevem no stderr sem falhar; as esperas lançam exceção
 Set-StrictMode -Version 3.0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $root 'tools\homologation\NkHomolog.psm1') -Force
@@ -119,11 +119,19 @@ function Capture([string]$Name, [string]$Title = 'Nekkora Agent') {
 $secrets = @{}
 foreach ($l in [IO.File]::ReadAllLines((Join-Path $Seg 'segredos.env'))) { $i = $l.IndexOf('='); if ($i -gt 0) { $secrets[$l.Substring(0, $i)] = $l.Substring($i + 1) } }
 foreach ($k in $secrets.Keys) { [Environment]::SetEnvironmentVariable($k, $secrets[$k], 'Process') }
-$composeArgs = @('compose', '-f', (Join-Path $secrets['LAB_API_REPO'] 'api\e2e\compose.e2e.yml'), '-f', (Join-Path $PSScriptRoot 'compose.lab.yml'))
-function Dc([string[]]$a) { $null = & docker @composeArgs @a 2>&1; return $LASTEXITCODE }
+$apiRepo = $secrets['LAB_API_REPO'] -replace '^/([a-zA-Z])/', '$1:/' # /c/... (Git Bash) → C:/...
+$composeArgs = @('compose', '-f', (Join-Path $apiRepo 'api\e2e\compose.e2e.yml'), '-f', (Join-Path $PSScriptRoot 'compose.lab.yml'))
+# comandos nativos: a saída de erro do docker não interrompe o roteiro (PS 5.1); o código de saída é o que vale
+function Dc([string[]]$a) {
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $null = & docker @composeArgs @a 2>&1; return $LASTEXITCODE } finally { $ErrorActionPreference = $old }
+}
 function Sql([string]$q) {
-    $r = $q | & docker @composeArgs exec -T postgres psql -X -q -At -v ON_ERROR_STOP=1 -U nekkora -d nekkora 2>$null
-    return ($r -join "`n").Trim()
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try {
+        $r = $q | & docker @composeArgs exec -T postgres psql -X -q -At -v ON_ERROR_STOP=1 -U nekkora -d nekkora 2>$null
+        return ($r -join "`n").Trim()
+    } finally { $ErrorActionPreference = $old }
 }
 
 # ---------- J1: Agent empacotado, cópia de laboratório ----------
@@ -147,7 +155,7 @@ if (-not (Test-Path $script:data)) {
     New-Item -ItemType Directory -Force $script:data | Out-Null
     $origin = 'https://localhost:' + $secrets['E2E_PORTA']
     New-Item -ItemType Directory -Force (Join-Path $script:data 'config') | Out-Null
-    [IO.File]::WriteAllText((Join-Path $script:data 'configgent-config.json'), "{`n  `"format`": `"nekkora-agent/config`",`n  `"version`": 1,`n  `"theme`": `"sakura-dark`",`n  `"shortcuts`": {`n    `"platformUrl`": `"$origin`",`n    `"studioExecutable`": null`n  }`n}`n", (New-Object System.Text.UTF8Encoding $false))
+    [IO.File]::WriteAllText((Join-Path $script:data 'config\agent-config.json'), "{`n  `"format`": `"nekkora-agent/config`",`n  `"version`": 1,`n  `"theme`": `"sakura-dark`",`n  `"shortcuts`": {`n    `"platformUrl`": `"$origin`",`n    `"studioExecutable`": null`n  }`n}`n", (New-Object System.Text.UTF8Encoding $false))
 }
 $agentVersions = Get-Content -Raw (Join-Path $app 'VERSOES.txt')
 function Start-Agent {
@@ -178,7 +186,7 @@ try {
     $codeFile = Join-Path $Seg 'codigo-pareamento'
     $code = ([IO.File]::ReadAllText($codeFile)).Trim()
     Focus $w.Handle
-    [System.Windows.Forms.SendKeys]::SendWait('%r')
+    [System.Windows.Forms.SendKeys]::SendWait('%a')
     $pd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Parear com a Platform'; if (Test-WindowShown $h) { $h } } 20 'diálogo de pareamento'
     Focus $pd
     Start-Sleep -Milliseconds 500
@@ -193,8 +201,8 @@ try {
     Check 'J2 vínculo gravado sem segredo (vinculo.json) e credencial só no arquivo protegido' ((Test-Path (Join-Path $script:data 'plataforma\credencial.dpapi')) -and -not (Test-Path (Join-Path $script:data 'plataforma\resgate.dpapi')))
     $agentDb = Sql "SELECT status || '|' || worker_id FROM agents a JOIN worker_agent_assignments w ON w.agent_id = a.agent_id AND w.status = 1 WHERE a.agent_id = '$($vinculo.agentId)'"
     Check "J2 Agent ACTIVE e associado ao Worker na Platform ($agentDb)" ($agentDb -match '^2\|')
-    Wait-Until { (Log-Count 'PLATFORM_AUTHORIZATIONS count=1') -ge 1 } 60 'autorizações baixadas' | Out-Null
-    Check 'J2 autorização baixada (1 válida para o Worker)' ((Log-Count 'PLATFORM_AUTHORIZATIONS count=1') -ge 1)
+    Wait-Until { (Log-Count 'PLATFORM_AUTHORIZATIONS count=2') -ge 1 } 60 'autorizações baixadas' | Out-Null
+    Check 'J2 autorizações baixadas (2 válidas para o Worker, uma por impressão)' ((Log-Count 'PLATFORM_AUTHORIZATIONS count=2') -ge 1)
     Start-Sleep -Seconds 1
     Capture 'j2-pareado'
 
@@ -203,7 +211,7 @@ try {
     [System.Windows.Forms.SendKeys]::SendWait('%e')
     $dlg = Wait-Until { $h = Get-AgentWindow $script:jvm 'Execução local'; if (Test-WindowShown $h) { $h } } 20 'janela Execução local'
     Start-Sleep -Milliseconds 800
-    Choose-Path $dlg '%p' 'Pasta do pacote da automação' (Join-Path $Lab 'pacote-laboratorio')
+    Choose-Path $dlg '%p' 'Pasta do pacote da automação' (Join-Path $Lab 'pacote-laboratorio-longo')
     Wait-Until { (Log-Count 'EXEC_PACKAGE_INSPECTED') -ge 1 } 30 'pacote inspecionado' | Out-Null
     Start-Sleep -Milliseconds 600
     $pos = Find-Button $dlg @(@(109, 60, 82), @(118, 71, 92)) 185 330 450 1000
@@ -351,6 +359,10 @@ try {
     $reg2 = Sql "SELECT count(*) FROM agent_runs WHERE agent_execution_id = '$($second.Name)'"
     Check "J8 execução local depois da revogação terminou ($s2), sem registro na Platform ($reg2) e sem vínculo de entrega" ($s2 -eq 'SUCCEEDED' -and $reg2 -eq '0' -and -not (Test-Path (Join-Path $script:data "plataforma\entregas\$($second.Name).json")))
     [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+}
+catch {
+    Note 'ERRO' ($_.Exception.Message + ' @linha ' + $_.InvocationInfo.ScriptLineNumber)
+    Check ('jornada interrompida por exceção: ' + $_.Exception.Message) $false
 }
 finally {
     # ---------- encerramento do Agent ----------

@@ -81,6 +81,16 @@ final class MainWindow extends NekkoraFrame {
     private final NekkoraButton removeLink = NekkoraButton.ghost("Remover vínculo local…");
     private final NekkoraButton blockedButton = NekkoraButton.secondary("Ver envios parados…");
     private PlatformStatus platformStatus;
+    private final NekkoraStack platformContent;
+    private final JPanel platformRows = transparent();
+    private final JPanel platformNotice = transparent();
+    private final NekkoraStack platformButtons = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
+
+    private static JPanel transparent() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setOpaque(false);
+        return p;
+    }
     private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma nesta sessão", TextTone.SECONDARY);
     private final NekkoraButton execution = NekkoraButton.secondary("Execução local…");
     private final NekkoraParagraph closeHint = new NekkoraParagraph("", TextTone.MUTED);
@@ -121,7 +131,7 @@ final class MainWindow extends NekkoraFrame {
         rotate.addActionListener(e -> listener.rotate());
         removeLink.addActionListener(e -> listener.removeLink());
         blockedButton.addActionListener(e -> listener.blocked());
-        pair.setMnemonic(KeyEvent.VK_R);
+        pair.setMnemonic(KeyEvent.VK_A);
         rotate.setMnemonic(KeyEvent.VK_N);
         removeLink.setMnemonic(KeyEvent.VK_M);
         blockedButton.setMnemonic(KeyEvent.VK_V);
@@ -148,6 +158,10 @@ final class MainWindow extends NekkoraFrame {
         body.setPadding(Spacing.SPACE_7);
         // DESKTOP-001: a execução local é uma linha em "Esta máquina" e um botão nas ações (a janela continua compacta)
         // AGENT-PLATFORM-001: o canal com a Platform tem card próprio (vínculo, comunicação e envios; nunca desfecho de automação)
+        platformContent = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
+        platformButtons.addAll(pair, rotate, removeLink, blockedButton);
+        platformContent.addAll(platformRows, platformNotice, platformButtons);
+        platformCard.setContent(platformContent);
         platformCard.setVisible(false);
         body.addAll(header, notices, statusCard, platformCard, shortcutsCard, actions, closeHint);
         scroll = NekkoraScrollPane.verticalOnly(body);
@@ -210,38 +224,27 @@ final class MainWindow extends NekkoraFrame {
             if (st.incompleteRuns() > 0) rows.add("Histórico incompleto", st.incompleteRuns() + (st.incompleteRuns() == 1 ? " execução" : " execuções")
                     + " com perda local declarada");
         }
-        NekkoraStack content = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
-        content.add(rows);
+        // a estrutura do card é montada uma vez: os botões nunca saem da janela (o atalho Alt+letra registrado na janela se
+        // perdia quando o botão era retirado e recolocado a cada redesenho); aqui só as linhas e o aviso são trocados
+        platformRows.removeAll();
+        platformRows.add(rows, BorderLayout.CENTER);
+        platformNotice.removeAll();
         if (!st.blocked().isEmpty()) {
-            content.add(new NekkoraInlineAlert(Severity.WARNING, "Envio parado", st.blocked().size() + (st.blocked().size() == 1 ? " execução precisa" : " execuções precisam")
-                    + " de decisão para continuar o envio. A automação não é afetada."));
+            platformNotice.add(new NekkoraInlineAlert(Severity.WARNING, "Envio parado", st.blocked().size() + (st.blocked().size() == 1 ? " execução precisa"
+                    : " execuções precisam") + " de decisão para continuar o envio. A automação não é afetada."), BorderLayout.CENTER);
         } else if (st.problem() != null && st.link() != PlatformStatus.LinkState.PAIRED) {
-            content.add(new NekkoraInlineAlert(st.link() == PlatformStatus.LinkState.NOT_PAIRED ? Severity.INFO : Severity.WARNING, "Platform",
-                    PlatformText.problem(st.problem())));
+            platformNotice.add(new NekkoraInlineAlert(st.link() == PlatformStatus.LinkState.NOT_PAIRED ? Severity.INFO : Severity.WARNING, "Platform",
+                    PlatformText.problem(st.problem())), BorderLayout.CENTER);
         } else if (st.problem() != null) {
-            content.add(new NekkoraParagraph(PlatformText.problem(st.problem()), TextTone.SECONDARY));
+            platformNotice.add(new NekkoraParagraph(PlatformText.problem(st.problem()), TextTone.SECONDARY), BorderLayout.CENTER);
         }
-        NekkoraStack buttons = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-        boolean any = false;
-        if (st.link() == PlatformStatus.LinkState.NOT_PAIRED) {
-            buttons.add(pair);
-            any = true;
-        }
-        if (st.link() == PlatformStatus.LinkState.PAIRED || st.link() == PlatformStatus.LinkState.REFUSED) {
-            buttons.add(rotate);
-            any = true;
-        }
-        if (st.link() == PlatformStatus.LinkState.REFUSED || st.link() == PlatformStatus.LinkState.DESTINATION_CHANGED
-                || st.link() == PlatformStatus.LinkState.CONTRACT_REFUSED) {
-            buttons.add(removeLink);
-            any = true;
-        }
-        if (!st.blocked().isEmpty()) {
-            buttons.add(blockedButton);
-            any = true;
-        }
-        if (any) content.add(buttons);
-        platformCard.setContent(content);
+        platformNotice.setVisible(platformNotice.getComponentCount() > 0);
+        pair.setVisible(st.link() == PlatformStatus.LinkState.NOT_PAIRED);
+        rotate.setVisible(st.link() == PlatformStatus.LinkState.PAIRED || st.link() == PlatformStatus.LinkState.REFUSED);
+        removeLink.setVisible(st.link() == PlatformStatus.LinkState.REFUSED || st.link() == PlatformStatus.LinkState.DESTINATION_CHANGED
+                || st.link() == PlatformStatus.LinkState.CONTRACT_REFUSED);
+        blockedButton.setVisible(!st.blocked().isEmpty());
+        platformButtons.setVisible(pair.isVisible() || rotate.isVisible() || removeLink.isVisible() || blockedButton.isVisible());
         platformCard.setVisible(true);
         body.revalidate();
         body.repaint();
