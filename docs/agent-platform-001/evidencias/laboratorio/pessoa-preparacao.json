@@ -1,0 +1,12 @@
+{
+  "organizacao": "2e70c47b-1d7d-47f4-a8f3-11b5f588cee7",
+  "workspace": "491c2eed-0303-4988-aa78-5a2fa4bd9d76",
+  "automacao": "4384e24d-cb0c-4bd7-a12e-d02308142e2e",
+  "versao_publicada": "34d3611d-91ef-4d54-afcd-6c48caac9385",
+  "worker": "a7196ba7-c93b-439d-b616-e9b669724c71",
+  "autorizacao": "db21afeb-1ba1-4d52-a862-a710a3b41d96",
+  "impressao_autorizada": "18adddf9e4bce7e6a4042ed10e98dfd681fc3cba42d7c7275ce2abf500138496",
+  "regra": "nekkora-agent/package-fingerprint/1",
+  "valida_ate": "2026-11-28T00:00:00Z",
+  "codigo_pareamento": "<arquivo protegido fora do repositório; consumido pela jornada>"
+}

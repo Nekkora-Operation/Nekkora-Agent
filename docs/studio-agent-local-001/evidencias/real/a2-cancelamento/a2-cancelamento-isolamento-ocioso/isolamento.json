@@ -1,0 +1,30 @@
+﻿{
+    "schema":  "nekkora-agent/isolation-check",
+    "version":  "1.0.0",
+    "measured_utc":  "2026-10-28T14:24:40.2733283Z",
+    "seconds":  15,
+    "samples":  18,
+    "agent_alive_at_end":  true,
+    "quiet":  true,
+    "tcp":  [
+
+            ],
+    "udp":  [
+
+            ],
+    "af_unix_or_reparse":  [
+
+                           ],
+    "new_named_pipes_total":  13,
+    "new_named_pipes_agent":  [
+
+                              ],
+    "new_named_pipes_other_processes":  {
+                                            "powershell":  1,
+                                            "libuv/node":  12
+                                        },
+    "new_named_pipes_unattributed":  [
+
+                                     ],
+    "isolated":  true
+}

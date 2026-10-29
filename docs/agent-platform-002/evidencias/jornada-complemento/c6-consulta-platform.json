@@ -1,0 +1,86 @@
+﻿{
+  "detalhe": {
+    "runId": "efdb2649-c0b9-4b6e-ab91-39bd911e6d59",
+    "correlation": {
+      "agentExecutionId": "ex-1e2c7149fe370d5cdcc345e303ab6d19",
+      "frameworkExecutionId": "ex-ede81aed8c0e482f85cb",
+      "platformExecutionId": null,
+      "agentId": "44332031-ffa8-4f85-a990-7c6b5db11ca7",
+      "workerId": "f2872b57-1518-4298-9ce4-a518c7fa006f",
+      "workspaceId": "ea555776-9d57-48df-a399-b996b9d917ad",
+      "automationId": "0b99790c-8b06-4b4a-93cc-e328474b3575",
+      "automationVersionId": "19515aea-b1ca-47b9-9e2c-06d533b15ed2",
+      "authorizationId": "b494a360-5b36-4ad7-bcd5-cd6f5c7ec41e"
+    },
+    "origin": "LOCAL_AUTHORIZED",
+    "authorizationStateAtRegistration": "ACTIVE",
+    "registeredAt": "2026-10-29T05:15:17.798438Z",
+    "supervisor": {
+      "state": "OUTCOME_UNKNOWN",
+      "code": "AGT-EXE-025",
+      "exitCode": null,
+      "counts": {},
+      "agentCreatedAt": "2026-10-29T05:15:17.125374Z",
+      "agentStartedAt": "2026-10-29T05:15:17.777418Z",
+      "agentEndedAt": "2026-10-29T05:15:45.355261Z",
+      "adopted": false,
+      "suspensions": 0,
+      "locks": 0,
+      "reports": 2,
+      "conflicts": 0,
+      "lastReportAt": "2026-10-29T05:15:45.828475Z"
+    },
+    "process": "ENDED",
+    "outcome": "UNKNOWN",
+    "transport": {
+      "connectivity": "CONNECTED",
+      "lastHeartbeatAt": "2026-10-29T05:15:45.79436Z",
+      "lastEventAt": "2026-10-29T05:15:46.890974Z"
+    },
+    "history": {
+      "completeness": "COMPLETE",
+      "reasons": [],
+      "eventsStored": 197,
+      "storedThrough": 197,
+      "settledThrough": 197,
+      "maxSequence": 197,
+      "declaredMissing": 0,
+      "collectionCompletedSequence": 197,
+      "invalidRefused": 0,
+      "stepsAvailable": true
+    },
+    "transactionsSeen": {
+      "TRANSACTION_COMPLETED": 22,
+      "TRANSACTION_STARTED": 23
+    },
+    "retention": {
+      "state": "AVAILABLE",
+      "eventsPurged": 0
+    }
+  },
+  "eventos": {
+    "quantidade": 197,
+    "primeira": 1,
+    "ultima": 197,
+    "sequencias_repetidas": 0,
+    "em_ordem": true,
+    "codigos": [
+      "ACTION_COMPLETED",
+      "ACTION_STARTED",
+      "COLLECTION_COMPLETED",
+      "COLLECTION_RESUMED",
+      "COLLECTION_STARTED",
+      "ENGINE_STARTED",
+      "OUTCOME_UNKNOWN",
+      "PARTIAL_PROGRESS",
+      "PHASE_COMPLETED",
+      "PHASE_STARTED",
+      "PROTOCOL_REJECTED",
+      "RECONCILE",
+      "RUNNING",
+      "STARTING",
+      "TRANSACTION_COMPLETED",
+      "TRANSACTION_STARTED"
+    ]
+  }
+}

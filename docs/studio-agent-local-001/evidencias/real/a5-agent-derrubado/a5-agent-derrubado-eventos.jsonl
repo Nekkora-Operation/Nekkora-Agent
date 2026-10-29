@@ -1,0 +1,5 @@
+﻿{"at": "2026-10-28T14:26:44.649666300Z", "event": "STARTING", "mode": "LIST", "kind": "STUDIO_PYTHON", "session": 1}
+{"at": "2026-10-28T14:26:44.699052400Z", "event": "RUNNING", "pid": 53552}
+{"at": "2026-10-28T14:27:09.650960300Z", "event": "RECONCILE", "state": "RUNNING"}
+{"at": "2026-10-28T14:27:09.749825600Z", "event": "FAILED", "exit": "none", "protocol": true, "recovered": true, "code": "AGT-EXE-022"}
+

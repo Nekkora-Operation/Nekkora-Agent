@@ -1,0 +1,16 @@
+01:26:06.610 [REAL] J1 Agent empacotado do commit e4e5617c5efc43c437ac9623a15a46ac4870a375
+01:26:08.780 [REAL] J1 Agent empacotado aberto (JVM 28444), sem Java no PATH
+01:26:17.719 [REAL] J2 código digitado no campo de senha; arquivo do código apagado
+01:26:44.376 [REAL] J3 execução local iniciada pela janela: ex-31d00cfd38400b5d071f651bddafa094
+01:26:46.714 [REAL] J4 nginx do laboratório PAUSADO (nenhuma resposta da Platform) com a automação rodando
+01:27:31.324 [REAL] J4 nginx de volta
+01:27:31.454 [INJETADA] J5 trava FOR UPDATE da linha da execução (12 s) para o próximo lote ficar preso no gateway
+01:27:35.679 [INJETADA] J5 nginx PAUSADO com o pedido em andamento (a resposta não chegará ao Agent)
+01:27:44.044 [INJETADA] J5 trava liberada: o gateway grava e responde ao nginx pausado
+01:28:16.238 [INJETADA] J5 nginx retomado; o Agent reenvia o mesmo lote
+01:28:16.380 [REAL] J6 processo do Agent (JVM 28444) ENCERRADO à força; automação (PID 40552) segue
+01:28:21.064 [REAL] J6 Agent reaberto (JVM 23804)
+01:32:45.436 [REAL] J7 fim pelo supervisor: SUCCEEDED
+01:32:50.628 [REAL] J7 relatórios do supervisor na Platform (estado:desfecho; códigos da 025: 3=RUNNING 4=SUCCEEDED; 1=APPLIED 2=UNCHANGED 3=STALE 4=CONFLICT): 3:1 3:1 4:1
+01:34:01.714 [REAL] J8 Agent revogado pela pessoa na Platform (ADMINISTRATIVE, com step-up)
+01:36:30.704 ERRO tempo esgotado: execução local iniciada @linha 63

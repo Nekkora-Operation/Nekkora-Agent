@@ -1,0 +1,19 @@
+﻿05:03:50.476 [REAL] J1 Agent empacotado do commit 2045910a3c68181353fbd3abc715a0374954994b
+05:03:52.701 [REAL] C1 Agent empacotado aberto (JVM 44344), sem Java no PATH
+05:04:01.196 [REAL] C1 código digitado no campo de senha; arquivo do código apagado
+05:05:12.909 [REAL] C2 presença no banco: 2026-10-29T05:04:01.715382 -> 2026-10-29T05:05:02.258448
+05:05:12.913 [REAL] C3 nginx do laboratório PAUSADO antes de iniciar (nenhuma resposta da Platform)
+05:06:39.533 [REAL] C3 execução iniciada SEM Platform: ex-6b088b484527d389b11cf8398a97c005
+05:06:55.367 [REAL] C3 nginx de volta
+05:06:57.106 [INJETADA] C4 Redis do laboratório PARADO: o limitador do canal falha fechado (503, sem ACK)
+05:07:09.122 [INJETADA] C4 Redis de volta
+05:07:23.084 [INJETADA] C5 outro programa abre o atividade.jsonl sem compartilhar a escrita (65 s)
+05:08:28.644 [INJETADA] C5 arquivo liberado
+05:08:31.811 [INJETADA] C5 local: lacunas 358-653, avisos AGT-OBS-009
+05:13:40.922 [REAL] C5 banco: estado=4 stored=357 settled=3214 eventos=2918 ausentes=358-653 recusas=0; local último=3214 lacunas=358-653
+05:15:19.757 [REAL] C6 segunda execução iniciada: ex-1e2c7149fe370d5cdcc345e303ab6d19
+05:15:39.934 [REAL] C6 Agent (JVM 44344) ENCERRADO à força; em seguida a automação (2 processos) termina com o Agent fora
+05:15:46.612 [REAL] C6 Agent reaberto (JVM 9092)
+05:16:25.787 [REAL] C7 a pessoa gerou um código de rotação na Platform
+05:16:31.870 [REAL] C7 código de rotação digitado no campo de senha; arquivo apagado
+05:18:13.128 ERRO tempo esgotado: confirmação da aprovação @linha 63

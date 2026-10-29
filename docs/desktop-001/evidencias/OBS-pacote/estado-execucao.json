@@ -1,0 +1,20 @@
+{
+  "schema": "nekkora-agent/execution",
+  "version": "1.0.0",
+  "id": "ex-58b671583e5089136f7f43bdd9102b7d",
+  "kind": "STUDIO_PYTHON",
+  "package": "pacote d6ae80b8eef8",
+  "fingerprint": "sha256:d6ae80b8eef88e9105c601b2a51e8d03aa3c5da91455bc3986391ebdc25c5247",
+  "state": "SUCCEEDED",
+  "code": "AGT-EXE-025",
+  "created": "2026-10-23T03:32:10.374149100Z",
+  "started": "2026-10-23T03:32:10.421123600Z",
+  "ended": "2026-10-23T03:32:32.585402300Z",
+  "process": {"pid": 41784, "start": 1792726330401, "executableDigest": "sha256:a38291e6e85c57879dc51dff5e088b9dbb264bbaee0b6d8c842e9a003864e155"},
+  "exitCode": null,
+  "counts": {"SUCCEEDED": 12},
+  "suspensions": 0,
+  "locks": 0,
+  "adopted": true,
+  "outputBytes": 0
+}

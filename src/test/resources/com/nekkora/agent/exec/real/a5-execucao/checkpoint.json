@@ -1,0 +1,108 @@
+{
+ "body": {
+  "process_name": "biografias_da_wikipedia",
+  "salt": "3dcdedb281ff74067cd75a585626c936",
+  "schema": "nekkora-rpa/checkpoint",
+  "transactions": {
+   "tx-01ce11446d7b97208af0": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:54.583Z"
+   },
+   "tx-02f006fed2ea7148aa88": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:58.181Z"
+   },
+   "tx-0ac277d4371048a53c15": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:51.169Z"
+   },
+   "tx-15e4c235d1ce6dc7d7bc": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:49.967Z"
+   },
+   "tx-23846bb600c9038ee975": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:56.848Z"
+   },
+   "tx-3e56a3f45e4783718bec": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:59.326Z"
+   },
+   "tx-6cf555e5ecd0f79b85f8": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:47.587Z"
+   },
+   "tx-8aaeac12c6bbeb3919e3": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:53.451Z"
+   },
+   "tx-b0df43494e2fd29fc047": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:55.731Z"
+   },
+   "tx-c41e1758dda98627fffb": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:48.753Z"
+   },
+   "tx-ca39629245c66636be9d": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "error_code": "TARGET_NOT_FOUND",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "FAILED_TECHNICAL",
+    "updated_utc": "2026-10-28T12:45:08.403Z"
+   },
+   "tx-f92cbc5a7c108f9dfc78": {
+    "attempts": 1,
+    "delivery": "COMMITTED",
+    "execution_id": "ex-9542a4f62e624cbfb253",
+    "side_effects": 0,
+    "status": "SUCCEEDED",
+    "updated_utc": "2026-10-28T12:44:52.440Z"
+   }
+  },
+  "version": "1.1.0"
+ },
+ "integrity": "sha256:39b4ae6ba7d3016073b4e3ce211f6d3b59344dec8e83a015f2148f942c069ead"
+}

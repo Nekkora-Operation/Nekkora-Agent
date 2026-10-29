@@ -1,0 +1,94 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.nekkora:nekkora-agent >----------------------
+[INFO] Building Nekkora Agent 0.1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- properties:1.2.1:read-project-properties (default) @ nekkora-agent ---
+[INFO] Loading 4 properties from File: <nekkora>\wt-a03\design-system.properties
+[INFO] 
+[INFO] --- git-commit-id:9.0.1:revision (build-commit) @ nekkora-agent ---
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ nekkora-agent ---
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ nekkora-agent ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 62 source files with javac [debug release 21] to target\classes
+[WARNING] /<nekkora>/wt-a03/src/main/java/com/nekkora/agent/storage/InstanceLock.java:[71,41] com.sun.nio.file.ExtendedOpenOption is internal proprietary API and may be removed in a future release
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ nekkora-agent ---
+[INFO] Copying 23 resources from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ nekkora-agent ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 46 source files with javac [debug release 21] to target\test-classes
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/obs/ActivityPersistenceTest.java:[17,24] com.sun.nio.file.ExtendedOpenOption is internal proprietary API and may be removed in a future release
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/obs/ActivityPersistenceTest.java:[140,83] com.sun.nio.file.ExtendedOpenOption is internal proprietary API and may be removed in a future release
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/obs/ActivityPersistenceTest.java:[202,108] com.sun.nio.file.ExtendedOpenOption is internal proprietary API and may be removed in a future release
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/obs/ActivityPersistenceTest.java:[140,26] auto-closeable resource reader is never referenced in body of corresponding try statement
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/obs/ActivityPersistenceTest.java:[202,26] auto-closeable resource reader is never referenced in body of corresponding try statement
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/DesktopHarness.java:[49,7] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/DesktopHomologation.java:[123,29] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/DesktopHomologation.java:[155,29] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/DesktopHomologation.java:[425,29] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/DesktopHomologation.java:[544,29] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[WARNING] /<nekkora>/wt-a03/src/test/java/com/nekkora/agent/ui/ScaleEvidenceTest.java:[40,29] auto-closeable resource com.nekkora.agent.ui.DesktopHarness has a member method close() that could throw InterruptedException
+[INFO] 
+[INFO] --- surefire:3.5.2:test (default-test) @ nekkora-agent ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.nekkora.agent.exec.PartialProgressTest
+[ERROR] Tests run: 5, Failures: 1, Errors: 1, Skipped: 0, Time elapsed: 3.168 s <<< FAILURE! -- in com.nekkora.agent.exec.PartialProgressTest
+[ERROR] com.nekkora.agent.exec.PartialProgressTest.cancelamentoReal -- Time elapsed: 2.528 s <<< ERROR!
+java.lang.NullPointerException: Cannot invoke "com.nekkora.agent.exec.ExecutionRecord$PartialProgress.available()" because the return value of "com.nekkora.agent.exec.ExecutionRecord.progress()" is null
+	at com.nekkora.agent.exec.PartialProgressTest.cancelamentoReal(PartialProgressTest.java:168)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+[ERROR] com.nekkora.agent.exec.PartialProgressTest.reconcileSemResultado -- Time elapsed: 0.102 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:31)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:183)
+	at com.nekkora.agent.exec.PartialProgressTest.reconcileSemResultado(PartialProgressTest.java:142)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   PartialProgressTest.reconcileSemResultado:142 expected: <true> but was: <false>
+[ERROR] Errors: 
+[ERROR]   PartialProgressTest.cancelamentoReal:168 NullPointer Cannot invoke "com.nekkora.agent.exec.ExecutionRecord$PartialProgress.available()" because the return value of "com.nekkora.agent.exec.ExecutionRecord.progress()" is null
+[INFO] 
+[ERROR] Tests run: 5, Failures: 1, Errors: 1, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  12.180 s
+[INFO] Finished at: 2026-10-28T10:28:24-03:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.2:test (default-test) on project nekkora-agent: There are test failures.
+[ERROR] 
+[ERROR] See <nekkora>\wt-a03\target\surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

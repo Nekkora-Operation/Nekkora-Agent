@@ -1,0 +1,32 @@
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.132 s -- in com.nekkora.agent.app.AgentBootstrapTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.035 s -- in com.nekkora.agent.app.SensitiveDataLeakTest
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.028 s -- in com.nekkora.agent.ArchitectureTest
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.025 s -- in com.nekkora.agent.core.MainViewModelTest
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.020 s -- in com.nekkora.agent.DesignSystemProvenanceTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.422 s -- in com.nekkora.agent.diagnostics.AgentLogTest
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.013 s -- in com.nekkora.agent.diagnostics.DiagnosticReportTest
+Tests run: 35, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.104 s -- in com.nekkora.agent.os.ShortcutTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.010 s -- in com.nekkora.agent.os.TrayControllerTest
+Tests run: 19, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.133 s -- in com.nekkora.agent.storage.ConfigStoreTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.492 s -- in com.nekkora.agent.storage.InstanceLockTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in com.nekkora.agent.storage.IsolatedPreferencesTest
+Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.017 s -- in com.nekkora.agent.storage.StrictJsonTest
+Tests run: 13, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 18.78 s -- in com.nekkora.agent.ui.AgentDesktopTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.799 s -- in com.nekkora.agent.ui.ScaleEvidenceTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.847 s -- in com.nekkora.agent.ui.ScaleEvidenceTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.587 s -- in com.nekkora.agent.ui.ScaleEvidenceTest
+[A12] ordem de Tab: [Configurações, Diagnóstico, Sair]
+[A13] CPU de todas as threads da JVM de teste com a janela oculta: 0 ms em 10006 ms (0.000%) {}
+[A13] javax.swing.Timer ativos com a janela oculta: []
+[A12] escala efetiva 100% (sun.java2d.uiScale=null)
+[A12] janela principal 540x683 rolagem=false
+[A12] Configurações 540x390 rolagem=false
+[A12] Diagnóstico 540x673 rolagem=false
+[A12] escala efetiva 150% (sun.java2d.uiScale=1.5)
+[A12] janela principal 540x680 rolagem=false
+[A12] Configurações 540x390 rolagem=false
+[A12] Diagnóstico 540x672 rolagem=false
+[A12] escala efetiva 200% (sun.java2d.uiScale=2.0)
+[A12] janela principal 540x516 rolagem=true
+[A12] Configurações 540x390 rolagem=false
+[A12] Diagnóstico 540x500 rolagem=true

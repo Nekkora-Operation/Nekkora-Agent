@@ -1,0 +1,202 @@
+package com.nekkora.agent.app;
+
+import com.nekkora.agent.core.BuildInfo;
+import com.nekkora.agent.core.ErrorCode;
+import com.nekkora.agent.core.ErrorJournal;
+import com.nekkora.agent.core.MachineName;
+import com.nekkora.agent.core.SafeText;
+import com.nekkora.agent.diagnostics.AgentLog;
+import com.nekkora.agent.diagnostics.AgentLog.Field;
+import com.nekkora.agent.diagnostics.LogEvent;
+import com.nekkora.agent.exec.ApprovalStore;
+import com.nekkora.agent.exec.ExecutionController;
+import com.nekkora.agent.exec.ExecutionId;
+import com.nekkora.agent.exec.ExecutionState;
+import com.nekkora.agent.exec.RunStore;
+import com.nekkora.agent.exec.SessionProbe;
+import com.nekkora.agent.obs.ActivityService;
+import com.nekkora.agent.os.ShortcutLauncher;
+import com.nekkora.agent.platform.PlatformService;
+import com.nekkora.agent.os.ShortcutPolicy;
+import com.nekkora.agent.storage.AgentDataDir;
+import com.nekkora.agent.storage.AtomicWriter;
+import com.nekkora.agent.storage.ConfigStore;
+import com.nekkora.agent.storage.InstanceLock;
+import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Inicialização fora da EDT: diretório de dados → trava → logs → configuração → nome da máquina.
+ * A trava vem antes de qualquer gravação: uma segunda instância não toca em logs nem configuração.
+ */
+public final class AgentBootstrap {
+
+    /** Resultado da inicialização. */
+    public sealed interface Start permits Ready, AlreadyRunning, Fatal {}
+
+    public record Ready(AgentContext context) implements Start {}
+
+    /** Outra instância é a proprietária da trava neste diretório. */
+    public record AlreadyRunning() implements Start {}
+
+    /** Não é possível continuar com segurança (sem diretório ou sem trava). */
+    public record Fatal(ErrorCode code) implements Start {}
+
+    /** Dependências do ambiente (substituíveis em testes). */
+    public record Environment(
+            AgentDataDir.Location location,
+            Map<String, String> env,
+            Clock clock,
+            Optional<Instant> processStart,
+            ShortcutLauncher launcher,
+            ShortcutPolicy.FileProbe probe,
+            boolean windows,
+            AtomicWriter writer,
+            PlatformFactory platform) {
+
+        public Environment(AgentDataDir.Location location, Map<String, String> env, Clock clock, Optional<Instant> processStart, ShortcutLauncher launcher,
+                           ShortcutPolicy.FileProbe probe, boolean windows, AtomicWriter writer) {
+            this(location, env, clock, processStart, launcher, probe, windows, writer, PlatformService::system);
+        }
+
+        public static Environment system() {
+            return new Environment(AgentDataDir.locateCurrent(), System.getenv(), Clock.systemUTC(),
+                    ProcessHandle.current().info().startInstant(), ShortcutLauncher.system(), ShortcutPolicy.FileProbe.DEFAULT,
+                    ShortcutPolicy.isWindows(), AtomicWriter.DEFAULT, PlatformService::system);
+        }
+    }
+
+    /** Como o transporte é criado (os testes trocam o HTTPS e a guarda de segredos). */
+    @FunctionalInterface
+    public interface PlatformFactory {
+        PlatformService create(java.nio.file.Path dir, java.util.function.Supplier<String> configuredUrl, RunStore runs, PlatformService.ActivityAccess activity,
+                               boolean windows, AtomicWriter writer, Clock clock, String agentVersion);
+    }
+
+    private AgentBootstrap() {}
+
+    public static Start start(AgentOptions options, Environment e) {
+        AgentDataDir dir;
+        try {
+            dir = AgentDataDir.open(e.location());
+        } catch (IOException | SecurityException ex) {
+            return new Fatal(ErrorCode.DATA_DIR_UNAVAILABLE);
+        }
+        InstanceLock lock;
+        switch (InstanceLock.tryAcquire(dir.lockFile())) {
+            case InstanceLock.Acquired a -> lock = a.lock();
+            case InstanceLock.HeldElsewhere h -> {
+                return new AlreadyRunning();
+            }
+            case InstanceLock.Failed f -> {
+                return new Fatal(ErrorCode.LOCK_FAILED);
+            }
+        }
+
+        ErrorJournal journal = new ErrorJournal(e.clock());
+        AgentLog log = AgentLog.open(dir.logsDir(), e.clock(), journal);
+        BuildInfo build = BuildInfo.load();
+        log.info(LogEvent.LIFE_START,
+                Field.of("version", build.version()),
+                Field.of("build", build.commitShort()),
+                Field.of("dirty", build.dirty()),
+                Field.of("design_system", shortHash(build.designSystemCommit())),
+                Field.of("java", System.getProperty("java.version", "")),
+                Field.of("os", SafeText.token(System.getProperty("os.name", ""), 30)),
+                Field.of("os_version", System.getProperty("os.version", "")),
+                Field.of("arch", System.getProperty("os.arch", "")),
+                Field.of("data_dir", dir.kind().diagnosticValue()),
+                Field.of("tray_option", options.trayDisabled() ? "off" : "on"),
+                Field.of("ignored_args", options.ignoredArguments()),
+                Field.of("pid", ProcessHandle.current().pid()));
+        log.info(LogEvent.LOCK_ACQUIRED);
+
+        ConfigStore config = new ConfigStore(dir.configFile(), e.writer(), e.clock());
+        ConfigStore.Load load = config.load();
+        if (load.state().code() != null) {
+            log.warn(LogEvent.CONFIG_PROBLEM, load.state().code(), Field.of("state", load.state().diagnosticValue()));
+        } else {
+            log.info(LogEvent.CONFIG_LOADED, Field.of("state", load.state().diagnosticValue()));
+        }
+
+        Optional<String> machine = MachineName.resolve(e.env());
+        if (machine.isEmpty()) log.warn(LogEvent.MACHINE_NAME_UNAVAILABLE, ErrorCode.MACHINE_NAME_UNAVAILABLE);
+
+        // DESKTOP-001: execução local supervisionada. Depois de um reinício, execuções não terminadas são reconciliadas
+        // (adotadas se o processo ainda for o mesmo; senão fechadas sem inventar resultado) — nada é relançado
+        RunStore runs = new RunStore(dir.root().resolve("execucoes"), e.writer());
+        ExecutionController execution = new ExecutionController(runs,
+                new ApprovalStore(dir.root().resolve("execucao").resolve("aprovacoes.json"), e.writer()), SessionProbe.system(e.windows(), e.env()),
+                e.clock(), dir.root().resolve("execucao"));
+        // OBS-001: atividade local (só observa: lê os eventos já gravados pelo supervisor e pelo Framework, em segundo plano)
+        ActivityService activity = new ActivityService(runs, e.clock());
+        execution.addListener(activity.controllerListener());
+        // gravação do histórico de atividade: só transições e contagens no log (sem caminho nem conteúdo de evento)
+        activity.storeDiagnostics(new ActivityService.StoreDiagnostics() {
+            @Override
+            public void delayed(ExecutionId id, int pending) {
+                log.warn(LogEvent.ACTIVITY_STORE_DELAYED, ErrorCode.OBS_STORE_FAILED, Field.of("execution", id.value()), Field.of("pending", pending));
+            }
+
+            @Override
+            public void recovered(ExecutionId id) {
+                log.info(LogEvent.ACTIVITY_STORE_RECOVERED, Field.of("execution", id.value()));
+            }
+
+            @Override
+            public void lost(ExecutionId id, long lost) {
+                log.warn(LogEvent.ACTIVITY_STORE_LOST, ErrorCode.OBS_STORE_FAILED, Field.of("execution", id.value()), Field.of("lost", lost));
+            }
+        });
+        // F-AGT-01: gravação do estado.json da execução — só transições no log (sem caminho nem conteúdo)
+        execution.recordDiagnostics(new ExecutionController.RecordDiagnostics() {
+            @Override
+            public void delayed(ExecutionId id, ExecutionState state) {
+                log.warn(LogEvent.EXEC_RECORD_DELAYED, ErrorCode.EXEC_STORAGE_FAILED, Field.of("execution", id.value()), Field.of("state", state));
+            }
+
+            @Override
+            public void recovered(ExecutionId id, ExecutionState state) {
+                log.info(LogEvent.EXEC_RECORD_RECOVERED, Field.of("execution", id.value()), Field.of("state", state));
+            }
+
+            @Override
+            public void lost(ExecutionId id, ExecutionState state) {
+                log.warn(LogEvent.EXEC_RECORD_LOST, ErrorCode.EXEC_STORAGE_FAILED, Field.of("execution", id.value()), Field.of("state", state));
+            }
+        });
+        int reconciled = execution.reconcile();
+        // AGENT-PLATFORM-001: transporte para a Platform. Só LÊ os fatos gravados (estado.json e atividade.jsonl) e grava o
+        // próprio progresso em <dados>/plataforma; não chama o executor nem é chamado por ele. A execução local não depende dele
+        PlatformService platform = e.platform().create(dir.root().resolve("plataforma"), () -> config.current().platformUrl(), runs,
+                activity::durableThrough, e.windows(), e.writer(), e.clock(), agentVersion(build));
+        platform.diagnostics(new PlatformLog(log));
+        runs.retention(platform::retains);
+        activity.retention(platform::retains);
+        platform.load();
+        activity.start(); // retoma a coleta pendente (inclusive da execução adotada) a partir das posições gravadas
+        platform.start();
+        if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
+                Field.of("adopted", execution.running()));
+
+        // a abertura do arquivo de log é assíncrona: espera o resultado para a primeira tela já mostrar o estado real
+        log.flush(1000);
+        return new Ready(new AgentContext(build, dir, lock, log, journal, config, machine, options, e.clock(),
+                e.processStart(), e.launcher(), e.probe(), e.windows(), execution, activity, platform));
+    }
+
+    /** {@code versão+commit} no formato que a Platform aceita ({@code [0-9A-Za-z.+-]{1,40}}), só informativo. */
+    static String agentVersion(BuildInfo b) {
+        String v = BuildInfo.UNKNOWN.equals(b.commitShort()) ? b.version() : b.version() + "+" + b.commitShort();
+        v = v.replaceAll("[^0-9A-Za-z.+-]", "");
+        if (v.isEmpty()) v = "desconhecida";
+        return v.length() > 40 ? v.substring(0, 40) : v;
+    }
+
+    private static String shortHash(String h) {
+        return h.length() > 12 ? h.substring(0, 12) : h;
+    }
+}

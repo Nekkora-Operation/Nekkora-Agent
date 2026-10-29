@@ -1,0 +1,205 @@
+package com.nekkora.agent.exec;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nekkora.agent.core.ErrorCode;
+import com.nekkora.agent.storage.AtomicWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/** DESKTOP-001 G0: ciclo de vida, identificadores, pacotes e aprovação — sem processo. */
+class ExecutionDomainTest {
+    @TempDir
+    Path tmp;
+
+    @Test
+    @DisplayName("estados: só as transições do contrato; terminal não sai; SUCCEEDED só a partir de RUNNING")
+    void transicoes() {
+        Set<String> ok = new HashSet<>();
+        for (ExecutionState a : ExecutionState.values()) for (ExecutionState b : a.next()) ok.add(a + ">" + b);
+        assertEquals(Set.of("READY>STARTING", "READY>BLOCKED", "READY>CANCELLED", "STARTING>RUNNING", "STARTING>BLOCKED", "STARTING>FAILED",
+                "STARTING>CANCELLED", "STARTING>OUTCOME_UNKNOWN", "RUNNING>SUCCEEDED", "RUNNING>FAILED", "RUNNING>CANCELLED", "RUNNING>TIMED_OUT",
+                "RUNNING>OUTCOME_UNKNOWN"), ok);
+        for (ExecutionState t : EnumSet.of(ExecutionState.SUCCEEDED, ExecutionState.FAILED, ExecutionState.CANCELLED, ExecutionState.TIMED_OUT,
+                ExecutionState.BLOCKED, ExecutionState.OUTCOME_UNKNOWN)) {
+            assertTrue(t.terminal() && t.next().isEmpty(), t.name());
+        }
+        ExecutionRecord r = new ExecutionRecord(ExecutionId.random(), ExecutionPackage.Kind.LAB_GENERIC, "x", "sha256:" + "a".repeat(64), ExecutionState.READY,
+                null, Instant.EPOCH, null, null, null, null, Map.of(), 0, 0, false, 0);
+        assertThrows(IllegalStateException.class, () -> r.moveTo(ExecutionState.SUCCEEDED, null, Instant.EPOCH), "sem confirmação artificial");
+        ExecutionRecord done = r.moveTo(ExecutionState.BLOCKED, ErrorCode.EXEC_NOT_APPROVED, Instant.EPOCH);
+        assertThrows(IllegalStateException.class, () -> done.moveTo(ExecutionState.STARTING, null, Instant.EPOCH));
+    }
+
+    @Test
+    @DisplayName("ExecutionId: formato fixo, 20 mil sem colisão, valor inválido recusado")
+    void identificadores() {
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < 20_000; i++) assertTrue(seen.add(ExecutionId.random().value()));
+        assertTrue(seen.stream().allMatch(ExecutionId::valid));
+        for (String bad : List.of("", "ex-", "ex-" + "g".repeat(32), "../" + "a".repeat(32), "ex-" + "A".repeat(32))) {
+            assertThrows(IllegalArgumentException.class, () -> new ExecutionId(bad), bad);
+        }
+    }
+
+    @Test
+    @DisplayName("JsonReader: listas, números, chave repetida e profundidade")
+    void json() throws Exception {
+        Map<String, Object> m = JsonReader.object("{\"a\": [1, 2.5, \"x\", null, true], \"b\": {\"c\": {}}}");
+        assertEquals(List.of(1L, 2.5, "x", JsonReader.NULL, true), m.get("a"));
+        assertThrows(JsonReader.Invalid.class, () -> JsonReader.object("{\"a\": 1, \"a\": 2}"));
+        assertThrows(JsonReader.Invalid.class, () -> JsonReader.object("[1]"));
+        assertThrows(JsonReader.Invalid.class, () -> JsonReader.object("{\"a\": " + "[".repeat(40) + "]".repeat(40) + "}"));
+    }
+
+    @Test
+    @DisplayName("pacote de laboratório: inspeção, impressão digital estável, arquivo mudado é recusado e muda a impressão")
+    void pacoteLaboratorio() throws Exception {
+        Path dir = ExecFixtures.labPackage(tmp.resolve("lab"), "Laboratorio sucesso", "lab_sucesso.py");
+        ExecutionPackage p = ExecutionPackage.inspect(dir);
+        assertEquals(ExecutionPackage.Kind.LAB_GENERIC, p.kind());
+        assertEquals(ExecutionPackage.Mode.LAB, p.mode());
+        assertEquals(p.fingerprint(), ExecutionPackage.inspect(dir).fingerprint(), "determinística");
+        assertTrue(p.requiredFramework().isEmpty(), "laboratório não exige nekkora_rpa");
+        Files.writeString(dir.resolve("lab_sucesso.py"), Files.readString(dir.resolve("lab_sucesso.py")) + "\n# mudado\n");
+        assertEquals(ErrorCode.EXEC_PACKAGE_CHANGED, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(dir)).code());
+    }
+
+    @Test
+    @DisplayName("pacote do Studio: lista exige entrada e planilha; CRLF não muda o hash; segredos, versão antiga e opção desconhecida são recusados")
+    void pacoteStudio() throws Exception {
+        String list = "\"input\": \"--input\", \"spreadsheet\": \"--spreadsheet\", \"output\": \"--output\"";
+        Path dir = ExecFixtures.studioPackage(tmp.resolve("s1"), "list", list, "");
+        ExecutionPackage p = ExecutionPackage.inspect(dir);
+        assertEquals(ExecutionPackage.Kind.STUDIO_PYTHON, p.kind());
+        assertTrue(p.needsInput());
+        assertEquals("0.3.0", p.requiredFramework().orElseThrow());
+        assertEquals(List.of("https://exemplo.invalid"), p.origins());
+        // checkout do Windows com CRLF: mesmo conteúdo, mesmo hash (como o gerador do Studio calcula)
+        Files.writeString(dir.resolve("main.py"), "print('main')\r\n");
+        assertEquals(p.fingerprint(), ExecutionPackage.inspect(dir).fingerprint());
+        Files.writeString(dir.resolve("main.py"), "print('outro')\n");
+        assertEquals(ErrorCode.EXEC_PACKAGE_CHANGED, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(dir)).code());
+        Path secrets = ExecFixtures.studioPackage(tmp.resolve("s2"), "single", "\"output\": \"--output\"", "\"steps\": [{\"credential\": true}], ");
+        assertEquals(ErrorCode.EXEC_SECRETS_UNSUPPORTED, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(secrets)).code());
+        Path unknown = ExecFixtures.studioPackage(tmp.resolve("s3"), "single", "\"output\": \"--output\", \"extra\": \"--rm\"", "");
+        assertEquals(ErrorCode.EXEC_PACKAGE_INVALID, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(unknown)).code());
+        Path old = ExecFixtures.studioPackage(tmp.resolve("s4"), "single", "\"output\": \"--output\"", "");
+        Files.writeString(old.resolve("manifest.json"), Files.readString(old.resolve("manifest.json")).replace("\"1.5.0\"", "\"1.3.0\""));
+        assertEquals(ErrorCode.EXEC_PACKAGE_INVALID, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(old)).code());
+        Path noList = ExecFixtures.studioPackage(tmp.resolve("s5"), "list", "\"output\": \"--output\"", "");
+        assertEquals(ErrorCode.EXEC_PACKAGE_INVALID, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(noList)).code(), "lista sem entrada/planilha");
+    }
+
+    @Test
+    @DisplayName("procedência: sem metadado, com gerador do Studio declarado, com declaração inválida e laboratório → sempre 'Origem não verificada'; nunca 'gerada pelo Studio'")
+    void procedenciaNaoVerificada() throws Exception {
+        // NEGATIVO: manifesto no formato do Studio SEM generator (montado à mão, por exemplo) — nada é inferido do formato
+        ExecutionPackage bare = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o1"), "single", "\"output\": \"--output\"", ""));
+        assertEquals(ExecutionPackage.Kind.STUDIO_PYTHON, bare.kind(), "o formato continua aceito");
+        assertTrue(bare.declaredGenerator().isEmpty());
+        assertEquals("Origem não verificada · nenhum gerador declarado", ExecutionSetup.originLabel(bare));
+        // o gerador do Studio DECLARADO continua sendo só declaração: o manifesto não é assinado
+        ExecutionPackage studio = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o2"), "single", "\"output\": \"--output\"",
+                "\"generator\": \"nekkora-studio-codegen/1.2.0\", "));
+        assertEquals("nekkora-studio-codegen/1.2.0", studio.declaredGenerator().orElseThrow());
+        assertEquals("Origem não verificada · gerador declarado pelo pacote: nekkora-studio-codegen/1.2.0", ExecutionSetup.originLabel(studio));
+        // pacote escrito à mão que se declara como tal (E2E-005)
+        ExecutionPackage hand = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o3"), "single", "\"output\": \"--output\"",
+                "\"generator\": \"hand-written:nekkora-e2e-005/1.0.0\", "));
+        assertTrue(ExecutionSetup.originLabel(hand).endsWith("gerador declarado pelo pacote: hand-written:nekkora-e2e-005/1.0.0"));
+        // declaração fora do formato exibível (caminho, quebra de linha, longa demais, não texto): não aparece; o pacote não é recusado por isso
+        for (String bad : List.of("\"C:\\\\Users\\\\fulano\\\\gerador\"", "\"linha\\nnova\"", "\"" + "g".repeat(81) + "\"", "\" espaco\"", "42", "{\"x\": 1}")) {
+            ExecutionPackage p = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("o-" + Math.abs(bad.hashCode())), "single",
+                    "\"output\": \"--output\"", "\"generator\": " + bad + ", "));
+            assertTrue(p.declaredGenerator().isEmpty(), bad);
+            assertEquals("Origem não verificada · nenhum gerador declarado", ExecutionSetup.originLabel(p), bad);
+        }
+        ExecutionPackage lab = ExecutionPackage.inspect(ExecFixtures.labPackage(tmp.resolve("o-lab"), "Laboratorio sucesso", "lab_sucesso.py"));
+        assertTrue(ExecutionSetup.originLabel(lab).startsWith("Origem não verificada"));
+        for (ExecutionPackage p : List.of(bare, studio, hand, lab)) {
+            String shown = ExecutionSetup.kindLabel(p) + " " + ExecutionSetup.originLabel(p);
+            assertFalse(shown.toLowerCase(java.util.Locale.ROOT).matches(".*gerad[ao] pelo studio.*"), shown);
+        }
+        assertEquals("Pacote local importado (projeto Python com nekkora-rpa)", ExecutionSetup.kindLabel(studio));
+        // a declaração não entra na impressão digital de outra forma que não o próprio manifesto (já coberto: o manifesto é hasheado)
+        assertNotEquals(bare.fingerprint(), studio.fingerprint());
+    }
+
+    @Test
+    @DisplayName("pacote inseguro: caminho que sobe de pasta, arquivo ausente e pasta desconhecida")
+    void pacoteInseguro() throws Exception {
+        Path dir = ExecFixtures.labPackage(tmp.resolve("lab"), "Laboratorio", "lab_sucesso.py");
+        Path d = dir.resolve(ExecutionPackage.LAB_DESCRIPTOR);
+        String base = Files.readString(d);
+        Files.writeString(d, base.replace("\"lab_comum.py\"", "\"../fora.py\""));
+        assertEquals(ErrorCode.EXEC_PACKAGE_UNSAFE, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(dir)).code());
+        Files.writeString(d, base);
+        Files.delete(dir.resolve("lab_comum.py"));
+        assertEquals(ErrorCode.EXEC_PACKAGE_CHANGED, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(dir)).code());
+        Files.createDirectories(tmp.resolve("vazia"));
+        assertEquals(ErrorCode.EXEC_PACKAGE_UNKNOWN, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(tmp.resolve("vazia"))).code());
+        assertEquals(ErrorCode.EXEC_PACKAGE_NOT_FOUND, assertThrows(ExecRefused.class, () -> ExecutionPackage.inspect(tmp.resolve("nao-existe"))).code());
+    }
+
+    @Test
+    @DisplayName("aprovação: vale só para a impressão aprovada; arquivo ilegível = nenhuma aprovação; sem caminho no arquivo")
+    void aprovacao() throws Exception {
+        ApprovalStore store = new ApprovalStore(tmp.resolve("dados").resolve("aprovacoes.json"), AtomicWriter.DEFAULT);
+        Path dir = ExecFixtures.labPackage(tmp.resolve("lab"), "Laboratorio", "lab_sucesso.py");
+        ExecutionPackage p = ExecutionPackage.inspect(dir);
+        assertFalse(store.approved(p));
+        store.approve(p, Instant.parse("2026-10-22T00:00:00Z"));
+        assertTrue(store.approved(p));
+        String saved = Files.readString(tmp.resolve("dados").resolve("aprovacoes.json"), StandardCharsets.UTF_8);
+        assertFalse(saved.contains(tmp.toString().replace("\\", "\\\\")) || saved.contains("lab_sucesso"), "nenhum caminho nem arquivo: " + saved);
+        // outro conteúdo (outro descritor): outra impressão digital, não aprovada
+        ExecutionPackage changed = ExecutionPackage.inspect(ExecFixtures.labPackage(tmp.resolve("lab2"), "Laboratorio", "lab_falha.py"));
+        assertNotEquals(p.fingerprint(), changed.fingerprint());
+        assertFalse(store.approved(changed));
+        // achado na homologação (G1): o nome da PASTA de um pacote do Studio (pode ser o nome de um cliente) não vai ao arquivo
+        ExecutionPackage studio = ExecutionPackage.inspect(ExecFixtures.studioPackage(tmp.resolve("Cliente-Confidencial-ACME"), "single", "\"output\": \"--output\"", ""));
+        store.approve(studio, Instant.parse("2026-10-22T00:00:00Z"));
+        assertTrue(store.approved(studio));
+        assertFalse(Files.readString(tmp.resolve("dados").resolve("aprovacoes.json"), StandardCharsets.UTF_8).contains("Cliente-Confidencial-ACME"));
+        Files.writeString(tmp.resolve("dados").resolve("aprovacoes.json"), "{ quebrado");
+        assertFalse(store.approved(p), "ilegível: nada é presumido aprovado");
+    }
+
+    @Test
+    @DisplayName("histórico: 'nenhuma execução' é diferente de 'não foi possível ler' e de registro ilegível")
+    void historicoDistingueVazioDeFalha() throws Exception {
+        RunStore none = new RunStore(tmp.resolve("sem-pasta").resolve("execucoes"), AtomicWriter.DEFAULT);
+        assertEquals(new RunStore.Listing(List.of(), 0, false), none.list(), "primeira abertura: vazio, sem falha");
+        Path file = Files.writeString(tmp.resolve("execucoes-arquivo"), "x");
+        RunStore broken = new RunStore(file, AtomicWriter.DEFAULT);
+        assertTrue(broken.list().failed(), "a pasta do histórico não é uma pasta: falha, não 'nenhuma execução'");
+        RunStore store = new RunStore(tmp.resolve("dados").resolve("execucoes"), AtomicWriter.DEFAULT);
+        ExecutionId ok = ExecutionId.random();
+        store.save(new ExecutionRecord(ok, ExecutionPackage.Kind.LAB_GENERIC, "pacote", "sha256:" + "a".repeat(64), ExecutionState.READY, null,
+                Instant.parse("2026-10-23T10:00:00Z"), null, null, null, null, Map.of(), 0, 0, false, 0));
+        ExecutionId bad = ExecutionId.random();
+        Files.createDirectories(store.dir(bad));
+        Files.writeString(store.dir(bad).resolve("estado.json"), "{ quebrado");
+        Files.createDirectories(store.dir(ExecutionId.random())); // em criação (sem estado.json): não conta
+        RunStore.Listing l = store.list();
+        assertEquals(List.of(ok), l.records().stream().map(ExecutionRecord::id).toList());
+        assertEquals(1, l.unreadable());
+        assertFalse(l.failed());
+        assertEquals(l.records(), store.all());
+    }
+}

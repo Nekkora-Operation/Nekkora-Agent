@@ -1,0 +1,14 @@
+# AGENT-PLATFORM-001 — complemento do laboratório sobre api/e2e/compose.e2e.yml (a API não é alterada): limite de memória
+# dos três processos Java (o heap segue -XX:MaxRAMPercentage=75 do Dockerfile da API) e do banco, para o laboratório não
+# pressionar a máquina junto com o Agent e a automação.
+services:
+  platform:
+    mem_limit: 900m
+  portal:
+    mem_limit: 512m
+  agent-gateway:
+    mem_limit: 640m
+  postgres:
+    mem_limit: 768m
+  redis:
+    mem_limit: 128m

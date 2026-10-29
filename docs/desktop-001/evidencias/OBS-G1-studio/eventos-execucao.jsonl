@@ -1,0 +1,3 @@
+{"at": "2026-10-23T03:32:55.051916900Z", "event": "STARTING", "session": 1, "kind": "STUDIO_PYTHON", "mode": "LIST"}
+{"at": "2026-10-23T03:32:55.088420700Z", "event": "RUNNING", "pid": 40900}
+{"at": "2026-10-23T03:33:01.410559200Z", "event": "SUCCEEDED", "exit": 0, "protocol": true, "output_bytes": 198}

@@ -1,0 +1,8 @@
+id=agentlab-003
+projeto=nekkora-agentlab-003
+api_commit=2e639244c22e0f439860344ac46557896431f51a
+migrations=001-027
+sub_rede=10.251.49.0/24
+origem=https://localhost:55877
+certificado_sha256=49f9279233733800fe585aa24afa6362b75347f47ca0a9ee340f84b15c111add
+subido_em=2026-10-29T15:40:41Z

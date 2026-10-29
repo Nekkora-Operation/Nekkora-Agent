@@ -1,0 +1,40 @@
+﻿{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-003",
+    "execucao":  null,
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: 7986e84afc656c1c7e2b791aa4411e55fe0ee961\r / data do commit: 2026-10-29T15:19:49Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "J1 Agent empacotado abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 pareamento confirmado pela Platform real (PLATFORM_PAIRED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 vínculo gravado sem segredo (vinculo.json) e credencial só no arquivo protegido",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 Agent ACTIVE e associado ao Worker na Platform (2|c06d20b2-2b01-49a3-9761-08c06741accd)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 autorizações baixadas (2 válidas para o Worker, uma por impressão)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "jornada interrompida por exceção: tempo esgotado: execução iniciada",
+                       "ok":  false
+                   },
+                   {
+                       "check":  "J9 nenhum segredo (código, credencial, senha e fator da pessoa: 6 valores) em evidências, dados, logs dos 5 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  7,
+    "ok":  6
+}

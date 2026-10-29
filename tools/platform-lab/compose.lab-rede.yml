@@ -1,0 +1,40 @@
+# AGENT-PLATFORM-002 — sub-rede própria para um segundo laboratório (a API não é alterada). O compose da stack E2E fixa
+# 10.251.47.0/24 e os endereços de cada serviço; um laboratório anterior, parado e PRESERVADO para revisão, continua dono
+# dessa sub-rede. Este complemento troca só a sub-rede, os endereços e o proxy confiável (o nginx), na mesma disposição.
+networks:
+  e2e:
+    ipam:
+      config: !override
+        - subnet: 10.251.48.0/24
+
+services:
+  postgres:
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.20
+  redis:
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.21
+  platform:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.48.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.30
+  portal:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.48.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.31
+  agent-gateway:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.48.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.32
+  nginx:
+    networks:
+      e2e:
+        ipv4_address: 10.251.48.10

@@ -1,0 +1,799 @@
+[
+ {
+  "motivo": "versão de contrato desconhecida",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "2.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "tipo desconhecido (aprovação pelo canal não existe)",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "package.approve",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "campo livre no envelope",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   },
+   "note": "executar já"
+  }
+ },
+ {
+  "motivo": "sem seq depois do handshake",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "pedido sem request_id",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "pedido com campo de aprovação (pedido não aprova pacote)",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    },
+    "approve": true
+   }
+  }
+ },
+ {
+  "motivo": "pedido com execução automática",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    },
+    "auto_start": true
+   }
+  }
+ },
+ {
+  "motivo": "caminho do pacote relativo",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "caminho do pacote em rede (UNC)",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "\\\\servidor\\share\\pacote",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "caminho com prefixo de dispositivo",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "\\\\?\\C:\\Automacoes\\pacote",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "caminho com '..'",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\..\\Windows",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "impressão digital fora do formato",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "5664f1a5",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "prazo abaixo do mínimo",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 5,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "correlação com texto livre",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "Cliente Sigiloso S/A",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "argumentos de linha de comando livres",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.request",
+   "message_id": "00000008-0000-4000-8000-000000000008",
+   "seq": 5,
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "package": {
+     "path": "C:\\Automacoes\\biografias",
+     "expected_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+     "manifest_sha256": "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5"
+    },
+    "runtime": {
+     "python": "C:\\Ambientes\\0.3.0-excel\\venv\\Scripts\\python.exe"
+    },
+    "input": "C:\\Entradas\\artigos.csv",
+    "output_root": "C:\\Saidas",
+    "timeout_seconds": 3600,
+    "correlation": {
+     "project_ref": "wikipedia-biografias",
+     "automation_ref": "biografias",
+     "code_revision_ref": "r-14"
+    },
+    "arguments": [
+     "--channel",
+     "msedge"
+    ]
+   }
+  }
+ },
+ {
+  "motivo": "prova com tamanho errado",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "auth.proof",
+   "message_id": "00000002-0000-4000-8000-000000000002",
+   "payload": {
+    "client_nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw",
+    "proof_secret": "abc",
+    "pairing_id": "00000384-0000-4000-8000-000000000384",
+    "proof_pairing": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw",
+    "studio_version": "1.0.0-SNAPSHOT"
+   }
+  }
+ },
+ {
+  "motivo": "pairing_id sem proof_pairing",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "auth.proof",
+   "message_id": "00000002-0000-4000-8000-000000000002",
+   "payload": {
+    "client_nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw",
+    "proof_secret": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw",
+    "pairing_id": "00000384-0000-4000-8000-000000000384",
+    "studio_version": "1.0.0-SNAPSHOT"
+   }
+  }
+ },
+ {
+  "motivo": "pareamento recusado não traz chave",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "pair.result",
+   "message_id": "00000007-0000-4000-8000-000000000007",
+   "seq": 4,
+   "reply_to": "00000004-0000-4000-8000-000000000004",
+   "payload": {
+    "outcome": "REFUSED",
+    "pairing_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw"
+   }
+  }
+ },
+ {
+  "motivo": "pareamento concluído sem chave",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "pair.result",
+   "message_id": "00000006-0000-4000-8000-000000000006",
+   "seq": 3,
+   "reply_to": "00000004-0000-4000-8000-000000000004",
+   "payload": {
+    "outcome": "PAIRED",
+    "pairing_id": "00000384-0000-4000-8000-000000000384"
+   }
+  }
+ },
+ {
+  "motivo": "código fora do catálogo",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.refused",
+   "message_id": "0000000a-0000-4000-8000-00000000000a",
+   "seq": 7,
+   "reply_to": "00000008-0000-4000-8000-000000000008",
+   "payload": {
+    "request_id": "000001f5-0000-4000-8000-0000000001f5",
+    "code": "AGT-EXE-099"
+   }
+  }
+ },
+ {
+  "motivo": "snapshot STARTED sem agent_execution_id",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "request.snapshot",
+   "message_id": "0000000d-0000-4000-8000-00000000000d",
+   "seq": 10,
+   "reply_to": "0000000c-0000-4000-8000-00000000000c",
+   "payload": {
+    "request_id": "000001f4-0000-4000-8000-0000000001f4",
+    "request_state": "STARTED",
+    "agent_fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d"
+   }
+  }
+ },
+ {
+  "motivo": "estado de execução novo (o canal não muda o ciclo de vida)",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.snapshot",
+   "message_id": "00000011-0000-4000-8000-000000000011",
+   "seq": 14,
+   "reply_to": "00000010-0000-4000-8000-000000000010",
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "AWAITING_APPROVAL",
+    "created": "2026-10-28T12:35:05.896Z",
+    "started": "2026-10-28T12:35:06.001Z",
+    "ended": "2026-10-28T12:35:14.300Z",
+    "exit_code": 0,
+    "adopted": false,
+    "recovered": false,
+    "record_saved": true,
+    "counts": {
+     "SUCCEEDED": 5
+    },
+    "origin": {
+     "kind": "STUDIO_LOCAL",
+     "pairing_id": "00000384-0000-4000-8000-000000000384",
+     "request_id": "000001f4-0000-4000-8000-0000000001f4"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "SUCCEEDED com progresso parcial (parcial não é conclusão)",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.snapshot",
+   "message_id": "00000011-0000-4000-8000-000000000011",
+   "seq": 14,
+   "reply_to": "00000010-0000-4000-8000-000000000010",
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "SUCCEEDED",
+    "created": "2026-10-28T12:35:05.896Z",
+    "started": "2026-10-28T12:35:06.001Z",
+    "ended": "2026-10-28T12:35:14.300Z",
+    "exit_code": 0,
+    "adopted": false,
+    "recovered": false,
+    "record_saved": true,
+    "counts": {
+     "SUCCEEDED": 5
+    },
+    "origin": {
+     "kind": "STUDIO_LOCAL",
+     "pairing_id": "00000384-0000-4000-8000-000000000384",
+     "request_id": "000001f4-0000-4000-8000-0000000001f4"
+    },
+    "progress": {
+     "available": true,
+     "transactions": {
+      "SUCCEEDED": 5
+     },
+     "delivered": 5,
+     "problem": null
+    }
+   }
+  }
+ },
+ {
+  "motivo": "origem STUDIO_LOCAL sem pareamento",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.snapshot",
+   "message_id": "00000011-0000-4000-8000-000000000011",
+   "seq": 14,
+   "reply_to": "00000010-0000-4000-8000-000000000010",
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "SUCCEEDED",
+    "created": "2026-10-28T12:35:05.896Z",
+    "started": "2026-10-28T12:35:06.001Z",
+    "ended": "2026-10-28T12:35:14.300Z",
+    "exit_code": 0,
+    "adopted": false,
+    "recovered": false,
+    "record_saved": true,
+    "counts": {
+     "SUCCEEDED": 5
+    },
+    "origin": {
+     "kind": "STUDIO_LOCAL",
+     "request_id": "000001f4-0000-4000-8000-0000000001f4"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "origem LOCAL_UI com pareamento",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.snapshot",
+   "message_id": "00000011-0000-4000-8000-000000000011",
+   "seq": 14,
+   "reply_to": "00000010-0000-4000-8000-000000000010",
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "SUCCEEDED",
+    "created": "2026-10-28T12:35:05.896Z",
+    "started": "2026-10-28T12:35:06.001Z",
+    "ended": "2026-10-28T12:35:14.300Z",
+    "exit_code": 0,
+    "adopted": false,
+    "recovered": false,
+    "record_saved": true,
+    "counts": {
+     "SUCCEEDED": 5
+    },
+    "origin": {
+     "kind": "LOCAL_UI",
+     "pairing_id": "00000384-0000-4000-8000-000000000384",
+     "request_id": "000001f4-0000-4000-8000-0000000001f4"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "em andamento com fim",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.snapshot",
+   "message_id": "00000011-0000-4000-8000-000000000011",
+   "seq": 14,
+   "reply_to": "00000010-0000-4000-8000-000000000010",
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "RUNNING",
+    "created": "2026-10-28T12:35:05.896Z",
+    "started": "2026-10-28T12:35:06.001Z",
+    "ended": "2026-10-28T12:35:14.300Z",
+    "exit_code": 0,
+    "adopted": false,
+    "recovered": false,
+    "record_saved": true,
+    "counts": {
+     "SUCCEEDED": 5
+    },
+    "origin": {
+     "kind": "STUDIO_LOCAL",
+     "pairing_id": "00000384-0000-4000-8000-000000000384",
+     "request_id": "000001f4-0000-4000-8000-0000000001f4"
+    }
+   }
+  }
+ },
+ {
+  "motivo": "página de atividade acima de 500",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.activity",
+   "message_id": "00000013-0000-4000-8000-000000000013",
+   "seq": 16,
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "after_sequence": 0,
+    "max": 501
+   }
+  }
+ },
+ {
+  "motivo": "cancelamento sem cancel_id",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.cancel",
+   "message_id": "00000015-0000-4000-8000-000000000015",
+   "seq": 18,
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4"
+   }
+  }
+ },
+ {
+  "motivo": "resultado de cancelamento fora do enum",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.cancel.result",
+   "message_id": "00000016-0000-4000-8000-000000000016",
+   "seq": 19,
+   "reply_to": "00000015-0000-4000-8000-000000000015",
+   "payload": {
+    "cancel_id": "000002bc-0000-4000-8000-0000000002bc",
+    "result": "CANCELLED"
+   }
+  }
+ },
+ {
+  "motivo": "aviso com os dois identificadores",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "run.changed",
+   "message_id": "00000017-0000-4000-8000-000000000017",
+   "seq": 20,
+   "payload": {
+    "agent_execution_id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+    "state": "CANCELLED",
+    "last_sequence": 420,
+    "request_id": "000001f4-0000-4000-8000-0000000001f4"
+   }
+  }
+ },
+ {
+  "motivo": "batimento com conteúdo",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "heartbeat",
+   "message_id": "00000019-0000-4000-8000-000000000019",
+   "seq": 22,
+   "payload": {
+    "x": 1
+   }
+  }
+ },
+ {
+  "motivo": "erro com código de outra família",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "error",
+   "message_id": "0000001a-0000-4000-8000-00000000001a",
+   "seq": 23,
+   "payload": {
+    "code": "AGT-EXE-004",
+    "fatal": false
+   }
+  }
+ },
+ {
+  "motivo": "limite de quadro diferente de 64 KiB",
+  "mensagem": {
+   "schema": "nekkora-agent/local-control",
+   "version": "1.0.0",
+   "type": "auth.ok",
+   "message_id": "00000003-0000-4000-8000-000000000003",
+   "reply_to": "00000002-0000-4000-8000-000000000002",
+   "payload": {
+    "server_proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw",
+    "contract_version": "1.0.0",
+    "heartbeat_ms": 15000,
+    "paired": true,
+    "limits": {
+     "max_frame_bytes": 12582912,
+     "max_messages_per_second": 20,
+     "max_requests_per_hour": 10,
+     "max_activity_page": 500
+    }
+   }
+  }
+ }
+]

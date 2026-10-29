@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nekkora.local/contracts/nekkora-agent-local-control-1.0.0.schema.json",
+  "title": "nekkora-agent/local-control 1.0.0 (PROPOSTA): uma mensagem do canal local Studio ↔ Agent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "type", "message_id", "payload"],
+  "properties": {
+    "schema": {"const": "nekkora-agent/local-control"},
+    "version": {"const": "1.0.0"},
+    "type": {"enum": ["auth.challenge", "auth.proof", "auth.ok", "pair.begin", "pair.pending", "pair.result", "run.request", "run.received",
+      "run.refused", "request.status", "request.snapshot", "request.withdraw", "run.status", "run.snapshot", "run.activity", "run.activity.page",
+      "run.cancel", "run.cancel.result", "run.changed", "heartbeat", "error"]},
+    "message_id": {"$ref": "#/$defs/uuid"},
+    "seq": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "reply_to": {"$ref": "#/$defs/uuid"},
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {"if": {"properties": {"type": {"not": {"enum": ["auth.challenge", "auth.proof", "auth.ok"]}}}}, "then": {"required": ["seq"]}},
+    {"if": {"properties": {"type": {"const": "auth.challenge"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/authChallenge"}}}},
+    {"if": {"properties": {"type": {"const": "auth.proof"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/authProof"}}}},
+    {"if": {"properties": {"type": {"const": "auth.ok"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/authOk"}}}},
+    {"if": {"properties": {"type": {"const": "pair.begin"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/empty"}}}},
+    {"if": {"properties": {"type": {"const": "pair.pending"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/pairPending"}}}},
+    {"if": {"properties": {"type": {"const": "pair.result"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/pairResult"}}}},
+    {"if": {"properties": {"type": {"const": "run.request"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/runRequest"}}}},
+    {"if": {"properties": {"type": {"const": "run.received"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/runReceived"}}}},
+    {"if": {"properties": {"type": {"const": "run.refused"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/runRefused"}}}},
+    {"if": {"properties": {"type": {"const": "request.status"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/requestRef"}}}},
+    {"if": {"properties": {"type": {"const": "request.withdraw"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/requestRef"}}}},
+    {"if": {"properties": {"type": {"const": "request.snapshot"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/requestSnapshot"}}}},
+    {"if": {"properties": {"type": {"const": "run.status"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/executionRef"}}}},
+    {"if": {"properties": {"type": {"const": "run.snapshot"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/runSnapshot"}}}},
+    {"if": {"properties": {"type": {"const": "run.activity"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/runActivity"}}}},
+    {"if": {"properties": {"type": {"const": "run.activity.page"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/runActivityPage"}}}},
+    {"if": {"properties": {"type": {"const": "run.cancel"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/runCancel"}}}},
+    {"if": {"properties": {"type": {"const": "run.cancel.result"}}}, "then": {"required": ["reply_to"], "properties": {"payload": {"$ref": "#/$defs/runCancelResult"}}}},
+    {"if": {"properties": {"type": {"const": "run.changed"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/runChanged"}}}},
+    {"if": {"properties": {"type": {"const": "heartbeat"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/empty"}}}},
+    {"if": {"properties": {"type": {"const": "error"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/error"}}}}
+  ],
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+    "b64_32": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$", "description": "32 bytes em base64url sem preenchimento (nonce, segredo, HMAC-SHA256)."},
+    "sha256hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executionId": {"type": "string", "pattern": "^ex-[0-9a-f]{32}$"},
+    "instant": {"type": "string", "format": "date-time"},
+    "opaqueRef": {"type": "string", "pattern": "^[a-z0-9-]{1,64}$"},
+    "localPath": {
+      "type": "string", "minLength": 3, "maxLength": 260,
+      "description": "Caminho absoluto LOCAL do Windows: letra de unidade, sem UNC, sem prefixo de dispositivo, sem '..', sem caracteres proibidos. Ligação/junção é recusada na conferência (AGT-LCL-012), não aqui.",
+      "pattern": "^[A-Za-z]:\\\\[^<>:\"|?*\\u0000-\\u001f]*$",
+      "not": {"pattern": "(^|\\\\)\\.\\.(\\\\|$)"}
+    },
+    "agentCode": {"type": "string", "pattern": "^(AGT-EXE-0(0[1-9]|1[0-7]|2[0-6])|AGT-LCL-0(0[1-9]|1[0-3]))$"},
+    "requestState": {"enum": ["RECEIVED", "AWAITING_APPROVAL", "AWAITING_CONFIRMATION", "STARTED", "REFUSED", "EXPIRED", "WITHDRAWN"]},
+    "executionState": {"enum": ["READY", "STARTING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "BLOCKED", "OUTCOME_UNKNOWN"]},
+    "counts": {"type": "object", "maxProperties": 16, "propertyNames": {"pattern": "^[A-Z_]{1,40}$"},
+      "additionalProperties": {"type": "integer", "minimum": 0}},
+    "empty": {"type": "object", "additionalProperties": false, "maxProperties": 0},
+    "authChallenge": {"type": "object", "additionalProperties": false, "required": ["instance_id", "server_nonce", "accepts"], "properties": {
+      "instance_id": {"$ref": "#/$defs/b64_32"}, "server_nonce": {"$ref": "#/$defs/b64_32"},
+      "accepts": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": {"const": "1.0.0"}}}},
+    "authProof": {"type": "object", "additionalProperties": false, "required": ["client_nonce", "proof_secret", "studio_version"], "properties": {
+      "client_nonce": {"$ref": "#/$defs/b64_32"}, "proof_secret": {"$ref": "#/$defs/b64_32"},
+      "pairing_id": {"$ref": "#/$defs/uuid"}, "proof_pairing": {"$ref": "#/$defs/b64_32"},
+      "studio_version": {"type": "string", "pattern": "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(-SNAPSHOT)?$"}},
+      "dependentRequired": {"pairing_id": ["proof_pairing"], "proof_pairing": ["pairing_id"]}},
+    "authOk": {"type": "object", "additionalProperties": false, "required": ["server_proof", "contract_version", "heartbeat_ms", "limits", "paired"], "properties": {
+      "server_proof": {"$ref": "#/$defs/b64_32"}, "contract_version": {"const": "1.0.0"},
+      "heartbeat_ms": {"type": "integer", "minimum": 1000, "maximum": 60000}, "paired": {"type": "boolean"},
+      "limits": {"type": "object", "additionalProperties": false, "required": ["max_frame_bytes", "max_messages_per_second", "max_requests_per_hour", "max_activity_page"],
+        "properties": {"max_frame_bytes": {"const": 65536}, "max_messages_per_second": {"type": "integer", "minimum": 1, "maximum": 20},
+          "max_requests_per_hour": {"type": "integer", "minimum": 1, "maximum": 10}, "max_activity_page": {"type": "integer", "minimum": 1, "maximum": 500}}}}},
+    "pairPending": {"type": "object", "additionalProperties": false, "required": ["sas", "expires_in_s"], "properties": {
+      "sas": {"type": "string", "pattern": "^[0-9]{6}$"}, "expires_in_s": {"type": "integer", "minimum": 1, "maximum": 600}}},
+    "pairResult": {"type": "object", "additionalProperties": false, "required": ["outcome"], "properties": {
+      "outcome": {"enum": ["PAIRED", "REFUSED", "EXPIRED"]}, "pairing_id": {"$ref": "#/$defs/uuid"}, "pairing_key": {"$ref": "#/$defs/b64_32"}},
+      "if": {"properties": {"outcome": {"const": "PAIRED"}}}, "then": {"required": ["pairing_id", "pairing_key"]},
+      "else": {"not": {"anyOf": [{"required": ["pairing_id"]}, {"required": ["pairing_key"]}]}}},
+    "runRequest": {"type": "object", "additionalProperties": false, "required": ["request_id", "package", "runtime", "output_root", "timeout_seconds"], "properties": {
+      "request_id": {"$ref": "#/$defs/uuid"},
+      "package": {"type": "object", "additionalProperties": false, "required": ["path", "manifest_sha256"], "properties": {
+        "path": {"$ref": "#/$defs/localPath"}, "expected_fingerprint": {"$ref": "#/$defs/fingerprint"}, "manifest_sha256": {"$ref": "#/$defs/sha256hex"}}},
+      "runtime": {"type": "object", "additionalProperties": false, "required": ["python"], "properties": {"python": {"$ref": "#/$defs/localPath"}}},
+      "input": {"$ref": "#/$defs/localPath"},
+      "output_root": {"$ref": "#/$defs/localPath"},
+      "timeout_seconds": {"type": "integer", "minimum": 60, "maximum": 86400},
+      "correlation": {"type": "object", "additionalProperties": false, "properties": {
+        "project_ref": {"$ref": "#/$defs/opaqueRef"}, "automation_ref": {"$ref": "#/$defs/opaqueRef"}, "code_revision_ref": {"$ref": "#/$defs/opaqueRef"}}}}},
+    "runReceived": {"type": "object", "additionalProperties": false, "required": ["request_id", "request_state"], "properties": {
+      "request_id": {"$ref": "#/$defs/uuid"}, "request_state": {"$ref": "#/$defs/requestState"}, "agent_fingerprint": {"$ref": "#/$defs/fingerprint"}}},
+    "runRefused": {"type": "object", "additionalProperties": false, "required": ["request_id", "code"], "properties": {
+      "request_id": {"$ref": "#/$defs/uuid"}, "code": {"$ref": "#/$defs/agentCode"}}},
+    "requestRef": {"type": "object", "additionalProperties": false, "required": ["request_id"], "properties": {"request_id": {"$ref": "#/$defs/uuid"}}},
+    "requestSnapshot": {"type": "object", "additionalProperties": false, "required": ["request_id", "request_state"], "properties": {
+      "request_id": {"$ref": "#/$defs/uuid"},
+      "request_state": {"anyOf": [{"$ref": "#/$defs/requestState"}, {"const": "UNKNOWN_REQUEST"}]},
+      "code": {"$ref": "#/$defs/agentCode"}, "agent_execution_id": {"$ref": "#/$defs/executionId"}, "agent_fingerprint": {"$ref": "#/$defs/fingerprint"}},
+      "if": {"properties": {"request_state": {"const": "STARTED"}}}, "then": {"required": ["agent_execution_id"]}},
+    "executionRef": {"type": "object", "additionalProperties": false, "required": ["agent_execution_id"], "properties": {"agent_execution_id": {"$ref": "#/$defs/executionId"}}},
+    "runSnapshot": {"type": "object", "additionalProperties": false,
+      "required": ["agent_execution_id", "state", "created", "adopted", "recovered", "record_saved", "counts", "origin"], "properties": {
+      "agent_execution_id": {"$ref": "#/$defs/executionId"}, "state": {"$ref": "#/$defs/executionState"}, "code": {"$ref": "#/$defs/agentCode"},
+      "created": {"$ref": "#/$defs/instant"}, "started": {"$ref": "#/$defs/instant"}, "ended": {"$ref": "#/$defs/instant"},
+      "exit_code": {"type": "integer"}, "adopted": {"type": "boolean"}, "recovered": {"type": "boolean"}, "record_saved": {"type": "boolean"},
+      "counts": {"$ref": "#/$defs/counts"},
+      "progress": {"type": "object", "additionalProperties": false, "required": ["available", "transactions", "delivered"], "properties": {
+        "available": {"type": "boolean"}, "transactions": {"$ref": "#/$defs/counts"}, "delivered": {"type": "integer", "minimum": 0},
+        "problem": {"type": ["string", "null"], "pattern": "^[A-Z_]{1,40}$"}}},
+      "cancellation": {"type": "object", "additionalProperties": false, "required": ["requested", "source", "outcome"], "properties": {
+        "requested": {"$ref": "#/$defs/instant"}, "source": {"enum": ["LOCAL_UI", "AGENT_SHUTDOWN", "STUDIO_LOCAL"]},
+        "outcome": {"enum": ["PENDING", "CONFIRMED", "NOT_EFFECTIVE"]}}},
+      "origin": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {
+        "kind": {"enum": ["LOCAL_UI", "STUDIO_LOCAL", "UNKNOWN"]}, "pairing_id": {"$ref": "#/$defs/uuid"}, "request_id": {"$ref": "#/$defs/uuid"}},
+        "if": {"properties": {"kind": {"const": "STUDIO_LOCAL"}}}, "then": {"required": ["pairing_id", "request_id"]},
+        "else": {"not": {"anyOf": [{"required": ["pairing_id"]}, {"required": ["request_id"]}]}}}},
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "SUCCEEDED"}}}, "then": {"not": {"required": ["progress"]}}},
+        {"if": {"properties": {"state": {"enum": ["READY", "STARTING", "RUNNING"]}}}, "then": {"not": {"required": ["ended"]}}}]},
+    "runActivity": {"type": "object", "additionalProperties": false, "required": ["agent_execution_id", "after_sequence", "max"], "properties": {
+      "agent_execution_id": {"$ref": "#/$defs/executionId"}, "after_sequence": {"type": "integer", "minimum": 0}, "max": {"type": "integer", "minimum": 1, "maximum": 500}}},
+    "runActivityPage": {"type": "object", "additionalProperties": false, "required": ["agent_execution_id", "events", "last_sequence", "more"], "properties": {
+      "agent_execution_id": {"$ref": "#/$defs/executionId"},
+      "events": {"type": "array", "maxItems": 500, "items": {"type": "object", "required": ["schema", "version", "agent_execution_id", "sequence"],
+        "properties": {"schema": {"const": "nekkora-agent/observability"}},
+        "description": "Envelope nekkora-agent/observability 1.0.0 SEM transformação; validado pelo schema publicado da observabilidade."}},
+      "last_sequence": {"type": "integer", "minimum": 0}, "more": {"type": "boolean"}}},
+    "runCancel": {"type": "object", "additionalProperties": false, "required": ["agent_execution_id", "cancel_id"], "properties": {
+      "agent_execution_id": {"$ref": "#/$defs/executionId"}, "cancel_id": {"$ref": "#/$defs/uuid"}}},
+    "runCancelResult": {"type": "object", "additionalProperties": false, "required": ["cancel_id", "result"], "properties": {
+      "cancel_id": {"$ref": "#/$defs/uuid"},
+      "result": {"enum": ["REQUESTED", "ALREADY_REQUESTED", "ALREADY_ENDED", "NOT_ACTIVE", "UNKNOWN_EXECUTION", "NOT_REQUESTED_BY_THIS_ORIGIN"]}}},
+    "runChanged": {"type": "object", "additionalProperties": false, "properties": {
+      "agent_execution_id": {"$ref": "#/$defs/executionId"}, "request_id": {"$ref": "#/$defs/uuid"},
+      "state": {"anyOf": [{"$ref": "#/$defs/executionState"}, {"$ref": "#/$defs/requestState"}]}, "last_sequence": {"type": "integer", "minimum": 0}},
+      "required": ["state"], "oneOf": [{"required": ["agent_execution_id"]}, {"required": ["request_id"]}]},
+    "error": {"type": "object", "additionalProperties": false, "required": ["code", "fatal"], "properties": {
+      "code": {"type": "string", "pattern": "^AGT-LCL-0(0[1-9]|1[0-3])$"}, "fatal": {"type": "boolean"}}}
+  }
+}

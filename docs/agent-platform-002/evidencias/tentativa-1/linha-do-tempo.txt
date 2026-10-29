@@ -1,0 +1,6 @@
+﻿04:59:19.146 [REAL] J1 Agent empacotado do commit 2045910a3c68181353fbd3abc715a0374954994b
+04:59:21.947 [REAL] C1 Agent empacotado aberto (JVM 38684), sem Java no PATH
+04:59:30.303 [REAL] C1 código digitado no campo de senha; arquivo do código apagado
+05:00:42.497 [REAL] C2 presença no banco: 2026-10-29T04:59:31.029035 -> 2026-10-29T05:00:31.609529
+05:00:42.500 [REAL] C3 nginx do laboratório PAUSADO antes de iniciar (nenhuma resposta da Platform)
+05:02:36.105 ERRO tempo esgotado: execução iniciada @linha 63

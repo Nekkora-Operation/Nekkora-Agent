@@ -1,0 +1,25 @@
+OBS-PERSISTENCE-HARDENING — B-OBS-03 (revisão de fontes do pacote 7357525): prova vermelho/verde
+
+Cenário: fila cheia + bytes integralmente visíveis no arquivo + fsync sempre falho + chegada contínua + recuperação.
+
+VERMELHO: ActivityPersistenceTest (17 testes = 14 anteriores + 3 do B-OBS-03) contra o commit 05f7a48.
+Única adição ao código antigo para compilar: accessors somente leitura queuedLines() (pending.size()) e queuedBytes() (pendingBytes).
+
+[ERROR]   ActivityPersistenceTest.fullQueueOfVisibleLinesWithFsyncAlwaysFailingStaysWithinTheLimitsLosesNothingAndConfirmsOnlyAfterRecovery:571 linhas na memória: 4098 (fase 1, 4162 aceitos) ==> expected: <true> but was: <false>
+[ERROR]   ActivityPersistenceTest.linesReleasedFromMemoryWhileAwaitingSyncAreLostOnlyIfTheFileProvesIt:671 expected: <true> but was: <false>
+[ERROR]   ActivityPersistenceTest.queueFullByBytesWithFsyncAlwaysFailingStaysWithinTheByteLimitAndLosesNothing:635 bytes na memória: 2100148 ==> expected: <true> but was: <false>
+[ERROR] Tests run: 17, Failures: 3, Errors: 0, Skipped: 0
+
+Mapa:
+  fullQueueOfVisibleLines...   fila com 4098 linhas (> MAX_PENDING 4096) na fase 1 — o caminho descrito no parecer
+  queueFullByBytes...          2 100 148 bytes na fila (> MAX_PENDING_BYTES 2 097 152 + 1 linha)
+  linesReleasedFromMemory...   a fila passa do limite já ao encher (a verificação de perda com prova nem chega a rodar)
+
+Sonda (não versionada; 16 384 eventos em lotes de 64 a cada 5 s, todo byte chega ao arquivo, fsync sempre falha):
+  05f7a48   filaMaxLinhas=4436 (limite 4096)  perdidos=10682  pendentes=4436
+  correção  filaMaxLinhas=704                 perdidos=0      pendentes=16384 (aguardando sincronização, contados)
+  No 05f7a48, além de passar do limite, cada evento novo com a fila cheia descartava o anterior ainda não escrito,
+  embora a escrita funcionasse (só a sincronização falhava).
+
+VERDE: os mesmos 17 testes na correção:
+Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.453 s -- in com.nekkora.agent.obs.ActivityPersistenceTest

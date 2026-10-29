@@ -1,0 +1,16 @@
+OK    sem ícone na bandeja neste roteiro (o único ícone é o do Agent empacotado)
+  estado [antes] {"momento":"antes","quando_utc":"2026-10-24T12:43:32.227424500Z","execucao":"ex-e768d28f44e67895fac71b75b46dd21a","estado":"RUNNING","codigo":null,"bloqueios":0,"suspensoes":0,"processo_vivo":true,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":0,"linha_do_tempo":"IN_PROGRESS","execucoes_no_agent":1}
+EM_ANDAMENTO falha ex-e768d28f44e67895fac71b75b46dd21a
+OK    falha: a janela de execução continuou aberta do início ao fim (nada a fechou)
+OK    falha: aba Atividade mostra a coleta encerrada
+  estado [fim] {"momento":"fim","quando_utc":"2026-10-24T12:49:33.266715600Z","execucao":"ex-e768d28f44e67895fac71b75b46dd21a","estado":"FAILED","codigo":"AGT-EXE-022","bloqueios":0,"suspensoes":0,"processo_vivo":false,"sessao_bloqueada":false,"efeitos":1,"eventos_atividade":5,"linha_do_tempo":"COMPLETE","execucoes_no_agent":1}
+  falha: estado FAILED · código AGT-EXE-022 · bloqueios 0 · suspensões 0 · saída 1
+  NÃO EXERCIDO (ensaio): bloqueio false, suspensão false
+OK    falha: classificação FAILED = esperada FAILED
+OK    falha: nenhum sucesso sem prova (SUCCEEDED só com agent-result.json)
+OK    falha: efeito não idempotente aconteceu UMA vez (nada relançado)
+OK    falha: uma única execução registrada neste Agent
+OK    falha: o Agent continuou o mesmo processo (um único LIFE_START)
+OK    falha: OBS-G6 sequência contínua 1..5 e desfecho do supervisor (FAILED) na linha do tempo
+OK    falha: linha do tempo COMPLETE [] (genérico: completa)
+RESULTADO: 10 verificações, 0 falha(s)

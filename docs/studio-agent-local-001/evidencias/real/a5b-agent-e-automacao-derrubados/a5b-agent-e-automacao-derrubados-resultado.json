@@ -1,0 +1,94 @@
+﻿{
+    "schema":  "nekkora-e2e-005/agent-run",
+    "version":  "1.0.0",
+    "label":  "a5b-agent-e-automacao-derrubados",
+    "agent_zip_sha256":  "5fa0354ee4d993bb478133e18038ce9e5b5fa0242c347759cff9b6b6549b6c84",
+    "package_manifest_sha256":  "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5",
+    "execution_id":  "ex-b571707c53842873aa91eea40625ee7c",
+    "state":  "OUTCOME_UNKNOWN",
+    "code":  "AGT-EXE-025",
+    "exit_code":  "",
+    "framework_summary_status":  null,
+    "python_peak_working_set_mb":  0,
+    "agent_peak_working_set_mb":  0,
+    "framework_events_bytes":  203512,
+    "agent_activity_bytes":  262741,
+    "duration_seconds":  12.5,
+    "run_output":  "\u003csaida\u003e\\ex-b571707c53842873aa91eea40625ee7c",
+    "record_version":  "1.1.0",
+    "origin":  "LOCAL_UI",
+    "recovered":  "false",
+    "cancellation":  "",
+    "progress":  "{\"available\": true, \"transactions\": {\"IN_PROGRESS\": 1, \"SUCCEEDED\": 8}, \"delivered\": 8, \"problem\": null}",
+    "counts":  "{}",
+    "screenshots":  [
+                        "a5b-agent-e-automacao-derrubados-01-pacote-escolhido.png",
+                        "a5b-agent-e-automacao-derrubados-02-confirmacao-aprovacao.png",
+                        "a5b-agent-e-automacao-derrubados-03-pronto-para-iniciar.png",
+                        "a5b-agent-e-automacao-derrubados-04-durante-execucao.png",
+                        "a5b-agent-e-automacao-derrubados-06-atividade-fim.png",
+                        "a5b-agent-e-automacao-derrubados-07-execucao-fim.png"
+                    ],
+    "checks":  [
+                   {
+                       "check":  "SHA-256 do ZIP do Agent confere (5fa0354ee4d9…)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Studio fechado (nenhum processo do Studio)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent empacotado abriu sem Java no PATH em 1,9 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R com o Agent aberto e ocioso (15 s): nenhuma porta TCP/UDP, nenhum AF_UNIX, nenhum pipe atribuído ao Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote escolhido pelo seletor e inspecionado pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote APROVADO pela pessoa (confirmação explícita)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Python do ambiente conferido pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução iniciada pelo botão Iniciar (Alt+I)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução em andamento antes de derrubar o Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent derrubado à força (Stop-Process) com a execução RUNNING",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "automação derrubada junto (taskkill /T /F): nenhum resultado final publicado",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "automação continuou e terminou sem supervisão em 0 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "registro em disco continua RUNNING enquanto o Agent está fora",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R durante a execução (Agent): nenhuma porta TCP/UDP do processo do Agent, nenhum AF_UNIX",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "fim registrado pelo Agent: OUTCOME_UNKNOWN",
+                       "ok":  true
+                   }
+               ]
+}

@@ -1,0 +1,75 @@
+﻿{
+    "schema":  "nekkora-e2e-005/agent-run",
+    "version":  "1.0.0",
+    "label":  "a1-sucesso",
+    "agent_zip_sha256":  "5fa0354ee4d993bb478133e18038ce9e5b5fa0242c347759cff9b6b6549b6c84",
+    "package_manifest_sha256":  "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5",
+    "execution_id":  "ex-6143bf69e5dc18a882fa7aaaf6c2c32f",
+    "state":  "SUCCEEDED",
+    "code":  "",
+    "exit_code":  "0",
+    "framework_summary_status":  "COMPLETED",
+    "python_peak_working_set_mb":  54,
+    "agent_peak_working_set_mb":  170.8,
+    "framework_events_bytes":  126355,
+    "agent_activity_bytes":  163226,
+    "duration_seconds":  8.9,
+    "run_output":  "\u003csaida\u003e\\ex-6143bf69e5dc18a882fa7aaaf6c2c32f",
+    "record_version":  "1.1.0",
+    "origin":  "LOCAL_UI",
+    "recovered":  "false",
+    "cancellation":  "",
+    "progress":  "",
+    "counts":  "{\"SUCCEEDED\": 5}",
+    "screenshots":  [
+                        "a1-sucesso-01-pacote-escolhido.png",
+                        "a1-sucesso-02-confirmacao-aprovacao.png",
+                        "a1-sucesso-03-pronto-para-iniciar.png",
+                        "a1-sucesso-04-durante-execucao.png",
+                        "a1-sucesso-05-atividade-durante.png",
+                        "a1-sucesso-06-atividade-fim.png",
+                        "a1-sucesso-07-execucao-fim.png"
+                    ],
+    "checks":  [
+                   {
+                       "check":  "SHA-256 do ZIP do Agent confere (5fa0354ee4d9…)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Studio fechado (nenhum processo do Studio)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent empacotado abriu sem Java no PATH em 2,4 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R com o Agent aberto e ocioso (15 s): nenhuma porta TCP/UDP, nenhum AF_UNIX, nenhum pipe atribuído ao Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote escolhido pelo seletor e inspecionado pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote APROVADO pela pessoa (confirmação explícita)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Python do ambiente conferido pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução iniciada pelo botão Iniciar (Alt+I)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R durante a execução (Agent): nenhuma porta TCP/UDP do processo do Agent, nenhum AF_UNIX",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "fim registrado pelo Agent: SUCCEEDED",
+                       "ok":  true
+                   }
+               ]
+}

@@ -1,0 +1,24 @@
+OK    pacote original: 9 arquivos conferem com o manifesto (SHA-256 sobre LF)
+OK    uma execução registrada pelo Agent  [1]
+OK    impressão digital recalculada = a do registro do Agent  [sha256:5664f1a56556e813]
+OK    cópia conferida do Agent idêntica byte a byte ao pacote do Studio
+OK    estado.json nekkora-agent/execution 1.1.0 SUCCEEDED, código nulo, exit 0, protocolo
+OK    1.1.0: origem do pedido LOCAL_UI; não recuperado; sem cancelamento nem progresso parcial (houve resultado final)
+OK    execução não adotada, sem suspensão nem bloqueio
+OK    summary nekkora-rpa/run-summary 1.2.0, Framework 0.3.0 = manifesto
+OK    summary COMPLETED, planilha COMMITTED, 5 transações SUCCEEDED
+OK    contagens do registro = contagens do summary
+OK    events.jsonl do Framework: schema nekkora-rpa/events 1.2.0 em todas as linhas  [288]
+OK    execution_id do Framework único e igual ao do summary
+OK    atividade.jsonl: 293 envelopes válidos contra o schema nekkora-agent/observability 1.0.0
+OK    sequence contínua 1..N
+OK    um único agent_execution_id = o do registro
+OK    correlação secundária = execution_id do Framework  [['ex-9d8c15afca614b318e3c']]
+OK    todos os eventos do Framework entraram no envelope  [288/288]
+OK    COLLECTION_COMPLETED sem descarte, inválido, código ou campo desconhecido  [{'dropped': 0, 'events': 293, 'excluded_fields': 849, 'framework_events': 288, 'invalid': 0, 'restarts': 0, 'unknown_codes': 0, 'unknown_fields': 0}]
+OK    nenhuma lacuna ou recusa declarada
+OK    studio_step_id = stepId do manifesto para cada traceId emitido  [10 de 10 passos]
+OK    ciclo do supervisor no envelope: STARTING → RUNNING → SUCCEEDED  [['STARTING', 'RUNNING', 'SUCCEEDED']]
+OK    nenhum termo da lista, endereço, usuário ou caminho nos registros do Agent
+OK    planilha do Agent = planilha do teste autorizado do Studio (cabeçalho + 5 linhas, por tipo)  [6 linhas]
+RESULTADO: 23 verificações, 0 falha(s)

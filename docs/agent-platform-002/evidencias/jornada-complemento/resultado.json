@@ -1,0 +1,105 @@
+﻿{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-002",
+    "jornada":  "complemento PA-05",
+    "execucoes":  {
+                      "offline_503_perda_local":  "ex-6b088b484527d389b11cf8398a97c005",
+                      "desfecho_desconhecido":  "ex-1e2c7149fe370d5cdcc345e303ab6d19",
+                      "limite_do_historico":  null
+                  },
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: 2045910a3c68181353fbd3abc715a0374954994b\r / data do commit: 2026-10-29T04:53:12Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "C1 Agent empacotado do build candidato abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C1 pareado pela janela: PLATFORM_PAIRED, Agent ACTIVE no Worker preparado pela pessoa (2|f2872b57-1518-4298-9ce4-a518c7fa006f)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C1 duas autorizações baixadas e guardadas para uso offline (uma por impressão)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C2 heartbeat avançou entre dois ciclos (2026-10-29T05:04:01.715382 -\u003e 2026-10-29T05:05:02.258448)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C3 sem Platform antes do início (PLATFORM_DISCONNECTED AGT-PLT-010)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C3 execução vinculada à autorização guardada sem rede (PLATFORM_RUN_LINKED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C3 automação roda sem Platform (RUNNING) e nada foi registrado ainda (0)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C3 registro depois da volta, sob a autorização guardada (b494a360-5b36-4ad7-bcd5-cd6f5c7ec41e) e a versão publicada (19515aea-b1ca-47b9-9e2c-06d533b15ed2)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C4 a Platform respondeu 503 (gateway: redis_indisponivel 0 -\u003e 1) e o Agent registrou AGT-PLT-011",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C4 automação segue durante o 503 (RUNNING) e nenhum ACK foi aceito sem o servidor (2 -\u003e 2)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C4 entrega retomada depois do 503 (novo PLATFORM_ACK)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C5 a coleta registrou a perda (EVENT_GAP AGT-OBS-009, lacuna 358-653) e o transporte declarou (PLATFORM_LOSS_DECLARED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C5 ausências declaradas = lacuna local exata (358-653 = 358-653), settled=3214 = último local, eventos+ausentes=3214, recusas=0",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C5 Platform: SUCCEEDED/KNOWN, histórico INCOMPLETE (LOST_LOCAL), stored=357 \u003c settled=3214",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C5 correlação na consulta: autorização, versão publicada, Worker e Agent do vínculo, origem LOCAL_AUTHORIZED",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C6 reconciliação fechou OUTCOME_UNKNOWN (AGT-EXE-025) sem relançar, com o resultado parcial {}",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C6 Platform: OUTCOME_UNKNOWN/ENDED/UNKNOWN, contagens {}, transações vistas {\"TRANSACTION_COMPLETED\":22,\"TRANSACTION_STARTED\":23}",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C6 nada relançado: um registro (1) e uma pasta de saída por execução (2 para 2)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C7 rotação confirmada (PLATFORM_ROTATED): credenciais 1|1 -\u003e 2|1|1 (total|ativas|revogadas por ROTATION), segredo local trocado",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C7 a presença continua com a credencial nova (2026-10-29T05:16:32.303180 -\u003e 2026-10-29T05:17:32.862722) e nenhuma recusa no canal (0 -\u003e 0)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "jornada interrompida por exceção: tempo esgotado: confirmação da aprovação",
+                       "ok":  false
+                   },
+                   {
+                       "check":  "C9 nenhum segredo (códigos de pareamento e rotação, credenciais anterior e atual, senha e fator da pessoa: 10 valores) em evidências, dados, logs dos 6 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  22,
+    "ok":  21
+}

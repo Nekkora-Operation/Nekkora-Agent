@@ -1,0 +1,5 @@
+M1 repetição do resgate com segredo NOVO (material não reaproveitado): PlatformPairingTest#lostPairingResponseIsRepeatedWithTheSameMaterial -> VERMELHO (falhou, como esperado)
+M2 ACK aceito sem conferência: PlatformDeliveryTest#invalidAcksNeverAdvance -> VERMELHO (falhou, como esperado)
+M3 qualquer lacuna tratada como perda definitiva: PlatformDeliveryTest#partialLinePendingWriteAndDefinitiveLoss -> VERMELHO (falhou, como esperado)
+M4 recusa 401 não para o transporte: PlatformDeliveryTest#revokedCredentialStopsTheTransport -> VERMELHO (falhou, como esperado)
+VERDE depois de reverter: rc=0

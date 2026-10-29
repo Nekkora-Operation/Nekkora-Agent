@@ -1,0 +1,10 @@
+﻿[
+    {
+        "check":  "D1 nenhuma requisição ao canal da máquina com o destino alterado (nginx /agent/: 0 -\u003e 0) e presença parada (2026-10-29 16:22:04.160814+00 -\u003e 2026-10-29 16:22:04.160814+00)",
+        "ok":  true
+    },
+    {
+        "check":  "jornada interrompida por exceção: tempo esgotado: requisição nova ao canal",
+        "ok":  false
+    }
+]

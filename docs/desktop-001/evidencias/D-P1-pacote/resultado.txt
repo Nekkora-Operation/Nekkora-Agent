@@ -1,0 +1,14 @@
+﻿OK    SHA-256 do ZIP confere
+OK    queda simulada: execução semeada (processo vivo + registro RUNNING)
+OK    processo de laboratório e filho vivos antes de abrir o Agent
+OK    Agent empacotado abriu
+OK    execução ADOTADA na abertura (registro adopted=true, ainda RUNNING)
+OK    log registra a reconciliação com adoção (só códigos)
+OK    Sair com execução em andamento pede confirmação
+OK    Voltar (Alt+V): o Agent continua aberto e o processo continua vivo
+OK    Encerrar execução e sair (Alt+E): o Agent saiu
+OK    processo de laboratório E filho encerrados (árvore possuída)
+OK    registro final CANCELLED (AGT-EXE-024)
+OK    nenhum processo de laboratório relançado
+OK    log com LIFE_EXIT (saída ordenada)
+RESULTADO: 13 verificações, 0 falha(s)

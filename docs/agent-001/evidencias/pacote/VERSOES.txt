@@ -1,0 +1,29 @@
+Nekkora Agent 0.1.0 - distribuição de laboratório (Windows x64, sem assinatura digital)
+commit: 2815a18b6cde8acce9859c9b76c9f495b8dad77b
+data do commit: 2026-10-16T22:10:10Z
+gerado em: 2026-10-16T22:11:03Z
+
+Bibliotecas (app\lib) com SHA-256:
+  nekkora-agent.jar  635761a9fd0c367d7fe90e6a17c42c35272fd5c626362f556e365725adb066ab
+  flatlaf-3.7.2.jar  917aff3963c88d797d0fd9b9ccbd70f7681c101df9d11c59e2bc7a3a6c0fabf4
+  nekkora-design-tokens-1.0.0-SNAPSHOT.jar  78c89310d062d350856efa4189151918b5ee237bcc60771531e0a394c1d0f0de
+  nekkora-swing-ui-1.0.0-SNAPSHOT.jar  ef155caa02ce709aa5648ca9e819b55b0b7a79705b10186b242ae8b80f2e5e4c
+  flatlaf-3.7.2-windows-x86_64.dll  533407841892e294f70e4f1443ebddecbea83b7f0bd2af876181505073b677d5
+
+Origem do design system (nekkora-design-tokens, nekkora-swing-ui):
+  studio.repository=https://github.com/Nekkora-Operation/Nekkora-Studio.git
+  studio.commit=beae03f16cdb72de987280e0f1e85d0a0e9852ba
+  studio.version=1.0.0-SNAPSHOT
+  studio.modules=nekkora-design-tokens,nekkora-swing-ui
+  build.outputTimestamp=2026-10-16T17:24:12-03:00
+  built.jdk=openjdk version "21.0.12" 2026-07-21 LTS
+  sha256.nekkora-studio-parent=2bc8920d81197146d3623e5b55fcf44a38d733d931d33d2cb7a1e318b9553fdf
+  sha256.nekkora-design-tokens=78c89310d062d350856efa4189151918b5ee237bcc60771531e0a394c1d0f0de
+  sha256.nekkora-swing-ui=ef155caa02ce709aa5648ca9e819b55b0b7a79705b10186b242ae8b80f2e5e4c
+
+Runtime Java incluído (jlink):
+  JAVA_VERSION="21.0.12"
+  MODULES="java.base java.datatransfer java.xml java.prefs java.desktop java.logging jdk.accessibility jdk.unsupported"
+
+Biblioteca nativa: app\lib\flatlaf-3.7.2-windows-x86_64.dll (extraída do JAR do FlatLaf; -Dflatlaf.nativeLibraryPath=$APPDIR\lib)
+Opções da JVM: -Dflatlaf.nativeLibraryPath=$APPDIR\lib -XX:+UseSerialGC -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory

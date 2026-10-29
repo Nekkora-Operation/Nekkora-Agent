@@ -1,0 +1,39 @@
+NEKKORA AGENT - DISTRIBUIÇÃO DE LABORATÓRIO (Windows x64)
+==========================================================
+
+Esta é uma versão de laboratório para homologação. Não é instalador, não tem assinatura digital
+e não está pronta para produção.
+
+O que esta versão faz
+- Mostra o estado desta máquina e da integração (ainda indisponível: sem pareamento, sem conexão
+  com a Platform, sem verificação de licença e sem execução de automações).
+- Fica na bandeja do sistema; fechar a janela não encerra o Agent. Para encerrar, use "Sair".
+- Guarda preferências locais (tema e atalhos) e gera diagnóstico local, sem envio automático.
+
+Como abrir
+1. Descompacte o ZIP em uma pasta sua (por exemplo, Documentos\Nekkora Agent).
+2. Abra "Nekkora Agent.exe". Não é preciso ter Java instalado: o runtime está na pasta "runtime".
+3. Abrir de novo enquanto ele já está aberto apenas mostra um aviso; o ícone fica perto do relógio
+   (às vezes em "Mostrar ícones ocultos").
+
+Onde ficam os dados
+- %LOCALAPPDATA%\Nekkora\Agent\
+    config\agent-config.json   preferências (tema, endereço da Platform, executável do Studio)
+    logs\agent*.log            logs técnicos (até 4 arquivos de 256 KiB; sem caminhos, endereços ou nomes)
+    agent.lock                 trava de instância única (pode existir mesmo com o Agent fechado)
+- Os dados do Nekkora Studio e da extensão ficam em outras pastas e não são alterados.
+- Para homologação isolada, defina a variável NEKKORA_AGENT_DATA_DIR com outra pasta antes de abrir.
+
+Opção de inicialização
+- "Nekkora Agent.exe" --sem-bandeja   abre sem ícone na bandeja (fechar minimiza; use "Sair").
+
+Como remover
+1. Use "Sair" no Agent (menu do ícone na bandeja ou botão na janela).
+2. Apague a pasta onde o ZIP foi descompactado.
+3. Opcional: apague %LOCALAPPDATA%\Nekkora\Agent para remover preferências e logs.
+O Agent não grava no registro do Windows, não instala serviço nem início automático. (O próprio
+Windows pode guardar a sua preferência de exibição do ícone na bandeja.)
+
+Arquivos desta pasta
+- VERSOES.txt   versão, commit, bibliotecas com SHA-256, origem do design system e runtime Java
+- legal\        avisos e licenças de terceiros (o runtime traz os seus em runtime\legal\)

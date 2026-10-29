@@ -1,0 +1,5 @@
+﻿05:19:38.521 [REAL] J1 Agent empacotado do commit 2045910a3c68181353fbd3abc715a0374954994b
+05:19:40.840 [REAL] C1 Agent empacotado aberto (JVM 6872), sem Java no PATH
+05:19:42.862 [REAL] C8 retomada sobre os dados existentes (Agent 44332031-ffa8-4f85-a990-7c6b5db11ca7, credencial depois da rotação)
+05:20:10.381 [REAL] C8 execução com mais de 20.000 eventos: ex-8462859823fa90244f7b05ba9d32670f
+05:20:23.806 [REAL] C8 local: último=15047 lacunas='' avisos=AGT-OBS-005; banco: stored=15047 settled=15047 eventos=15047 ausentes=''

@@ -1,0 +1,20 @@
+{
+  "schema": "nekkora-agent/execution",
+  "version": "1.0.0",
+  "id": "ex-886b82687fda0cc40cfcce2a428d5832",
+  "kind": "LAB_GENERIC",
+  "package": "pacote ae399616137c",
+  "fingerprint": "sha256:ae399616137c61875859a2ed30ffc3a59a85fdd9035922239f41d027857f19c7",
+  "state": "CANCELLED",
+  "code": "AGT-EXE-024",
+  "created": "2026-10-22T03:54:04.974430600Z",
+  "started": "2026-10-22T03:54:04.974430600Z",
+  "ended": "2026-10-22T03:54:11.674616Z",
+  "process": {"pid": 400, "start": 1792641244949, "executableDigest": "sha256:a38291e6e85c57879dc51dff5e088b9dbb264bbaee0b6d8c842e9a003864e155"},
+  "exitCode": null,
+  "counts": {},
+  "suspensions": 0,
+  "locks": 0,
+  "adopted": true,
+  "outputBytes": 0
+}

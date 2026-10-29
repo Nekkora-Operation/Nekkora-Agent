@@ -1,0 +1,26 @@
+## remotos
+origin/main commit=afd1bb54caf0f8328e8c709061b88404a9c47285 arvore=fcc9b96cf55101854adbfecaf3d92dd63ab614f2 commits_desde_main=0
+origin/base/agent-studio-local-001 commit=932e61c00d1264025b1dd0546f7f745cf4501f83 arvore=925a87c85078b9d8ff682cb1cee2c69c303a20e5 commits_desde_main=52
+origin/feat/agent-platform-transport-001-a commit=d3e0f8af76da3d6c3e4f89c4224421ae8d47e1a4 arvore=973c1f83ca38794debb1f5b6fc8227c3ec0b3b44 commits_desde_main=54
+origin/feat/agent-platform-transport-001 commit=e46af2a5f0d63281f0dd8a9673a26f83204d3dd6 arvore=de18fd3a7be0cc7e7c2b994ecd13c75215f4b7cd commits_desde_main=60
+origin/feat/agent-platform-transport-002 commit=23ce414a073194cf69c66706f7be68facf6b23cd arvore=7e1eabeeda94dd31bde5bd194fb6a0b06c715068 commits_desde_main=63
+## merge-base
+main x PR3: afd1bb54caf0f8328e8c709061b88404a9c47285
+base x PR1: 932e61c00d1264025b1dd0546f7f745cf4501f83
+## faixas por PR
+base (sem PR): 52 commits afd1bb5..932e61c
+PR1: 2 commits 932e61c..d3e0f8a
+PR2: 6 commits d3e0f8a..e46af2a
+PR3: 3 commits e46af2a..23ce414
+## branches locais
+feat/agent-lean-001 ae01642 contido_em=base publicado=0
+feat/agent-package-origin-001 1507344 contido_em=base publicado=0
+feat/agent-platform-transport-001 e46af2a contido_em=pilha-PR3 publicado=1
+feat/agent-platform-transport-001-a d3e0f8a contido_em=pilha-PR3 publicado=1
+feat/agent-platform-transport-002 23ce414 contido_em=pilha-PR3 publicado=1
+feat/agent-studio-local-001 932e61c contido_em=base publicado=0
+feat/nekkora-agent-001 d465296 contido_em=base publicado=0
+feat/nekkora-desktop-001 a3e5598 contido_em=base publicado=0
+fix/agent-f-agt-01-001 f77e00e contido_em=base publicado=0
+fix/agent-integration-c1-001 b903952 contido_em=FORA-da-pilha publicado=0
+main afd1bb5 contido_em=base publicado=1

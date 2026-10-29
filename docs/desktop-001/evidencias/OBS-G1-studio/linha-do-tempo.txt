@@ -1,0 +1,238 @@
+# | Hora | Nível | Evento | Etapa | Ação | Resultado | Tent. | Duração | Fase | Transação | Origem
+1 | 00:32:55.340 | INFO | Coleta de atividade iniciada |  |  |  |  |  | — |  | Coletor
+2 | 00:32:55.051 | INFO | Iniciando |  |  | STARTING |  |  | — |  | Agent
+3 | 00:32:55.088 | INFO | Processo em andamento |  |  | RUNNING |  |  | — |  | Agent
+4 | 00:32:55.389 | INFO | Motor iniciado |  |  |  |  |  | — |  | Framework
+5 | 00:32:55.389 | INFO | Fase iniciada |  |  |  |  |  | INIT |  | Framework
+6 | 00:32:55.974 | INFO | Fase concluída |  |  |  |  |  | INIT |  | Framework
+7 | 00:32:55.974 | INFO | Fase iniciada |  |  |  |  |  | DATA IN |  | Framework
+8 | 00:32:55.974 | INFO | Fase concluída |  |  |  |  |  | DATA IN | T1 | Framework
+9 | 00:32:55.975 | INFO | Fase iniciada |  |  |  |  |  | PROCESS |  | Framework
+10 | 00:32:55.975 | INFO | Transação iniciada |  |  |  | 1 |  | PROCESS | T1 | Framework
+11 | 00:32:55.978 | INFO | Ponto de controle salvo |  |  | IN_PROGRESS |  |  | PROCESS | T1 | Framework
+12 | 00:32:55.978 | INFO | Ação iniciada | process.open_start_page | navegação |  |  |  | PROCESS | T1 | Framework
+13 | 00:32:56.341 | INFO | Ação concluída | process.open_start_page | navegação | OK | 1 | 360 ms | PROCESS | T1 | Framework
+14 | 00:32:56.341 | INFO | Ação iniciada | search.fill_search_term | preenchimento |  |  |  | PROCESS | T1 | Framework
+15 | 00:32:56.480 | INFO | Elemento localizado | search.fill_search_term |  |  |  |  | PROCESS | T1 | Framework
+16 | 00:32:56.505 | INFO | Ação concluída | search.fill_search_term | preenchimento | OK | 1 | 170 ms | PROCESS | T1 | Framework
+17 | 00:32:56.505 | INFO | Ação iniciada | search.press_enter | endereço da página |  |  |  | PROCESS | T1 | Framework
+18 | 00:32:56.505 | INFO | Ação concluída | search.press_enter | endereço da página | OK | 1 | 0 ms | PROCESS | T1 | Framework
+19 | 00:32:56.505 | INFO | Ação iniciada | search.press_enter | tecla |  |  |  | PROCESS | T1 | Framework
+20 | 00:32:56.515 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T1 | Framework
+21 | 00:32:56.573 | WARNING | Nova tentativa agendada | search.press_enter | tecla | TARGET_DETACHED | 1 |  | PROCESS | T1 | Framework
+22 | 00:32:56.785 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T1 | Framework
+23 | 00:32:57.040 | INFO | Ação concluída | search.press_enter | tecla | OK | 2 | 532 ms | PROCESS | T1 | Framework
+24 | 00:32:57.040 | INFO | Ação iniciada | profile.read_page_address | endereço da página |  |  |  | PROCESS | T1 | Framework
+25 | 00:32:57.040 | INFO | Ação concluída | profile.read_page_address | endereço da página | OK | 1 | 0 ms | PROCESS | T1 | Framework
+26 | 00:32:57.042 | INFO | Ação iniciada | profile.read_birth_date | espera (visível) |  |  |  | PROCESS | T1 | Framework
+27 | 00:32:57.443 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T1 | Framework
+28 | 00:32:57.450 | INFO | Ação concluída | profile.read_birth_date | espera (visível) | OK | 1 | 405 ms | PROCESS | T1 | Framework
+29 | 00:32:57.450 | INFO | Ação iniciada | profile.read_title | verificação |  |  |  | PROCESS | T1 | Framework
+30 | 00:32:57.467 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T1 | Framework
+31 | 00:32:57.467 | INFO | Ação concluída | profile.read_title | verificação | OK | 1 | 15 ms | PROCESS | T1 | Framework
+32 | 00:32:57.467 | INFO | Ação iniciada | profile.read_title | leitura de itens |  |  |  | PROCESS | T1 | Framework
+33 | 00:32:57.481 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T1 | Framework
+34 | 00:32:57.484 | INFO | Ação concluída | profile.read_title | leitura de itens | OK | 1 | 14 ms | PROCESS | T1 | Framework
+35 | 00:32:57.484 | INFO | Ação iniciada | profile.read_full_name | verificação |  |  |  | PROCESS | T1 | Framework
+36 | 00:32:57.491 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T1 | Framework
+37 | 00:32:57.493 | INFO | Ação concluída | profile.read_full_name | verificação | OK | 1 | 15 ms | PROCESS | T1 | Framework
+38 | 00:32:57.493 | INFO | Ação iniciada | profile.read_full_name | leitura de itens |  |  |  | PROCESS | T1 | Framework
+39 | 00:32:57.502 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T1 | Framework
+40 | 00:32:57.505 | INFO | Ação concluída | profile.read_full_name | leitura de itens | OK | 1 | 14 ms | PROCESS | T1 | Framework
+41 | 00:32:57.505 | INFO | Ação iniciada | profile.read_birth_date | leitura de itens |  |  |  | PROCESS | T1 | Framework
+42 | 00:32:57.512 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T1 | Framework
+43 | 00:32:57.515 | INFO | Ação concluída | profile.read_birth_date | leitura de itens | OK | 1 | 0 ms | PROCESS | T1 | Framework
+44 | 00:32:57.515 | INFO | Ação iniciada | profile.read_death_date | verificação |  |  |  | PROCESS | T1 | Framework
+45 | 00:32:57.520 | INFO | Elemento localizado | profile.read_death_date |  |  |  |  | PROCESS | T1 | Framework
+46 | 00:32:57.522 | INFO | Ação concluída | profile.read_death_date | verificação | OK | 1 | 16 ms | PROCESS | T1 | Framework
+47 | 00:32:57.522 | INFO | Ação iniciada | profile.read_death_date | leitura de itens |  |  |  | PROCESS | T1 | Framework
+48 | 00:32:57.528 | INFO | Elemento localizado | profile.read_death_date |  |  |  |  | PROCESS | T1 | Framework
+49 | 00:32:57.531 | INFO | Ação concluída | profile.read_death_date | leitura de itens | OK | 1 | 0 ms | PROCESS | T1 | Framework
+50 | 00:32:57.531 | INFO | Ação iniciada | profile.read_nationality | leitura de itens |  |  |  | PROCESS | T1 | Framework
+51 | 00:32:57.538 | INFO | Elemento localizado | profile.read_nationality |  |  |  |  | PROCESS | T1 | Framework
+52 | 00:32:57.541 | INFO | Ação concluída | profile.read_nationality | leitura de itens | OK | 1 | 15 ms | PROCESS | T1 | Framework
+53 | 00:32:57.541 | INFO | Ação iniciada | profile.read_occupation | verificação |  |  |  | PROCESS | T1 | Framework
+54 | 00:32:57.548 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T1 | Framework
+55 | 00:32:57.550 | INFO | Ação concluída | profile.read_occupation | verificação | OK | 1 | 14 ms | PROCESS | T1 | Framework
+56 | 00:32:57.550 | INFO | Ação iniciada | profile.read_occupation | leitura de itens |  |  |  | PROCESS | T1 | Framework
+57 | 00:32:57.555 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T1 | Framework
+58 | 00:32:57.558 | INFO | Ação concluída | profile.read_occupation | leitura de itens | OK | 1 | 0 ms | PROCESS | T1 | Framework
+59 | 00:32:57.558 | INFO | Ação iniciada | profile.read_fields | verificação |  |  |  | PROCESS | T1 | Framework
+60 | 00:32:57.560 | INFO | Ação concluída | profile.read_fields | verificação | OK | 1 | 0 ms | PROCESS | T1 | Framework
+61 | 00:32:57.560 | INFO | Fase iniciada |  |  |  |  |  | DATA OUT |  | Framework
+62 | 00:32:57.563 | INFO | Resultado gravado |  |  | SUCCEEDED |  |  | DATA OUT | T1 | Framework
+63 | 00:32:57.564 | INFO | Ponto de controle salvo |  |  | SUCCEEDED |  |  | DATA OUT | T1 | Framework
+64 | 00:32:57.564 | INFO | Transação concluída |  |  | SUCCEEDED | 1 |  | DATA OUT | T1 | Framework
+65 | 00:32:57.564 | INFO | Fase iniciada |  |  |  |  |  | DATA IN |  | Framework
+66 | 00:32:57.564 | INFO | Fase concluída |  |  |  |  |  | DATA IN | T2 | Framework
+67 | 00:32:57.564 | INFO | Fase iniciada |  |  |  |  |  | PROCESS |  | Framework
+68 | 00:32:57.564 | INFO | Transação iniciada |  |  |  | 1 |  | PROCESS | T2 | Framework
+69 | 00:32:57.566 | INFO | Ponto de controle salvo |  |  | IN_PROGRESS |  |  | PROCESS | T2 | Framework
+70 | 00:32:57.566 | INFO | Ação iniciada | process.open_start_page | navegação |  |  |  | PROCESS | T2 | Framework
+71 | 00:32:57.706 | INFO | Ação concluída | process.open_start_page | navegação | OK | 1 | 140 ms | PROCESS | T2 | Framework
+72 | 00:32:57.706 | INFO | Ação iniciada | search.fill_search_term | preenchimento |  |  |  | PROCESS | T2 | Framework
+73 | 00:32:57.775 | INFO | Elemento localizado | search.fill_search_term |  |  |  |  | PROCESS | T2 | Framework
+74 | 00:32:57.803 | INFO | Ação concluída | search.fill_search_term | preenchimento | OK | 1 | 93 ms | PROCESS | T2 | Framework
+75 | 00:32:57.803 | INFO | Ação iniciada | search.press_enter | endereço da página |  |  |  | PROCESS | T2 | Framework
+76 | 00:32:57.803 | INFO | Ação concluída | search.press_enter | endereço da página | OK | 1 | 0 ms | PROCESS | T2 | Framework
+77 | 00:32:57.803 | INFO | Ação iniciada | search.press_enter | tecla |  |  |  | PROCESS | T2 | Framework
+78 | 00:32:57.847 | WARNING | Nova tentativa agendada | search.press_enter | tecla | TARGET_DETACHED | 1 |  | PROCESS | T2 | Framework
+79 | 00:32:58.069 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T2 | Framework
+80 | 00:32:58.313 | INFO | Ação concluída | search.press_enter | tecla | OK | 2 | 500 ms | PROCESS | T2 | Framework
+81 | 00:32:58.313 | INFO | Ação iniciada | profile.read_page_address | endereço da página |  |  |  | PROCESS | T2 | Framework
+82 | 00:32:58.313 | INFO | Ação concluída | profile.read_page_address | endereço da página | OK | 1 | 0 ms | PROCESS | T2 | Framework
+83 | 00:32:58.313 | INFO | Ação iniciada | profile.read_birth_date | espera (visível) |  |  |  | PROCESS | T2 | Framework
+84 | 00:32:58.465 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T2 | Framework
+85 | 00:32:58.468 | INFO | Ação concluída | profile.read_birth_date | espera (visível) | OK | 1 | 156 ms | PROCESS | T2 | Framework
+86 | 00:32:58.468 | INFO | Ação iniciada | profile.read_title | verificação |  |  |  | PROCESS | T2 | Framework
+87 | 00:32:58.573 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T2 | Framework
+88 | 00:32:58.573 | INFO | Ação concluída | profile.read_title | verificação | OK | 1 | 109 ms | PROCESS | T2 | Framework
+89 | 00:32:58.574 | INFO | Ação iniciada | profile.read_title | leitura de itens |  |  |  | PROCESS | T2 | Framework
+90 | 00:32:58.598 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T2 | Framework
+91 | 00:32:58.602 | INFO | Ação concluída | profile.read_title | leitura de itens | OK | 1 | 30 ms | PROCESS | T2 | Framework
+92 | 00:32:58.602 | INFO | Ação iniciada | profile.read_full_name | verificação |  |  |  | PROCESS | T2 | Framework
+93 | 00:32:58.608 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T2 | Framework
+94 | 00:32:58.609 | INFO | Ação concluída | profile.read_full_name | verificação | OK | 1 | 0 ms | PROCESS | T2 | Framework
+95 | 00:32:58.609 | INFO | Ação iniciada | profile.read_full_name | leitura de itens |  |  |  | PROCESS | T2 | Framework
+96 | 00:32:58.614 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T2 | Framework
+97 | 00:32:58.620 | INFO | Ação concluída | profile.read_full_name | leitura de itens | OK | 1 | 15 ms | PROCESS | T2 | Framework
+98 | 00:32:58.620 | INFO | Ação iniciada | profile.read_birth_date | leitura de itens |  |  |  | PROCESS | T2 | Framework
+99 | 00:32:58.637 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T2 | Framework
+100 | 00:32:58.640 | INFO | Ação concluída | profile.read_birth_date | leitura de itens | OK | 1 | 14 ms | PROCESS | T2 | Framework
+101 | 00:32:58.640 | INFO | Ação iniciada | profile.read_death_date | verificação |  |  |  | PROCESS | T2 | Framework
+102 | 00:32:58.641 | INFO | Ação concluída | profile.read_death_date | verificação | OK | 1 | 0 ms | PROCESS | T2 | Framework
+103 | 00:32:58.641 | INFO | Ação iniciada | profile.read_nationality | leitura de itens |  |  |  | PROCESS | T2 | Framework
+104 | 00:32:58.650 | INFO | Elemento localizado | profile.read_nationality |  |  |  |  | PROCESS | T2 | Framework
+105 | 00:32:58.653 | INFO | Ação concluída | profile.read_nationality | leitura de itens | OK | 1 | 16 ms | PROCESS | T2 | Framework
+106 | 00:32:58.653 | INFO | Ação iniciada | profile.read_occupation | verificação |  |  |  | PROCESS | T2 | Framework
+107 | 00:32:58.665 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T2 | Framework
+108 | 00:32:58.665 | INFO | Ação concluída | profile.read_occupation | verificação | OK | 1 | 15 ms | PROCESS | T2 | Framework
+109 | 00:32:58.665 | INFO | Ação iniciada | profile.read_occupation | leitura de itens |  |  |  | PROCESS | T2 | Framework
+110 | 00:32:58.675 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T2 | Framework
+111 | 00:32:58.678 | INFO | Ação concluída | profile.read_occupation | leitura de itens | OK | 1 | 14 ms | PROCESS | T2 | Framework
+112 | 00:32:58.678 | INFO | Ação iniciada | profile.read_fields | verificação |  |  |  | PROCESS | T2 | Framework
+113 | 00:32:58.680 | INFO | Ação concluída | profile.read_fields | verificação | OK | 1 | 0 ms | PROCESS | T2 | Framework
+114 | 00:32:58.680 | INFO | Fase iniciada |  |  |  |  |  | DATA OUT |  | Framework
+115 | 00:32:58.683 | INFO | Resultado gravado |  |  | SUCCEEDED |  |  | DATA OUT | T2 | Framework
+116 | 00:32:58.684 | INFO | Ponto de controle salvo |  |  | SUCCEEDED |  |  | DATA OUT | T2 | Framework
+117 | 00:32:58.684 | INFO | Transação concluída |  |  | SUCCEEDED | 1 |  | DATA OUT | T2 | Framework
+118 | 00:32:58.684 | INFO | Fase iniciada |  |  |  |  |  | DATA IN |  | Framework
+119 | 00:32:58.684 | INFO | Fase concluída |  |  |  |  |  | DATA IN | T3 | Framework
+120 | 00:32:58.684 | INFO | Fase iniciada |  |  |  |  |  | PROCESS |  | Framework
+121 | 00:32:58.684 | INFO | Transação iniciada |  |  |  | 1 |  | PROCESS | T3 | Framework
+122 | 00:32:58.686 | INFO | Ponto de controle salvo |  |  | IN_PROGRESS |  |  | PROCESS | T3 | Framework
+123 | 00:32:58.686 | INFO | Ação iniciada | process.open_start_page | navegação |  |  |  | PROCESS | T3 | Framework
+124 | 00:32:58.815 | INFO | Ação concluída | process.open_start_page | navegação | OK | 1 | 125 ms | PROCESS | T3 | Framework
+125 | 00:32:58.815 | INFO | Ação iniciada | search.fill_search_term | preenchimento |  |  |  | PROCESS | T3 | Framework
+126 | 00:32:58.883 | INFO | Elemento localizado | search.fill_search_term |  |  |  |  | PROCESS | T3 | Framework
+127 | 00:32:58.908 | INFO | Ação concluída | search.fill_search_term | preenchimento | OK | 1 | 94 ms | PROCESS | T3 | Framework
+128 | 00:32:58.908 | INFO | Ação iniciada | search.press_enter | endereço da página |  |  |  | PROCESS | T3 | Framework
+129 | 00:32:58.908 | INFO | Ação concluída | search.press_enter | endereço da página | OK | 1 | 0 ms | PROCESS | T3 | Framework
+130 | 00:32:58.908 | INFO | Ação iniciada | search.press_enter | tecla |  |  |  | PROCESS | T3 | Framework
+131 | 00:32:58.923 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T3 | Framework
+132 | 00:32:58.948 | WARNING | Nova tentativa agendada | search.press_enter | tecla | TARGET_DETACHED | 1 |  | PROCESS | T3 | Framework
+133 | 00:32:59.158 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T3 | Framework
+134 | 00:32:59.406 | INFO | Ação concluída | search.press_enter | tecla | OK | 2 | 500 ms | PROCESS | T3 | Framework
+135 | 00:32:59.406 | INFO | Ação iniciada | profile.read_page_address | endereço da página |  |  |  | PROCESS | T3 | Framework
+136 | 00:32:59.406 | INFO | Ação concluída | profile.read_page_address | endereço da página | OK | 1 | 0 ms | PROCESS | T3 | Framework
+137 | 00:32:59.406 | INFO | Ação iniciada | profile.read_birth_date | espera (visível) |  |  |  | PROCESS | T3 | Framework
+138 | 00:32:59.548 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T3 | Framework
+139 | 00:32:59.630 | INFO | Ação concluída | profile.read_birth_date | espera (visível) | OK | 1 | 233 ms | PROCESS | T3 | Framework
+140 | 00:32:59.630 | INFO | Ação iniciada | profile.read_title | verificação |  |  |  | PROCESS | T3 | Framework
+141 | 00:32:59.674 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T3 | Framework
+142 | 00:32:59.676 | INFO | Ação concluída | profile.read_title | verificação | OK | 1 | 47 ms | PROCESS | T3 | Framework
+143 | 00:32:59.676 | INFO | Ação iniciada | profile.read_title | leitura de itens |  |  |  | PROCESS | T3 | Framework
+144 | 00:32:59.688 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T3 | Framework
+145 | 00:32:59.690 | INFO | Ação concluída | profile.read_title | leitura de itens | OK | 1 | 15 ms | PROCESS | T3 | Framework
+146 | 00:32:59.692 | INFO | Ação iniciada | profile.read_full_name | verificação |  |  |  | PROCESS | T3 | Framework
+147 | 00:32:59.698 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T3 | Framework
+148 | 00:32:59.700 | INFO | Ação concluída | profile.read_full_name | verificação | OK | 1 | 0 ms | PROCESS | T3 | Framework
+149 | 00:32:59.700 | INFO | Ação iniciada | profile.read_full_name | leitura de itens |  |  |  | PROCESS | T3 | Framework
+150 | 00:32:59.705 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T3 | Framework
+151 | 00:32:59.710 | INFO | Ação concluída | profile.read_full_name | leitura de itens | OK | 1 | 15 ms | PROCESS | T3 | Framework
+152 | 00:32:59.710 | INFO | Ação iniciada | profile.read_birth_date | leitura de itens |  |  |  | PROCESS | T3 | Framework
+153 | 00:32:59.719 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T3 | Framework
+154 | 00:32:59.723 | INFO | Ação concluída | profile.read_birth_date | leitura de itens | OK | 1 | 14 ms | PROCESS | T3 | Framework
+155 | 00:32:59.723 | INFO | Ação iniciada | profile.read_death_date | verificação |  |  |  | PROCESS | T3 | Framework
+156 | 00:32:59.745 | INFO | Elemento localizado | profile.read_death_date |  |  |  |  | PROCESS | T3 | Framework
+157 | 00:32:59.747 | INFO | Ação concluída | profile.read_death_date | verificação | OK | 1 | 15 ms | PROCESS | T3 | Framework
+158 | 00:32:59.747 | INFO | Ação iniciada | profile.read_death_date | leitura de itens |  |  |  | PROCESS | T3 | Framework
+159 | 00:32:59.756 | INFO | Elemento localizado | profile.read_death_date |  |  |  |  | PROCESS | T3 | Framework
+160 | 00:32:59.762 | INFO | Ação concluída | profile.read_death_date | leitura de itens | OK | 1 | 14 ms | PROCESS | T3 | Framework
+161 | 00:32:59.762 | INFO | Ação iniciada | profile.read_nationality | leitura de itens |  |  |  | PROCESS | T3 | Framework
+162 | 00:32:59.772 | INFO | Elemento localizado | profile.read_nationality |  |  |  |  | PROCESS | T3 | Framework
+163 | 00:32:59.777 | INFO | Ação concluída | profile.read_nationality | leitura de itens | OK | 1 | 16 ms | PROCESS | T3 | Framework
+164 | 00:32:59.778 | INFO | Ação iniciada | profile.read_occupation | verificação |  |  |  | PROCESS | T3 | Framework
+165 | 00:32:59.786 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T3 | Framework
+166 | 00:32:59.786 | INFO | Ação concluída | profile.read_occupation | verificação | OK | 1 | 15 ms | PROCESS | T3 | Framework
+167 | 00:32:59.786 | INFO | Ação iniciada | profile.read_occupation | leitura de itens |  |  |  | PROCESS | T3 | Framework
+168 | 00:32:59.795 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T3 | Framework
+169 | 00:32:59.798 | INFO | Ação concluída | profile.read_occupation | leitura de itens | OK | 1 | 0 ms | PROCESS | T3 | Framework
+170 | 00:32:59.798 | INFO | Ação iniciada | profile.read_fields | verificação |  |  |  | PROCESS | T3 | Framework
+171 | 00:32:59.800 | INFO | Ação concluída | profile.read_fields | verificação | OK | 1 | 14 ms | PROCESS | T3 | Framework
+172 | 00:32:59.800 | INFO | Fase iniciada |  |  |  |  |  | DATA OUT |  | Framework
+173 | 00:32:59.801 | INFO | Resultado gravado |  |  | SUCCEEDED |  |  | DATA OUT | T3 | Framework
+174 | 00:32:59.805 | INFO | Ponto de controle salvo |  |  | SUCCEEDED |  |  | DATA OUT | T3 | Framework
+175 | 00:32:59.805 | INFO | Transação concluída |  |  | SUCCEEDED | 1 |  | DATA OUT | T3 | Framework
+176 | 00:32:59.805 | INFO | Fase iniciada |  |  |  |  |  | DATA IN |  | Framework
+177 | 00:32:59.805 | INFO | Fase concluída |  |  |  |  |  | DATA IN | T4 | Framework
+178 | 00:32:59.805 | INFO | Fase iniciada |  |  |  |  |  | PROCESS |  | Framework
+179 | 00:32:59.805 | INFO | Transação iniciada |  |  |  | 1 |  | PROCESS | T4 | Framework
+180 | 00:32:59.807 | INFO | Ponto de controle salvo |  |  | IN_PROGRESS |  |  | PROCESS | T4 | Framework
+181 | 00:32:59.807 | INFO | Ação iniciada | process.open_start_page | navegação |  |  |  | PROCESS | T4 | Framework
+182 | 00:32:59.948 | INFO | Ação concluída | process.open_start_page | navegação | OK | 1 | 140 ms | PROCESS | T4 | Framework
+183 | 00:32:59.948 | INFO | Ação iniciada | search.fill_search_term | preenchimento |  |  |  | PROCESS | T4 | Framework
+184 | 00:33:00.014 | INFO | Elemento localizado | search.fill_search_term |  |  |  |  | PROCESS | T4 | Framework
+185 | 00:33:00.040 | INFO | Ação concluída | search.fill_search_term | preenchimento | OK | 1 | 94 ms | PROCESS | T4 | Framework
+186 | 00:33:00.040 | INFO | Ação iniciada | search.press_enter | endereço da página |  |  |  | PROCESS | T4 | Framework
+187 | 00:33:00.040 | INFO | Ação concluída | search.press_enter | endereço da página | OK | 1 | 0 ms | PROCESS | T4 | Framework
+188 | 00:33:00.040 | INFO | Ação iniciada | search.press_enter | tecla |  |  |  | PROCESS | T4 | Framework
+189 | 00:33:00.082 | WARNING | Nova tentativa agendada | search.press_enter | tecla | TARGET_DETACHED | 1 |  | PROCESS | T4 | Framework
+190 | 00:33:00.307 | INFO | Elemento localizado | search.press_enter |  |  |  |  | PROCESS | T4 | Framework
+191 | 00:33:00.578 | INFO | Ação concluída | search.press_enter | tecla | OK | 2 | 530 ms | PROCESS | T4 | Framework
+192 | 00:33:00.578 | INFO | Ação iniciada | profile.read_page_address | endereço da página |  |  |  | PROCESS | T4 | Framework
+193 | 00:33:00.579 | INFO | Ação concluída | profile.read_page_address | endereço da página | OK | 1 | 0 ms | PROCESS | T4 | Framework
+194 | 00:33:00.579 | INFO | Ação iniciada | profile.read_birth_date | espera (visível) |  |  |  | PROCESS | T4 | Framework
+195 | 00:33:00.741 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T4 | Framework
+196 | 00:33:00.810 | INFO | Ação concluída | profile.read_birth_date | espera (visível) | OK | 1 | 234 ms | PROCESS | T4 | Framework
+197 | 00:33:00.810 | INFO | Ação iniciada | profile.read_title | verificação |  |  |  | PROCESS | T4 | Framework
+198 | 00:33:00.853 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T4 | Framework
+199 | 00:33:00.853 | INFO | Ação concluída | profile.read_title | verificação | OK | 1 | 46 ms | PROCESS | T4 | Framework
+200 | 00:33:00.853 | INFO | Ação iniciada | profile.read_title | leitura de itens |  |  |  | PROCESS | T4 | Framework
+201 | 00:33:00.862 | INFO | Elemento localizado | profile.read_title |  |  |  |  | PROCESS | T4 | Framework
+202 | 00:33:00.865 | INFO | Ação concluída | profile.read_title | leitura de itens | OK | 1 | 15 ms | PROCESS | T4 | Framework
+203 | 00:33:00.865 | INFO | Ação iniciada | profile.read_full_name | verificação |  |  |  | PROCESS | T4 | Framework
+204 | 00:33:00.872 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T4 | Framework
+205 | 00:33:00.872 | INFO | Ação concluída | profile.read_full_name | verificação | OK | 1 | 0 ms | PROCESS | T4 | Framework
+206 | 00:33:00.872 | INFO | Ação iniciada | profile.read_full_name | leitura de itens |  |  |  | PROCESS | T4 | Framework
+207 | 00:33:00.880 | INFO | Elemento localizado | profile.read_full_name |  |  |  |  | PROCESS | T4 | Framework
+208 | 00:33:00.883 | INFO | Ação concluída | profile.read_full_name | leitura de itens | OK | 1 | 14 ms | PROCESS | T4 | Framework
+209 | 00:33:00.883 | INFO | Ação iniciada | profile.read_birth_date | leitura de itens |  |  |  | PROCESS | T4 | Framework
+210 | 00:33:00.890 | INFO | Elemento localizado | profile.read_birth_date |  |  |  |  | PROCESS | T4 | Framework
+211 | 00:33:00.893 | INFO | Ação concluída | profile.read_birth_date | leitura de itens | OK | 1 | 0 ms | PROCESS | T4 | Framework
+212 | 00:33:00.893 | INFO | Ação iniciada | profile.read_death_date | verificação |  |  |  | PROCESS | T4 | Framework
+213 | 00:33:00.894 | INFO | Ação concluída | profile.read_death_date | verificação | OK | 1 | 16 ms | PROCESS | T4 | Framework
+214 | 00:33:00.896 | INFO | Ação iniciada | profile.read_nationality | leitura de itens |  |  |  | PROCESS | T4 | Framework
+215 | 00:33:00.901 | INFO | Elemento localizado | profile.read_nationality |  |  |  |  | PROCESS | T4 | Framework
+216 | 00:33:00.905 | INFO | Ação concluída | profile.read_nationality | leitura de itens | OK | 1 | 0 ms | PROCESS | T4 | Framework
+217 | 00:33:00.905 | INFO | Ação iniciada | profile.read_occupation | verificação |  |  |  | PROCESS | T4 | Framework
+218 | 00:33:00.912 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T4 | Framework
+219 | 00:33:00.913 | INFO | Ação concluída | profile.read_occupation | verificação | OK | 1 | 15 ms | PROCESS | T4 | Framework
+220 | 00:33:00.913 | INFO | Ação iniciada | profile.read_occupation | leitura de itens |  |  |  | PROCESS | T4 | Framework
+221 | 00:33:00.919 | INFO | Elemento localizado | profile.read_occupation |  |  |  |  | PROCESS | T4 | Framework
+222 | 00:33:00.922 | INFO | Ação concluída | profile.read_occupation | leitura de itens | OK | 1 | 0 ms | PROCESS | T4 | Framework
+223 | 00:33:00.922 | INFO | Ação iniciada | profile.read_fields | verificação |  |  |  | PROCESS | T4 | Framework
+224 | 00:33:00.923 | INFO | Ação concluída | profile.read_fields | verificação | OK | 1 | 0 ms | PROCESS | T4 | Framework
+225 | 00:33:00.923 | INFO | Fase iniciada |  |  |  |  |  | DATA OUT |  | Framework
+226 | 00:33:00.926 | INFO | Resultado gravado |  |  | SUCCEEDED |  |  | DATA OUT | T4 | Framework
+227 | 00:33:00.928 | INFO | Ponto de controle salvo |  |  | SUCCEEDED |  |  | DATA OUT | T4 | Framework
+228 | 00:33:00.928 | INFO | Transação concluída |  |  | SUCCEEDED | 1 |  | DATA OUT | T4 | Framework
+229 | 00:33:00.928 | INFO | Fase iniciada |  |  |  |  |  | DATA IN |  | Framework
+230 | 00:33:00.928 | INFO | Fase concluída |  |  | NO_MORE_ITEMS |  |  | DATA IN |  | Framework
+231 | 00:33:00.928 | INFO | Fase iniciada |  |  |  |  |  | DATA OUT |  | Framework
+232 | 00:33:01.176 | INFO | Saída consolidada |  |  | COMMITTED |  |  | DATA OUT |  | Framework
+233 | 00:33:01.176 | INFO | Fase iniciada |  |  |  |  |  | END |  | Framework
+234 | 00:33:01.351 | INFO | Limpeza concluída |  |  |  |  |  | END |  | Framework
+235 | 00:33:01.351 | INFO | Motor encerrado |  |  | COMPLETED |  |  | END |  | Framework
+236 | 00:33:01.410 | INFO | Concluída com sucesso |  |  | SUCCEEDED |  |  | — |  | Agent
+237 | 00:33:01.600 | INFO | Coleta de atividade encerrada |  |  |  |  |  | — |  | Coletor

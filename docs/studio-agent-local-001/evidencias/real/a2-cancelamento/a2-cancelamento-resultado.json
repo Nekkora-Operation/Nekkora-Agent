@@ -1,0 +1,83 @@
+﻿{
+    "schema":  "nekkora-e2e-005/agent-run",
+    "version":  "1.0.0",
+    "label":  "a2-cancelamento",
+    "agent_zip_sha256":  "5fa0354ee4d993bb478133e18038ce9e5b5fa0242c347759cff9b6b6549b6c84",
+    "package_manifest_sha256":  "ca9439c74461463ca49c3b6b862b2c6452034d398c30e1fec43264482dde32b5",
+    "execution_id":  "ex-85ac846bf8f31098bfb4a4bd90d7e638",
+    "state":  "CANCELLED",
+    "code":  "AGT-EXE-024",
+    "exit_code":  "1",
+    "framework_summary_status":  null,
+    "python_peak_working_set_mb":  0,
+    "agent_peak_working_set_mb":  0,
+    "framework_events_bytes":  253136,
+    "agent_activity_bytes":  326457,
+    "duration_seconds":  13.9,
+    "run_output":  "\u003csaida\u003e\\ex-85ac846bf8f31098bfb4a4bd90d7e638",
+    "record_version":  "1.1.0",
+    "origin":  "LOCAL_UI",
+    "recovered":  "false",
+    "cancellation":  "{\"requested\": \"2026-10-28T14:25:31.381516300Z\", \"source\": \"AGENT_SHUTDOWN\", \"outcome\": \"CONFIRMED\"}",
+    "progress":  "{\"available\": true, \"transactions\": {\"IN_PROGRESS\": 1, \"SUCCEEDED\": 10}, \"delivered\": 10, \"problem\": null}",
+    "counts":  "{}",
+    "screenshots":  [
+                        "a2-cancelamento-01-pacote-escolhido.png",
+                        "a2-cancelamento-02-confirmacao-aprovacao.png",
+                        "a2-cancelamento-03-pronto-para-iniciar.png",
+                        "a2-cancelamento-04-durante-execucao.png",
+                        "a2-cancelamento-05b-confirmar-encerrar.png",
+                        "a2-cancelamento-06-atividade-fim.png",
+                        "a2-cancelamento-07-execucao-fim.png"
+                    ],
+    "checks":  [
+                   {
+                       "check":  "SHA-256 do ZIP do Agent confere (5fa0354ee4d9…)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Studio fechado (nenhum processo do Studio)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Agent empacotado abriu sem Java no PATH em 2,5 s",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R com o Agent aberto e ocioso (15 s): nenhuma porta TCP/UDP, nenhum AF_UNIX, nenhum pipe atribuído ao Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote escolhido pelo seletor e inspecionado pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "pacote APROVADO pela pessoa (confirmação explícita)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "Python do ambiente conferido pelo Agent",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução iniciada pelo botão Iniciar (Alt+I)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "execução ainda em andamento no momento do cancelamento",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "cancelamento pela interface (Sair → Encerrar execução e sair)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "ISO-R durante a execução (Agent): nenhuma porta TCP/UDP do processo do Agent, nenhum AF_UNIX",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "fim registrado pelo Agent: CANCELLED",
+                       "ok":  true
+                   }
+               ]
+}

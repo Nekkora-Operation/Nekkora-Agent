@@ -1,0 +1,20 @@
+{
+  "schema": "nekkora-agent/execution",
+  "version": "1.0.0",
+  "id": "ex-a58ec47f2cfd421ad91bc2f654ea4862",
+  "kind": "LAB_GENERIC",
+  "package": "pacote 69ac59476649",
+  "fingerprint": "sha256:69ac594766495e8966aec7c31e29e305b04de8411a8e1af0a8aa152e88a8697c",
+  "state": "SUCCEEDED",
+  "code": null,
+  "created": "2026-10-24T12:43:30.831817700Z",
+  "started": "2026-10-24T12:43:31.932945200Z",
+  "ended": "2026-10-24T12:49:32.425663100Z",
+  "process": {"pid": 6700, "start": 1792845811921, "executableDigest": "sha256:a38291e6e85c57879dc51dff5e088b9dbb264bbaee0b6d8c842e9a003864e155"},
+  "exitCode": 0,
+  "counts": {"ITEMS": 1},
+  "suspensions": 0,
+  "locks": 0,
+  "adopted": false,
+  "outputBytes": 0
+}

@@ -1,0 +1,4 @@
+Framework (load com integridade): {'SUCCEEDED': 10, 'IN_PROGRESS': 1}, entregues 10; Agent: {'IN_PROGRESS': 1, 'SUCCEEDED': 10}, entregues 10
+OK    progresso parcial do Agent = checkpoint carregado pelo Framework
+OK    nenhum resultado final publicado (summary.json ausente)
+OK    contagens finais do registro vazias (parcial não vira resultado)

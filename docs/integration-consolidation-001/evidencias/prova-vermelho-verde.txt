@@ -1,0 +1,29 @@
+INTEGRATION-CONSOLIDATION-001 — provas vermelho/verde das correções da C1 (29/10/2026, Windows, Maven offline)
+
+1. Reabertura com o atividade.jsonl ilegível (achado A4-1 da revisão da base)
+   Teste: ActivityPersistenceTest.reopeningWhileAnotherProgramDeniesReadingDefersTheCollectionNeverRestartingTheSequenceOrRereadingTheSources
+   (Windows: outro programa abre o arquivo com NOSHARE_READ + NOSHARE_WRITE durante a reabertura)
+   Antes (código de 23ce414):
+     Tests run: 1, Failures: 1
+     sequência contínua, sem recomeçar em 1 ==> expected: <[1..35]> but was: <[1, ..., 33, 127, 128]>
+     (a sequência pula de 33 para 127 e os eventos do trecho somem)
+   Depois (f87ffaf): ActivityPersistenceTest 18/18
+
+2. Relógio local atrasado e autorização vencida (D-AP-2)
+   Teste: AuthorizationClockTest (4)
+   Antes (AuthorizationCache e PlatformService de 23ce414):
+     Tests run: 4, Failures: 2
+     afterRestartTheServerTimeSeenOnlineIsTheFloor:71 consultada vencida nesta sessão, não volta ==> expected: <false> but was: <true>
+     clockSetBackAfterExpiryDoesNotReviveTheAuthorizationInTheSameSession:54 o piso (maior instante já consultado) mantém a vencida ==> expected: <false> but was: <true>
+   Depois (3b07fc6): 4/4
+
+3. Guarda de rede (ressalva A7-1)
+   Mutação M6: src/main/java/com/nekkora/agent/exec/RunStore.java com
+     static java.io.InputStream m6(java.net.URI u) throws java.io.IOException { return u.toURL().openStream(); }
+   mvnw -o test -Dtest=NetworkIsolationTest
+     Tests run: 5, Failures: 1, Skipped: 1 — productionCodeHasNoChannel
+     exec\RunStore.java: leitura por URL (URL.openStream) (openStream)
+     exec\RunStore.java: conversão para URL (URI.toURL / Path.toUri().toURL) (toURL()
+   revertido (git status sem alteração em src/main): Tests run: 5, Failures: 0, Skipped: 1 (ISO-04: imagem não montada)
+
+M1–M5 continuam em docs/agent-platform-001/evidencias/prova-vermelho-verde.txt e docs/agent-platform-002/evidencias/prova-vermelho-verde.txt.

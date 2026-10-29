@@ -1,0 +1,16 @@
+OBS-PERSISTENCE-HARDENING — prova vermelho/verde (revisão de fontes 23/10, B-OBS-01 e B-OBS-02)
+
+VERMELHO: ActivityPersistenceTest (14 testes, versão final) contra a implementação ANTERIOR (commit 5c3fd6e).
+Única adição ao código antigo para compilar: accessor somente leitura unwrittenGapNotices() (conta linhas EVENT_GAP na fila).
+
+[ERROR]   ActivityPersistenceTest.linesThatReachedTheFileAreNotCountedAsLostWhenSyncKeepsFailing:375 continuam pendentes até sincronizar ==> expected: <3> but was: <0>
+[ERROR]   ActivityPersistenceTest.longOutageWithAFullQueueKeepsOneAccumulatedNoticeBoundedMemoryAndAnIncompleteTimeline:458 a memória não acumula avisos ==> expected: <true> but was: <false>
+[ERROR]   ActivityPersistenceTest.partialWriteThenFailedSyncIsCompletedThenSyncedOnceWithoutRewriting:514 visível, mas sem sincronização confirmada: pendente ==> expected: <3> but was: <2>
+[ERROR]   ActivityPersistenceTest.severalFailureCyclesKeepOneNoticeWithTheAccumulatedLossThroughRecoveryAndReopening:396 a memória não acumula avisos ==> expected: <true> but was: <false>
+[ERROR]   ActivityPersistenceTest.visibleBytesAreNotDurableUntilASyncIsConfirmedAndAreNeverRewritten:345 só sincroniza: nada é regravado ==> expected: <[0]> but was: <[]>
+[ERROR] Tests run: 14, Failures: 5, Errors: 0, Skipped: 0
+
+Mapa: B-OBS-01 = severalFailureCycles..., longOutageWithAFullQueue...; B-OBS-02 = visibleBytesAreNotDurable..., partialWriteThenFailedSync..., linesThatReachedTheFile...
+
+VERDE: os mesmos 14 testes na implementação corrigida (commit desta entrega):
+Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.826 s -- in com.nekkora.agent.obs.ActivityPersistenceTest

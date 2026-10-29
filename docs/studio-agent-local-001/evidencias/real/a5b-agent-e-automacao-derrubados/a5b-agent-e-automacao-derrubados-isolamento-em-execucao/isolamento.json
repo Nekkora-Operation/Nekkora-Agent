@@ -1,0 +1,31 @@
+﻿{
+    "schema":  "nekkora-agent/isolation-check",
+    "version":  "1.0.0",
+    "measured_utc":  "2026-10-28T14:28:34.8009586Z",
+    "seconds":  12,
+    "samples":  11,
+    "agent_alive_at_end":  false,
+    "quiet":  false,
+    "tcp":  [
+
+            ],
+    "udp":  [
+
+            ],
+    "af_unix_or_reparse":  [
+
+                           ],
+    "new_named_pipes_total":  32,
+    "new_named_pipes_agent":  [
+
+                              ],
+    "new_named_pipes_other_processes":  {
+                                            "chromium (mojo)":  18,
+                                            "libuv/node":  13,
+                                            "chrome":  1
+                                        },
+    "new_named_pipes_unattributed":  [
+
+                                     ],
+    "isolated":  true
+}

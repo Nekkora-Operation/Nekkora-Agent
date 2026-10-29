@@ -1,0 +1,37 @@
+﻿{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-002",
+    "jornada":  "complemento PA-05",
+    "execucoes":  {
+                      "offline_503_perda_local":  null,
+                      "desfecho_desconhecido":  null,
+                      "limite_do_historico":  "ex-8462859823fa90244f7b05ba9d32670f"
+                  },
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: 2045910a3c68181353fbd3abc715a0374954994b\r / data do commit: 2026-10-29T04:53:12Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "C1 Agent empacotado do build candidato abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 retomada: o mesmo vínculo continua ativo na Platform (2) e sem recusa da credencial",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 a coleta registrou o limite (AGT-OBS-005) sem lacuna de sequência; banco stored=settled=15047 = último local, nada declarado ausente, sob a autorização da segunda impressão",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 Platform: /, histórico  (), eventos  em ordem, sem repetição",
+                       "ok":  false
+                   },
+                   {
+                       "check":  "C9 nenhum segredo (códigos de pareamento e rotação, credenciais anterior e atual, senha e fator da pessoa: 4 valores) em evidências, dados, logs dos 6 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  5,
+    "ok":  4
+}

@@ -1,0 +1,70 @@
+{
+  "schema": "nekkora-agent-local-001/conferencia-recuperacao",
+  "version": "1.0.0",
+  "agent_execution_id": "ex-0c8cec5005c28e858b0bc457e05d135f",
+  "framework_execution_id": "ex-95d8831726a5428b83c2",
+  "checks": [
+    {
+      "check": "summary do Framework presente e com estado final",
+      "ok": true,
+      "info": "STOPPED"
+    },
+    {
+      "check": "diário do Framework termina em ENGINE_COMPLETED da mesma execução e com o mesmo desfecho",
+      "ok": true,
+      "info": "ENGINE_COMPLETED STOPPED"
+    },
+    {
+      "check": "estado do Agent = o que o protocolo determina (FAILED), não OUTCOME_UNKNOWN",
+      "ok": true,
+      "info": "FAILED"
+    },
+    {
+      "check": "código = AGT-EXE-022 (falha informada) ou nulo (sucesso)",
+      "ok": true,
+      "info": "AGT-EXE-022"
+    },
+    {
+      "check": "marcado como recuperado do protocolo depois do reinício",
+      "ok": true
+    },
+    {
+      "check": "sem código de saída (o fim do processo não foi observado)",
+      "ok": true
+    },
+    {
+      "check": "contagens do registro = contagens do summary",
+      "ok": true,
+      "info": {
+        "FAILED_TECHNICAL": 1,
+        "SUCCEEDED": 11
+      }
+    },
+    {
+      "check": "sem progresso parcial (há resultado final)",
+      "ok": true
+    },
+    {
+      "check": "não adotado (o processo já tinha terminado na reabertura)",
+      "ok": true
+    },
+    {
+      "check": "ciclo do Agent: STARTING → RUNNING → RECONCILE → desfecho (nenhum segundo lançamento)",
+      "ok": true,
+      "info": [
+        "STARTING",
+        "RUNNING",
+        "RECONCILE",
+        "FAILED"
+      ]
+    },
+    {
+      "check": "nada relançado: um único ENGINE_STARTED no diário do Framework",
+      "ok": true
+    },
+    {
+      "check": "o processo terminou ANTES da reabertura (ENGINE_COMPLETED anterior ao RECONCILE)",
+      "ok": true
+    }
+  ]
+}
