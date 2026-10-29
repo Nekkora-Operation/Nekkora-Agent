@@ -1,0 +1,47 @@
+# PLATFORM-AUTOMATION-LIFECYCLE-001 — laboratório do ciclo de vida das automações: sub-rede própria (10.251.50.0/24, sem
+# tocar os laboratórios 47/48/49 preservados) e armazenamento local dos artefatos recebidos pela Platform (volume desta
+# stack). O compose da stack E2E fixa os endereços por serviço; este complemento troca a sub-rede, os endereços e o proxy
+# confiável, na mesma disposição, e liga NEKKORA_ARTEFATOS_DIR só na Platform.
+networks:
+  e2e:
+    ipam:
+      config: !override
+        - subnet: 10.251.50.0/24
+
+volumes:
+  artefatos: {}
+
+services:
+  postgres:
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.20
+  redis:
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.21
+  platform:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.50.10/32
+      NEKKORA_ARTEFATOS_DIR: /var/lib/nekkora/artefatos
+    volumes:
+      - artefatos:/var/lib/nekkora/artefatos
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.30
+  portal:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.50.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.31
+  agent-gateway:
+    environment:
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.50.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.32
+  nginx:
+    networks:
+      e2e:
+        ipv4_address: 10.251.50.10
