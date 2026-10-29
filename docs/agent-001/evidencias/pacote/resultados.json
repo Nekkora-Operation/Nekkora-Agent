@@ -14,7 +14,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "java no PATH reduzido: nenhum; JAVA_HOME removido; 95 módulos carregados, fora do pacote/Windows: 0; do JDK/Studio/.design-system: 0",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
                                           ]
                        },
                        {
@@ -22,7 +22,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "janela em 1717 ms (externo), startup_ms=1346 (log); processos: 2 (lançador + JVM); consoles: 0; ícone na bandeja: no estouro (Mostrar ícones ocultos)",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A02-A14-pacote-primeiro-inicio.png"
                                           ]
                        },
                        {
@@ -30,7 +30,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "10/10 ciclos fechar (WM_CLOSE) → ícone da bandeja → janela de volta (clique real do mouse: 0; Invoke da UI Automation quando o Explorer não entregou o clique sintético: 10); ícones do Agent na bandeja: 1; log: 10 ocultações, 10 restaurações; processos: 2",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A03-restaurada-pela-bandeja.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A03-restaurada-pela-bandeja.png"
                                           ]
                        },
                        {
@@ -38,7 +38,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "Sair pelo menu da bandeja: processos restantes 0, ícone visível 0, LIFE_EXIT registrado; reabriu com a trava (arquivo mantido: True); config igual antes/depois: True (tema claro aplicado na captura)",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A04-reaberto-config-preservada.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A04-reaberto-config-preservada.png"
                                           ]
                        },
                        {
@@ -46,7 +46,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "5/5 rodadas com duas aberturas simultâneas: um único proprietário (1 LIFE_START, nenhuma configuração criada pela segunda), a outra mostrou o aviso e saiu; códigos de saída da segunda: 3,3,3,3,3",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A05-segunda-instancia-aviso.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A05-segunda-instancia-aviso.png"
                                           ]
                        },
                        {
@@ -62,7 +62,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "--sem-bandeja: nenhum ícone; fechar → minimizada com processo vivo (True); Alt+S (Sair) pelo teclado encerrou: True. Falha real de instalação da bandeja: simulada no teste automatizado",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A07-pacote-sem-bandeja.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A07-pacote-sem-bandeja.png"
                                           ]
                        },
                        {
@@ -70,7 +70,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "COMPUTERNAME removido do ambiente do processo: código AGT-HOST-001 no log; a captura mostra \u0027Não disponível\u0027",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A09-pacote-sem-nome-de-maquina.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A09-pacote-sem-nome-de-maquina.png"
                                           ]
                        },
                        {
@@ -78,7 +78,7 @@
                            "status":  "APROVADO",
                            "detalhe":  "nada abriu sozinho (0); Espaço em \u0027Abrir Studio\u0027 → linha de comando do filho: C:\\Windows\\System32\\charmap.exe (pai = JVM do Agent); navegador padrão pediu \u0027GET /nekkora-agent-homologacao HTTP/1.1\u0027; com o filho ainda aberto o Agent saiu e reabriu (sem herdar a trava); destinos ausentes do log",
                            "evidencias":  [
-                                              "C:\\Users\\nicol\\AppData\\Local\\Temp\\claude\\C--Users-nicol-nekkora\\fc2b12b9-7aea-4807-842c-efc59b9b9d00\\scratchpad\\a001\\homolog-final\\capturas\\A10-pacote-atalhos-configurados.png"
+                                              "<pasta-temporaria-da-sessao>\\a001\\homolog-final\\capturas\\A10-pacote-atalhos-configurados.png"
                                           ]
                        },
                        {

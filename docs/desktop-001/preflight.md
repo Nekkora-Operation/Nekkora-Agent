@@ -6,7 +6,7 @@ Data: 22/10/2026. Nada foi editado antes deste levantamento.
 
 | Item | Estado |
 |---|---|
-| Repositório | `Nekkora-Operation/Nekkora-Agent`, local `C:\Users\nicol\nekkora\Nekkora-Agent` |
+| Repositório | `Nekkora-Operation/Nekkora-Agent`, local `<pasta-do-repositorio>` |
 | Remoto | **vazio** (`git ls-remote` não devolve nada): nenhum commit do Agent está no GitHub |
 | `main` local | `afd1bb5` (commit inicial mínimo) |
 | AGENT-001 | branch local `feat/nekkora-agent-001`, `d465296` (docs finais), código homologado em `2815a18`; **não mergeada, não publicada** |

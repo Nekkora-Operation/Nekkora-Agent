@@ -120,7 +120,7 @@ precisão além da descrita na matriz.
 ## 9. Entrega para revisão
 
 - O repositório remoto continua vazio: o commit-base `afd1bb5` (`main`) e o branch existem só
-  localmente em `C:\Users\nicol\nekkora\Nekkora-Agent`. Para abrir o PR é preciso publicar a base mínima
+  localmente em `<pasta-do-repositorio>`. Para abrir o PR é preciso publicar a base mínima
   (`main` = `afd1bb5`) e o branch — **a publicar somente após o alinhamento com a responsável**.
 - Merge, force-push e auto-merge: não realizados.
 
