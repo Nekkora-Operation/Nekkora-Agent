@@ -378,7 +378,7 @@ public final class PlatformService implements AutoCloseable {
         if (l.get().refused()) return Action.refused(ErrorCode.PLT_CREDENTIAL_REFUSED);
         Optional<Authorization> z = authorizations.find(authorizationId);
         if (fp.isEmpty() || z.isEmpty() || !z.get().fingerprint().equals(fp.get()) || !PackageFingerprint.RULE.equals(z.get().rule())
-                || !clock.instant().isBefore(z.get().validUntil())) {
+                || !authorizations.effective(clock.instant()).isBefore(z.get().validUntil())) {
             return Action.refused(ErrorCode.PLT_AUTHORIZATION_REFUSED);
         }
         try {
@@ -616,6 +616,7 @@ public final class PlatformService implements AutoCloseable {
         Result<MachineClient.Presence> r = client.heartbeat(l.destination(), token);
         if (!(r instanceof Ok<MachineClient.Presence> ok)) return handleFailure(r, now, null);
         contact(now);
+        authorizations.observe(ok.value().serverTime());
         nextHeartbeat = now.plus(HEARTBEAT);
         try {
             vault.expiresAt(ok.value().credentialExpiresAt());

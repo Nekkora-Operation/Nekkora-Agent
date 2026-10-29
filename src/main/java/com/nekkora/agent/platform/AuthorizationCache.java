@@ -36,13 +36,24 @@ final class AuthorizationCache {
     record Authorization(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String fingerprint, String rule,
                          Instant validUntil) {}
 
-    /** Situação de uma autorização diante de um pacote, no instante {@code now} do relógio local. */
+    /**
+     * Situação de uma autorização diante de um pacote, no instante {@code now} do relógio local — nunca antes do último
+     * instante já observado (D-AP-2: atrasar o relógio não devolve o prazo de uma autorização vencida).
+     */
     enum Usability { USABLE, EXPIRED, RULE_UNKNOWN }
 
     private final Path dir;
     private final AtomicWriter writer;
     private UUID agentId;
     private Instant downloadedAt;
+    /** Maior hora informada pelo servidor (presença, canal autenticado por TLS), gravada no download (D-AP-2). */
+    private Instant serverSeen;
+    /**
+     * Piso do relógio (D-AP-2), só na memória: a hora do servidor e, entre contatos, o maior instante local já consultado.
+     * Atrasar o relógio não devolve o prazo de uma autorização vencida; um relógio adiantado só vence antes (falha
+     * fechada) até a próxima hora do servidor, que é a referência e corrige o piso.
+     */
+    private Instant observed;
     private List<Authorization> items = List.of();
     private Set<UUID> ended = new TreeSet<>();
 
@@ -54,6 +65,8 @@ final class AuthorizationCache {
     synchronized void load(UUID currentAgent) {
         agentId = null;
         downloadedAt = null;
+        serverSeen = null;
+        observed = null;
         items = List.of();
         ended = new TreeSet<>();
         try {
@@ -71,6 +84,8 @@ final class AuthorizationCache {
             if (e != null) for (Object o : e) if (o instanceof String s) gone.add(UUID.fromString(s));
             agentId = a;
             downloadedAt = Json.instant(m, "downloadedAt");
+            serverSeen = Json.instant(m, "serverTimeAt"); // ausente nas gravações anteriores
+            observed = serverSeen;
             items = List.copyOf(list);
             ended = gone;
         } catch (NoSuchFileException e) {
@@ -106,7 +121,9 @@ final class AuthorizationCache {
         }
         List<String> endedJs = new ArrayList<>();
         for (UUID g : gone) endedJs.add(com.nekkora.agent.storage.StrictJson.quote(g.toString()));
-        String doc = Json.obj().str("schema", SCHEMA).str("version", VERSION).str("agentId", agent.toString()).str("downloadedAt", now.toString())
+        Json.Obj o = Json.obj().str("schema", SCHEMA).str("version", VERSION).str("agentId", agent.toString()).str("downloadedAt", now.toString());
+        if (serverSeen != null) o.str("serverTimeAt", serverSeen.toString());
+        String doc = o
                 .raw("items", Json.list(js)).raw("ended", Json.list(endedJs)) + "\n";
         Files.createDirectories(dir);
         writer.write(dir.resolve(FILE), doc.getBytes(StandardCharsets.UTF_8));
@@ -126,6 +143,7 @@ final class AuthorizationCache {
 
     /** As autorizações que citam exatamente esta impressão, com a situação de cada uma agora. */
     synchronized Map<Authorization, Usability> forFingerprint(String fingerprintHex, Instant now) {
+        now = effective(now);
         Map<Authorization, Usability> out = new LinkedHashMap<>();
         for (Authorization z : items) {
             if (!z.fingerprint().equals(fingerprintHex)) continue;
@@ -133,6 +151,23 @@ final class AuthorizationCache {
             out.put(z, u);
         }
         return out;
+    }
+
+    /** Instante usado para conferir prazos: o relógio local, nunca abaixo do piso; a consulta também eleva o piso. */
+    synchronized Instant effective(Instant now) {
+        observed = later(observed, now);
+        return observed;
+    }
+
+    /** Hora informada pelo servidor (presença): passa a ser o piso (gravada no próximo download). */
+    synchronized void observe(Instant serverTime) {
+        if (serverTime == null) return;
+        serverSeen = later(serverSeen, serverTime);
+        observed = serverTime;
+    }
+
+    private static Instant later(Instant a, Instant b) {
+        return a == null ? b : b == null || a.isAfter(b) ? a : b;
     }
 
     synchronized Optional<Authorization> find(UUID id) {
