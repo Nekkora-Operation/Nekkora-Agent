@@ -98,6 +98,9 @@ public final class PlatformService implements AutoCloseable {
 
         default void lossDeclared(ExecutionId id, long count) {}
 
+        /** Um ACK aceito: cursores e quantos itens do lote foram gravados agora ou já estavam lá (reenvio sem efeito). */
+        default void acked(ExecutionId id, long storedThrough, long settledThrough, int stored, int duplicates) {}
+
         default void responseRejected(ExecutionId id, String why) {}
 
         default void storageFailed(ErrorCode why) {}
@@ -751,6 +754,13 @@ public final class PlatformService implements AutoCloseable {
             }
             if (!save(nd, false)) return false; // o progresso só existe depois de gravado
             lastSync = now;
+            int storedNow = 0;
+            int duplicates = 0;
+            for (MachineClient.ItemResult it : ok.value().results()) {
+                if ("STORED".equals(it.status())) storedNow++;
+                else if ("DUPLICATE".equals(it.status())) duplicates++;
+            }
+            diagnostics.acked(id, v.stored(), v.settled(), storedNow, duplicates);
             d = nd;
             lastSequence.put(id, Math.max(b.lastSequence(), v.settled()));
             if (nd.blocked()) {

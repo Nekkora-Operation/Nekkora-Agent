@@ -121,6 +121,10 @@ final class MainWindow extends NekkoraFrame {
         rotate.addActionListener(e -> listener.rotate());
         removeLink.addActionListener(e -> listener.removeLink());
         blockedButton.addActionListener(e -> listener.blocked());
+        pair.setMnemonic(KeyEvent.VK_R);
+        rotate.setMnemonic(KeyEvent.VK_N);
+        removeLink.setMnemonic(KeyEvent.VK_M);
+        blockedButton.setMnemonic(KeyEvent.VK_V);
         pair.getAccessibleContext().setAccessibleDescription("Liga esta máquina à organização na Platform com um código de pareamento");
         removeLink.getAccessibleContext().setAccessibleDescription("Apaga a credencial guardada nesta máquina; na Platform nada muda");
         studio.setMnemonic(KeyEvent.VK_T);

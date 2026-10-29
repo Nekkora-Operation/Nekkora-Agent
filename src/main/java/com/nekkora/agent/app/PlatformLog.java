@@ -106,6 +106,12 @@ final class PlatformLog implements PlatformService.Diagnostics {
     }
 
     @Override
+    public void acked(ExecutionId id, long storedThrough, long settledThrough, int stored, int duplicates) {
+        log.info(LogEvent.PLATFORM_ACK, Field.of("execution", id.value()), Field.of("stored_through", storedThrough), Field.of("settled_through", settledThrough),
+                Field.of("stored", stored), Field.of("duplicates", duplicates));
+    }
+
+    @Override
     public void responseRejected(ExecutionId id, String why) {
         log.warn(LogEvent.PLATFORM_RESPONSE_REJECTED, ErrorCode.PLT_RESPONSE_INVALID, Field.of("execution", id == null ? "none" : id.value()),
                 Field.of("why", why));

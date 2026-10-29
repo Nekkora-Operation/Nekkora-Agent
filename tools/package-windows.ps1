@@ -9,13 +9,13 @@
   4. Monta um runtime Java reduzido com jlink (módulos listados em $Modules, conferidos com jdeps).
   5. Cria a imagem de aplicativo com jpackage ("Nekkora Agent\Nekkora Agent.exe"), sem instalador.
   6. Copia avisos e licenças, LEIA-ME e a lista de versões/dependências com SHA-256.
-  7. Compacta em ZIP e grava o SHA-256 do ZIP.
+  7. Compacta em ZIP e grava o SHA-256 do ZIP (-NoZip: só a pasta, com o SHA-256 de cada arquivo em VERSOES.txt).
 
   Saída: target\dist\nekkora-agent-<versão>-windows-x64-lab.zip (+ .sha256) e target\dist\Nekkora Agent\ (pasta).
   O pacote NÃO é assinado digitalmente e não é instalador de produção.
 #>
 [CmdletBinding()]
-param([switch]$SkipTests)
+param([switch]$SkipTests, [switch]$NoZip)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
@@ -137,6 +137,13 @@ $lines += "Biblioteca nativa: app\lib\flatlaf-$flatVersion-windows-x86_64.dll (e
 $lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xms16m -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
 [System.IO.File]::WriteAllLines((Join-Path $app 'VERSOES.txt'), [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
 
+if ($NoZip) {
+    # AGENT-PLATFORM-001: entrega por PR, sem ZIP; a pasta da imagem é o artefato de homologação
+    Copy-Item -Recurse $app (Join-Path $dist 'Nekkora Agent')
+    Copy-Item (Join-Path $app 'VERSOES.txt') (Join-Path $dist 'VERSOES.txt')
+    Write-Host "[7/7] sem ZIP (-NoZip): pasta $(Join-Path $dist 'Nekkora Agent')"
+    exit 0
+}
 Write-Host "[7/7] ZIP e SHA-256"
 $zipName = "nekkora-agent-$version-windows-x64-lab.zip"
 $zip = Join-Path $dist $zipName
