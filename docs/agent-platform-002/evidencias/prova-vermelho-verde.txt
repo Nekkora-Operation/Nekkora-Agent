@@ -1,0 +1,13 @@
+AGENT-PLATFORM-002 — prova vermelho/verde da regra nova do ArchitectureTest (29/10/2026, Windows, Maven offline)
+
+M5: executor citando o transporte por nome completo, sem import (a regra de import do layersRespectTheirBoundaries não pega)
+  mutação temporária em src/main/java/com/nekkora/agent/exec/RunStore.java, dentro da classe:
+    static final String M5 = "com.nekkora.agent.platform.PlatformService";
+  mvnw -o test -Dtest=ArchitectureTest
+    Tests run: 4, Failures: 1 — executorAndCollectorNeverReachTheTransport
+    exec\RunStore.java (supervisão) cita com.nekkora.agent.platform
+    exec\RunStore.java (supervisão) cita PlatformService
+  revertido (git checkout -- RunStore.java; git diff -- src/main vazio)
+    Tests run: 4, Failures: 0
+
+M1–M4 (transporte) continuam em docs/agent-platform-001/evidencias/prova-vermelho-verde.txt.

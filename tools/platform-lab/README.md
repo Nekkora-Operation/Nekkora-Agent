@@ -18,3 +18,13 @@ as evidências sanitizadas vão para `docs/agent-platform-001/evidencias/`.
 
 O nginx carrega a chave TLS na subida e ela é apagada em seguida. Por isso a jornada corta a comunicação com `pause` e não
 com `stop`.
+
+## Segundo laboratório e jornada complementar (AGENT-PLATFORM-002)
+
+- Sub-rede própria, sem tocar um laboratório preservado: `LAB_REDE=48 LAB_PORTA=55873 LAB_PG_PORTA=55874 bash tools/platform-lab/subir.sh agentlab-002 ../npa-main-agentlab`
+  (`compose.lab-rede.yml`; as ferramentas leem `LAB_COMPOSE_EXTRA` de `segredos.env`).
+- Pacotes: `pacote-jornada` (`slow 400 350`) e `pacote-limite` (`slow 2600 0`, passa do limite do histórico); impressões em
+  `saidas/<id>/impressoes.json`; `pessoa.py preparar` com a primeira e `autorizar` com a segunda.
+- Jornada: `powershell -File tools/platform-lab/jornada-complemento.ps1 -Id agentlab-002 -Python <python do Framework 0.3.0>`
+  (`-SomenteLimite` retoma só o C8 sobre os dados existentes). Apoio comum em `LabComum.ps1`.
+- Parar: o mesmo `stop` do passo 7, com `-f tools/platform-lab/compose.lab-rede.yml` a mais.
