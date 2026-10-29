@@ -1,0 +1,91 @@
+﻿{
+  "detalhe": {
+    "runId": "f3f20680-05a4-40d6-8a22-7e99a3bfb776",
+    "correlation": {
+      "agentExecutionId": "ex-773cee77c1985e9899f26377dd370317",
+      "frameworkExecutionId": "ex-901a5aca29d44b179871",
+      "platformExecutionId": null,
+      "agentId": "4d1c748d-49e6-4d4c-904a-be2d251f45b8",
+      "workerId": "fc93e9d8-b9b4-4481-80de-d049a2fd18b5",
+      "workspaceId": "4930d39b-ef21-4d06-9cfa-c37858e597f5",
+      "automationId": "f7e01073-87d8-42a2-8ee0-0ad5b4c5311b",
+      "automationVersionId": "5495cb9f-bb6e-4233-b4ac-51cd7af74730",
+      "authorizationId": "89f26075-7492-4744-bd7f-f91e5a5e19a0"
+    },
+    "origin": "LOCAL_AUTHORIZED",
+    "authorizationStateAtRegistration": "ACTIVE",
+    "registeredAt": "2026-10-29T20:44:57.292804Z",
+    "supervisor": {
+      "state": "SUCCEEDED",
+      "code": null,
+      "exitCode": 0,
+      "counts": {
+        "SUCCEEDED": 5
+      },
+      "agentCreatedAt": "2026-10-29T20:44:56.413131Z",
+      "agentStartedAt": "2026-10-29T20:44:57.238779Z",
+      "agentEndedAt": "2026-10-29T20:45:06.5526Z",
+      "adopted": false,
+      "suspensions": 0,
+      "locks": 0,
+      "reports": 2,
+      "conflicts": 0,
+      "lastReportAt": "2026-10-29T20:45:39.699859Z"
+    },
+    "process": "ENDED",
+    "outcome": "KNOWN",
+    "transport": {
+      "connectivity": "CONNECTED",
+      "lastHeartbeatAt": "2026-10-29T20:45:39.673195Z",
+      "lastEventAt": "2026-10-29T20:45:39.872722Z"
+    },
+    "history": {
+      "completeness": "COMPLETE",
+      "reasons": [],
+      "eventsStored": 292,
+      "storedThrough": 292,
+      "settledThrough": 292,
+      "maxSequence": 292,
+      "declaredMissing": 0,
+      "collectionCompletedSequence": 292,
+      "invalidRefused": 0,
+      "stepsAvailable": true
+    },
+    "transactionsSeen": {
+      "TRANSACTION_COMPLETED": 5,
+      "TRANSACTION_STARTED": 5
+    },
+    "retention": {
+      "state": "AVAILABLE",
+      "eventsPurged": 0
+    }
+  },
+  "eventos": {
+    "quantidade": 292,
+    "primeira": 1,
+    "ultima": 292,
+    "sequencias_repetidas": 0,
+    "em_ordem": true,
+    "codigos": [
+      "ACTION_COMPLETED",
+      "ACTION_STARTED",
+      "CHECKPOINT_SAVED",
+      "CLEANUP_COMPLETED",
+      "COLLECTION_COMPLETED",
+      "COLLECTION_STARTED",
+      "ENGINE_COMPLETED",
+      "ENGINE_STARTED",
+      "OUTPUT_COMMITTED",
+      "PHASE_COMPLETED",
+      "PHASE_STARTED",
+      "RETRY_SCHEDULED",
+      "RUNNING",
+      "SINK_COMMITTED",
+      "STARTING",
+      "SUCCEEDED",
+      "TARGET_RESOLVED",
+      "TRANSACTION_COMPLETED",
+      "TRANSACTION_STARTED"
+    ]
+  }
+}
