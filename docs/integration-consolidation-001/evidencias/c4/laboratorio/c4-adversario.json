@@ -1,0 +1,108 @@
+{
+  "prova": "C4 itens 8 e 9 (API real, maquina de laboratorio adversaria)",
+  "placar": "10/10",
+  "casos": {
+    "A1-isolamento-de-worker": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 200,
+        "itens": 0
+      }
+    },
+    "A2-autorizacao-de-outro-worker": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 403,
+        "error": "forbidden"
+      }
+    },
+    "A3-autorizacao-fora-da-organizacao": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 403,
+        "error": "forbidden"
+      }
+    },
+    "A4-registro-e-lote": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 200,
+        "resultados": [
+          "STORED",
+          "STORED",
+          "STORED"
+        ],
+        "stored": 3
+      }
+    },
+    "A5-reenvio-idempotente": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 200,
+        "resultados": [
+          "DUPLICATE",
+          "DUPLICATE",
+          "DUPLICATE"
+        ]
+      }
+    },
+    "A6-conteudo-adulterado": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 200,
+        "resultado": {
+          "sequence": 2,
+          "status": "CONFLICT",
+          "reason": "conteudo_diferente"
+        }
+      }
+    },
+    "A7-evento-invalido": {
+      "resultado": "PASS",
+      "obtido": {
+        "status": 200,
+        "resultado": {
+          "sequence": 4,
+          "status": "INVALID",
+          "reason": "unknown_field"
+        }
+      }
+    },
+    "A9-contrato-ausente-ou-maior": {
+      "resultado": "PASS",
+      "obtido": {
+        "sem_cabecalho": [
+          400,
+          "unsupported_contract"
+        ],
+        "contrato_2": [
+          400,
+          "unsupported_contract"
+        ]
+      }
+    },
+    "A8-vencimento-imutavel-e-credencial-encerrada": {
+      "resultado": "PASS",
+      "obtido": {
+        "expires_at_imutavel": true,
+        "recusa_do_banco": "hou: CONTEXT:  PL/pgSQL function prevent_agent_credential_origin_change() line 13 at RAISE",
+        "revogacao": 204,
+        "heartbeat": 401,
+        "lote": 401
+      }
+    },
+    "A10-trilha-no-banco": {
+      "resultado": "PASS",
+      "obtido": {
+        "events_stored|stored|settled|invalid_refused": "3|3|3|1",
+        "gravados": "1:STEP_COMPLETED,2:STEP_COMPLETED,3:STEP_COMPLETED",
+        "eventos_administrativos_da_org": "35"
+      }
+    }
+  },
+  "maquina_adversaria": {
+    "agentId": "a1db0956-ac6c-41e2-89e3-db3a18ccc4d2",
+    "workerId": "4de8e64f-13dd-4be7-8b71-70723d914a25",
+    "credencial": "<so na memoria; vencida no fim>"
+  }
+}

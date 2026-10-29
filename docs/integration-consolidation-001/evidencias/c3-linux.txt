@@ -1,0 +1,5 @@
+commit=7986e84afc656c1c7e2b791aa4411e55fe0ee961 src=2ab110d1e25e0ba59f3274c0658b28d581f964aa
+[ERROR] Tests run: 287, Failures: 15, Errors: 0, Skipped: 38
+[ERROR] Tests run: 35, Failures: 13, Errors: 0, Skipped: 0, Time elapsed: 0.190 s <<< FAILURE! -- in com.nekkora.agent.os.ShortcutTest
+[ERROR] Tests run: 4, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.066 s <<< FAILURE! -- in com.nekkora.agent.app.AgentBootstrapTest
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.015 s <<< FAILURE! -- in com.nekkora.agent.app.SensitiveDataLeakTest

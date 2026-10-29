@@ -1,0 +1,37 @@
+﻿{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-003",
+    "jornada":  "complemento PA-05",
+    "execucoes":  {
+                      "offline_503_perda_local":  null,
+                      "desfecho_desconhecido":  null,
+                      "limite_do_historico":  "ex-db5807e6e9c464fd6ccf2f5ea45f56d9"
+                  },
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: 7986e84afc656c1c7e2b791aa4411e55fe0ee961\r / data do commit: 2026-10-29T15:19:49Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "C1 Agent empacotado do build candidato abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 retomada: o mesmo vínculo continua ativo na Platform (2) e sem recusa da credencial",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 a coleta registrou o limite (AGT-OBS-005) sem lacuna de sequência; banco stored=settled=15043 = último local, nada declarado ausente, sob a autorização da segunda impressão",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C8 Platform: SUCCEEDED/KNOWN, histórico INCOMPLETE (LOST_AT_SOURCE), eventos 15043 em ordem, sem repetição",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "C9 nenhum segredo (códigos de pareamento e rotação, credenciais anterior e atual, senha e fator da pessoa: 4 valores) em evidências, dados, logs dos 6 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  5,
+    "ok":  5
+}

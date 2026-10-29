@@ -1,0 +1,36 @@
+[1/7] Construá∆o (mvnw clean verify)
+Agent auxiliar: STARTED; processo {pai=20448, filho=37140}
+OBS-G2: 33040000 bytes drenados em 1055 ms; consulta pior caso 3 ms
+OBS-G5: antes da queda 11 eventos; depois 64; Framework 56
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+OBS-G4 10k: 13 rodadas, 271 ms, 5472729 bytes
+[2/7] ÷cone
+Ìcone gravado: <perfil>\nekkora\agent-clone-c3\target\package\nekkora-agent.ico (9 tamanhos)
+[3/7] Conferància de m¢dulos (jdeps)
+     jdeps: java.base,java.desktop,java.logging,java.net.http,java.prefs,jdk.unsupported
+[4/7] Runtime (jlink)
+[5/7] Imagem de aplicativo (jpackage)
+[6/7] Licenáas, LEIA-ME e vers‰es
+[7/7] sem ZIP (-NoZip): pasta <perfil>\nekkora\agent-clone-c3\target\dist\Nekkora Agent
+Nekkora Agent 0.1.0 - distribui√ß√£o de laborat√≥rio (Windows x64, sem assinatura digital)
+commit: 7986e84afc656c1c7e2b791aa4411e55fe0ee961
+data do commit: 2026-10-29T15:19:49Z
+gerado em: 2026-10-29T15:39:26Z
+
+Bibliotecas (app\lib) com SHA-256:
+  nekkora-agent.jar  343a72d7d6e54333ea9e06753f851e3b5d78629ef28e2282e9b22f6cb68b00dc
+  flatlaf-3.7.2.jar  917aff3963c88d797d0fd9b9ccbd70f7681c101df9d11c59e2bc7a3a6c0fabf4
+  jna-5.17.0.jar  b3a9408e7c51e08ef0e3bfcc08f443f6ec0f6191ba8cd7c18d53d2b22e5bdbc0
+  jna-platform-5.17.0.jar  b7e3d46c87bad2eb409b0e704916bcd81206168e357312dfddd0e253679cd9e0
+  nekkora-design-tokens-1.0.0-SNAPSHOT.jar  78c89310d062d350856efa4189151918b5ee237bcc60771531e0a394c1d0f0de
+  nekkora-swing-ui-1.0.0-SNAPSHOT.jar  ef155caa02ce709aa5648ca9e819b55b0b7a79705b10186b242ae8b80f2e5e4c
+  flatlaf-3.7.2-windows-x86_64.dll  533407841892e294f70e4f1443ebddecbea83b7f0bd2af876181505073b677d5
+
+Origem do design system (nekkora-design-tokens, nekkora-swing-ui):
+  studio.repository=https://github.com/Nekkora-Operation/Nekkora-Studio.git
+  studio.commit=beae03f16cdb72de987280e0f1e85d0a0e9852ba
+  studio.version=1.0.0-SNAPSHOT
+  studio.modules=nekkora-design-tokens,nekkora-swing-ui
+  build.outputTimestamp=2026-10-16T17:24:12-03:00
