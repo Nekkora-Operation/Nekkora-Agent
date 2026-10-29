@@ -98,6 +98,38 @@ class ArchitectureTest {
         assertTrue(networkViolations("exec/X.java", "import com.sun.jna.Native;").stream().anyMatch(v -> v.contains("biblioteca nativa")));
     }
 
+    /** AGENT-PLATFORM-002: executor e coleta (supervisor) não alcançam o transporte nem por nome completo, sem import. */
+    static final List<String> SUPERVISION = List.of("exec/", "obs/");
+    static final List<String> TRANSPORT_NAMES = List.of("com.nekkora.agent.platform", "PlatformService", "MachineClient", "HttpTransport");
+
+    static List<String> transportReferences(String relativePath, String text) {
+        List<String> out = new ArrayList<>();
+        String rel = relativePath.replace('\\', '/');
+        if (SUPERVISION.stream().noneMatch(rel::startsWith)) return out;
+        for (String n : TRANSPORT_NAMES) if (text.contains(n)) out.add(relativePath + " (supervisão) cita " + n);
+        return out;
+    }
+
+    @Test
+    void executorAndCollectorNeverReachTheTransport() throws IOException {
+        List<String> violations = new ArrayList<>();
+        int read = 0;
+        try (Stream<Path> files = Files.walk(SRC)) {
+            for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String rel = SRC.relativize(f).toString();
+                if (SUPERVISION.stream().anyMatch(rel.replace('\\', '/')::startsWith)) read++;
+                violations.addAll(transportReferences(rel, Files.readString(f, StandardCharsets.UTF_8)));
+            }
+        }
+        assertTrue(read > 20, "o guarda leu o executor e a coleta (" + read + " arquivos)");
+        assertTrue(violations.isEmpty(), String.join("\n", violations));
+        // contraprova: nome completo sem import, e os tipos do transporte, são recusados no executor e na coleta
+        assertTrue(transportReferences("exec/ExecutionController.java", "com.nekkora.agent.platform.PlatformService p;").size() >= 2);
+        assertTrue(transportReferences("obs/ActivityService.java", "MachineClient c;").stream().anyMatch(v -> v.contains("MachineClient")));
+        assertTrue(transportReferences("exec/X.java", "HttpTransport t;").stream().anyMatch(v -> v.contains("HttpTransport")));
+        assertTrue(transportReferences("app/AgentBootstrap.java", "com.nekkora.agent.platform.PlatformService p;").isEmpty(), "o app liga as partes");
+    }
+
     private static void check(String pkg, List<String> banned, List<String> violations) throws IOException {
         try (Stream<Path> files = Files.walk(SRC.resolve(pkg))) {
             for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {

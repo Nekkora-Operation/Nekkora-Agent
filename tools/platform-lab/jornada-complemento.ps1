@@ -27,13 +27,17 @@
 #>
 param(
     [string]$Id = 'agentlab-002',
-    [Parameter(Mandatory = $true)][string]$Python
+    [Parameter(Mandatory = $true)][string]$Python,
+    # retomada: só o C8 (e a varredura), com o Agent reaberto sobre os dados existentes (vínculo ativo, credencial atual)
+    [switch]$SomenteLimite
 )
-$Prefixo = 'complemento-'
+$Prefixo = $(if ($SomenteLimite) { 'complemento-retomada-c8-' } else { 'complemento-' })
 . (Join-Path $PSScriptRoot 'LabComum.ps1')
 $imp = Get-Content -Raw (Join-Path $Lab 'impressoes.json') | ConvertFrom-Json
 $ids = Get-Content -Raw (Join-Path $Lab 'pessoa-preparacao.json') | ConvertFrom-Json
 $authLimite = (Get-ChildItem (Join-Path $Lab 'pessoa-autorizacao-*.json') | Select-Object -First 1 | Get-Content -Raw | ConvertFrom-Json)
+# a pasta de saída precisa existir (sem ela o Agent bloqueia o início com AGT-EXE-011, como deve)
+New-Item -ItemType Directory -Force (Join-Path $Lab 'saida-automacao') | Out-Null
 
 function Exec-Dir([string]$ExecId) { return Join-Path $script:data "execucoes\$ExecId" }
 function Run-State([string]$ExecId) { return (Get-Content -Raw (Join-Path (Exec-Dir $ExecId) 'estado.json') | ConvertFrom-Json) }
@@ -84,6 +88,7 @@ function Start-Run([string]$Pkg, [string]$Shot) {
     Wait-Until { (Log-Count 'EXEC_PACKAGE_INSPECTED') -gt $insp0 } 30 'pacote inspecionado' | Out-Null
     Start-Sleep -Milliseconds 800
     if (-not (Approved $imp.$Pkg)) {
+        Capture "antes-de-aprovar-$Pkg" 'Execução local'
         $approved0 = Log-Count 'EXEC_PACKAGE_APPROVED'
         $pos = Find-Button $dlg @(@(109, 60, 82), @(118, 71, 92)) 185 330 450 1000
         if (-not $pos) { throw 'botão Aprovar este pacote… não encontrado' }
@@ -123,6 +128,13 @@ Start-Sleep -Seconds 2
 $code = $null; $rotCode = $null; $oldTok = $null
 $run1 = $null; $run2 = $null; $run3 = $null
 try {
+    if ($SomenteLimite) {
+        $vinculo = Get-Content -Raw (Join-Path $script:data 'plataforma\vinculo.json') | ConvertFrom-Json
+        Note '[REAL]' "C8 retomada sobre os dados existentes (Agent $($vinculo.agentId), credencial depois da rotação)"
+        Wait-Until { (Log-Count 'PLATFORM_CONNECTED') -ge 1 -and (Log-Count 'LIFE_READY') -ge 1 } 90 'Agent conectado' | Out-Null
+        $active = Sql "SELECT status FROM agents WHERE agent_id = '$($vinculo.agentId)'"
+        Check "C8 retomada: o mesmo vínculo continua ativo na Platform ($active) e sem recusa da credencial" ($active -eq '2' -and (Log-Count 'PLATFORM_CREDENTIAL_REFUSED') -eq 0)
+    } else {
     # ---------- C1: pareamento pela janela ----------
     $codeFile = Join-Path $Seg 'codigo-pareamento'
     $code = ([IO.File]::ReadAllText($codeFile)).Trim()
@@ -295,6 +307,7 @@ try {
     Check "C7 a presença continua com a credencial nova ($hb0 -> $hb1) e nenhuma recusa no canal ($refGw0 -> $refGw1)" ($hb1 -gt $hb0 -and $refGw1 -eq $refGw0 -and (Log-Count 'PLATFORM_CREDENTIAL_REFUSED') -eq 0)
     Capture 'c7-credencial-nova'
 
+    }
     # ---------- C8: limite do histórico (perda na origem) ----------
     $run3 = Start-Run 'pacote-limite' 'c8-pacote-limite-autorizacao'
     Note '[REAL]' "C8 execução com mais de 20.000 eventos: $run3"
