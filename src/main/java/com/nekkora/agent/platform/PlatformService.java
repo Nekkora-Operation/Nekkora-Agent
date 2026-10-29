@@ -348,6 +348,15 @@ public final class PlatformService implements AutoCloseable {
 
     // ------------------------------------------------------------------------------------------- autorização e vínculo da execução
 
+    /**
+     * D-AP-1: a pré-escolha da janela de execução. Exatamente uma autorização válida = ela; nenhuma ou mais de uma = nenhuma
+     * ("Não registrar" fica escolhido e ninguém escolhe pela pessoa entre várias).
+     */
+    public static Optional<UUID> preselected(List<AuthorizationChoice> choices) {
+        List<AuthorizationChoice> usable = choices.stream().filter(AuthorizationChoice::usable).toList();
+        return usable.size() == 1 ? Optional.of(usable.get(0).authorizationId()) : Optional.empty();
+    }
+
     /** Autorizações guardadas que citam esta impressão (forma do Agent, {@code sha256:…}), com a situação de cada uma. */
     public List<AuthorizationChoice> authorizationsFor(String agentFingerprint) {
         Optional<String> fp = PackageFingerprint.wire(agentFingerprint);

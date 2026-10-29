@@ -627,9 +627,7 @@ public final class AgentApp {
                 ExecutionPackage pk = ExecutionPackage.inspect(dir);
                 ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
                 // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
-                java.util.List<PlatformService.AuthorizationChoice> usable = ctx.platform().authorizationsFor(pk.fingerprint()).stream()
-                        .filter(PlatformService.AuthorizationChoice::usable).toList();
-                chosenAuthorization = usable.size() == 1 ? usable.get(0).authorizationId() : null;
+                chosenAuthorization = PlatformService.preselected(ctx.platform().authorizationsFor(pk.fingerprint())).orElse(null);
                 return setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
