@@ -34,6 +34,14 @@ Nada aqui muda o protocolo. Onde o contrato deixa uma regra a cargo do Agent, a 
 
 A revisão de limite com `resource_code = 6` (`AGENT_EVENT_BYTES_DAILY`, 026) é recusada por `organization_resource_limit_revisions`. A fixture do laboratório provisiona 1–5, como o `AgentChannelE2E`. A ingestão funcionou sem ela. Se o recurso 6 deveria ser provisionável, a API decide.
 
+### E-AP-3 (API, documentação do contrato — informativo)
+
+- **Commit:** `2e639244` (o mesmo texto no `7d30c24`).
+- **Operação:** `GET /api/v1/o/{org}/agent-runs/{runId}/events` (consulta da pessoa; não é rota da máquina).
+- **Contrato, sec. 10:** `?afterSequence=&limit=`.
+- **Implementação:** paginação por `cursor` opaco (`nextCursor`) e `limit` de no máximo 100 (`limit=200` → `400`); `afterSequence` é ignorado.
+- **Impacto:** nenhum no Agent. A ferramenta de laboratório usa o cursor. Basta alinhar o texto do contrato, ou a rota, por decisão da API.
+
 ### Fora desta missão (registrado)
 
 Despacho, cancelamento e agendamento remotos (contrato 14, D-PA-7), pacote local sem versão publicada (contrato 13) e entrega de segredos às automações (a recusa `AGT-EXE-006` continua).

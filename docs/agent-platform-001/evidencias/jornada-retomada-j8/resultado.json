@@ -1,0 +1,28 @@
+{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-001",
+    "execucao":  "ex-31d00cfd38400b5d071f651bddafa094",
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: e4e5617c5efc43c437ac9623a15a46ac4870a375\r / data do commit: 2026-10-29T00:37:29Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "J1 Agent empacotado abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J8 o vínculo continua recusado (nenhuma chamada autenticada)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J8 execução local depois da revogação terminou (SUCCEEDED), sem registro na Platform (0) e sem vínculo de entrega",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J9 nenhum segredo (código, credencial, senha e fator da pessoa: 4 valores) em evidências, dados, logs dos 5 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  4,
+    "ok":  4
+}

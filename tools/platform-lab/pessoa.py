@@ -11,6 +11,7 @@ Uso (python -I):
   pessoa.py consultar <id> <agentExecutionId>      execução na Platform (correlação, desfecho, completude, eventos)
   pessoa.py revogar   <id>                         revoga o Agent (ADMINISTRATIVE, com step-up)
   pessoa.py autorizar <id> <impressao-64-hex>      publica outra versão com esta impressão e autoriza o mesmo Worker
+  pessoa.py novo-codigo <id>                       revoga o Agent ativo (libera o Worker) e gera novo código de pareamento
   pessoa.py rotacao   <id>                         gera um código de rotação (arquivo, como o de pareamento)
   pessoa.py sql       <id>                         lê SQL da entrada padrão e roda como administrador do banco descartável
 """
@@ -26,6 +27,7 @@ import struct
 import subprocess
 import sys
 import time
+import urllib.parse
 import uuid
 from pathlib import Path
 
@@ -253,20 +255,21 @@ def consultar(i, execution):
     b = login(seg, env, p)
     st, j = b.call('GET', f"/api/v1/o/{p['org']}/agent-runs?limit=100")
     expect(st, 200, 'lista de execuções')
-    run = next((x for x in j.get('items', []) if x.get('agentExecutionId') == execution), None)
+    run = next((x for x in j.get('items', []) if (x.get('correlation') or {}).get('agentExecutionId') == execution), None)
     if run is None:
         raise SystemExit('execução não encontrada na Platform')
     st, detail = b.call('GET', f"/api/v1/o/{p['org']}/agent-runs/{run['runId']}")
     expect(st, 200, 'detalhe')
-    events, after = [], 0
-    while True:
-        st, page = b.call('GET', f"/api/v1/o/{p['org']}/agent-runs/{run['runId']}/events?afterSequence={after}&limit=500")
+    # a rota pagina por cursor opaco (nextCursor), até 100 por página (o contrato, sec. 10, escreve ?afterSequence=)
+    events, cursor = [], None
+    for _ in range(500):
+        q = f"?limit=100" + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else "")
+        st, page = b.call('GET', f"/api/v1/o/{p['org']}/agent-runs/{run['runId']}/events{q}")
         expect(st, 200, 'eventos')
-        items = page.get('items', [])
-        events.extend(items)
-        if not items or len(items) < 500:
+        events.extend(page.get('items', []))
+        cursor = page.get('nextCursor')
+        if not cursor:
             break
-        after = items[-1]['sequence']
     seqs = [e.get('sequence') for e in events]
     doc = {'detalhe': detail, 'eventos': {'quantidade': len(events), 'primeira': seqs[0] if seqs else None, 'ultima': seqs[-1] if seqs else None,
                                           'sequencias_repetidas': len(seqs) - len(set(seqs)), 'em_ordem': seqs == sorted(seqs),
@@ -318,6 +321,24 @@ def autorizar(i, fingerprint):
     print(json.dumps(resumo, indent=2))
 
 
+def novo_codigo(i):
+    seg, env, out = lab(i)
+    p = json.loads((seg / 'pessoa.json').read_text(encoding='utf-8'))
+    b = login(seg, env, p)
+    st, j = b.call('GET', f"/api/v1/o/{p['org']}/agents")
+    expect(st, 200, 'agents')
+    revogados = []
+    for a in j.get('items', []):
+        if a.get('status') in ('ACTIVE', 2):
+            st, _ = b.call('POST', f"/api/v1/o/{p['org']}/agents/{a['agentId']}/revoke", {'reason': 'ADMINISTRATIVE'})
+            expect(st, 204, 'revogação')
+            revogados.append(a['agentId'])
+    st, j = b.call('POST', f"/api/v1/o/{p['org']}/agent-enrollments", {'workerId': p['worker'], 'agentName': 'Agent laboratório', 'expiresInMinutes': 60})
+    expect(st, 201, 'código de pareamento')
+    save_private(seg / 'codigo-pareamento', j['code'])
+    print(json.dumps({'agentsRevogados': revogados, 'worker': p['worker'], 'codigo': '<arquivo protegido fora do repositório>'}, indent=2))
+
+
 def rotacao(i):
     seg, env, out = lab(i)
     p = json.loads((seg / 'pessoa.json').read_text(encoding='utf-8'))
@@ -342,6 +363,8 @@ if __name__ == '__main__':
         revogar(a[1])
     elif a[0] == 'autorizar':
         autorizar(a[1], a[2])
+    elif a[0] == 'novo-codigo':
+        novo_codigo(a[1])
     elif a[0] == 'rotacao':
         rotacao(a[1])
     elif a[0] == 'sql':

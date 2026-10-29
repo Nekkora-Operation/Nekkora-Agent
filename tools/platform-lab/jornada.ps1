@@ -26,7 +26,9 @@
 #>
 param(
     [string]$Id = 'agentlab-001',
-    [Parameter(Mandatory = $true)][string]$Python
+    [Parameter(Mandatory = $true)][string]$Python,
+    # retomada: só a execução local depois da revogação (J8, parte final) e a varredura (J9), sobre os dados existentes
+    [switch]$SomenteLocalDepoisDaRevogacao
 )
 $ErrorActionPreference = 'Continue' # comandos nativos (docker, python) escrevem no stderr sem falhar; as esperas lançam exceção
 Set-StrictMode -Version 3.0
@@ -137,11 +139,17 @@ function Sql([string]$q) {
 # ---------- J1: Agent empacotado, cópia de laboratório ----------
 $dist = Join-Path $root 'target\dist\Nekkora Agent'
 $app = Join-Path $Lab 'agent-app'
-if (Test-Path $app) { Remove-Item -Recurse -Force $app }
+if (Test-Path $app) { Remove-Item -Recurse -Force $app -ErrorAction Stop }
+if (Test-Path $app) { throw 'a cópia anterior do Agent não pôde ser apagada (processo preso?): nada é homologado com binário velho' }
 Copy-Item -Recurse $dist $app
 $exe = Join-Path $app 'Nekkora Agent.exe'
+$buildCommit = ([regex]::Match((Get-Content -Raw (Join-Path $app 'VERSOES.txt')), 'commit: ([0-9a-f]{40})')).Groups[1].Value
+$distCommit = ([regex]::Match((Get-Content -Raw (Join-Path $dist 'VERSOES.txt')), 'commit: ([0-9a-f]{40})')).Groups[1].Value
+if (-not $buildCommit -or $buildCommit -ne $distCommit) { throw 'a cópia de laboratório não é o build candidato' }
+Note '[REAL]' "J1 Agent empacotado do commit $buildCommit"
 $cfg = Join-Path $app 'app\Nekkora Agent.cfg'
 $trust = Join-Path $Lab 'confianca-laboratorio.p12'
+if (Test-Path $trust) { Remove-Item -Force $trust } # sempre do certificado atual do laboratório
 if (-not (Test-Path $trust)) {
     $kt = Join-Path $env:JAVA_HOME 'bin\keytool.exe'
     & $kt -importcert -noprompt -alias laboratorio -file (Join-Path $Lab 'certificado-laboratorio.pem') -keystore $trust -storetype PKCS12 -storepass laboratorio | Out-Null
@@ -182,12 +190,24 @@ Capture 'j1-nao-pareado'
 $code = $null
 $execId = $null
 try {
+    if (-not $SomenteLocalDepoisDaRevogacao) {
     # ---------- J2: pareamento pela janela ----------
     $codeFile = Join-Path $Seg 'codigo-pareamento'
     $code = ([IO.File]::ReadAllText($codeFile)).Trim()
     Focus $w.Handle
     [System.Windows.Forms.SendKeys]::SendWait('%a')
-    $pd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Parear com a Platform'; if (Test-WindowShown $h) { $h } } 20 'diálogo de pareamento'
+    $pd = $null
+    try { $pd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Parear com a Platform'; if (Test-WindowShown $h) { $h } } 5 'diálogo de pareamento (Alt+A)' } catch { }
+    if (-not $pd) {
+        # o atalho não chegou à janela (provado à parte no PlatformDesktopTest): clique real no botão "Parear…", o primeiro
+        # botão secundário de cima para baixo (o card Platform fica acima dos atalhos)
+        Note '[REAL]' 'J2 Alt+A não abriu o diálogo nesta sessão; clique no botão Parear…'
+        Capture 'j2-antes-do-clique'
+        $pos = Find-Button $w.Handle @(@(109, 60, 82), @(118, 71, 92)) 30 200 250 900
+        if (-not $pos) { throw 'botão Parear… não encontrado' }
+        Click-In $w.Handle $pos[0] $pos[1]
+        $pd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Parear com a Platform'; if (Test-WindowShown $h) { $h } } 20 'diálogo de pareamento'
+    }
     Focus $pd
     Start-Sleep -Milliseconds 500
     Send-Text $code # campo de senha: nada é exibido
@@ -199,7 +219,7 @@ try {
     Check 'J2 pareamento confirmado pela Platform real (PLATFORM_PAIRED)' ((Log-Count 'PLATFORM_PAIRED') -ge 1)
     $vinculo = Get-Content -Raw (Join-Path $script:data 'plataforma\vinculo.json') | ConvertFrom-Json
     Check 'J2 vínculo gravado sem segredo (vinculo.json) e credencial só no arquivo protegido' ((Test-Path (Join-Path $script:data 'plataforma\credencial.dpapi')) -and -not (Test-Path (Join-Path $script:data 'plataforma\resgate.dpapi')))
-    $agentDb = Sql "SELECT status || '|' || worker_id FROM agents a JOIN worker_agent_assignments w ON w.agent_id = a.agent_id AND w.status = 1 WHERE a.agent_id = '$($vinculo.agentId)'"
+    $agentDb = Sql "SELECT a.status || '|' || worker_id FROM agents a JOIN worker_agent_assignments w ON w.agent_id = a.agent_id AND w.status = 1 WHERE a.agent_id = '$($vinculo.agentId)'"
     Check "J2 Agent ACTIVE e associado ao Worker na Platform ($agentDb)" ($agentDb -match '^2\|')
     Wait-Until { (Log-Count 'PLATFORM_AUTHORIZATIONS count=2') -ge 1 } 60 'autorizações baixadas' | Out-Null
     Check 'J2 autorizações baixadas (2 válidas para o Worker, uma por impressão)' ((Log-Count 'PLATFORM_AUTHORIZATIONS count=2') -ge 1)
@@ -225,8 +245,6 @@ try {
     Wait-Until { (Log-Count 'EXEC_PACKAGE_APPROVED') -ge 1 } 20 'aprovação registrada' | Out-Null
     Choose-Path $dlg '%y' 'Python do ambiente do projeto' $Python
     Wait-Until { (Log-Count 'EXEC_PYTHON_CHECKED') -ge 1 } 60 'Python conferido' | Out-Null
-    Choose-Path $dlg '%e' 'Entrada da automação' (Join-Path $Lab 'entrada-ficticia.csv')
-    Start-Sleep -Seconds 1
     Choose-Path $dlg '%a' 'Pasta de saída (uma subpasta por execução)' (Join-Path $Lab 'saida-automacao')
     Start-Sleep -Seconds 1
     Capture 'j3-pronto-com-autorizacao' 'Execução local'
@@ -248,18 +266,18 @@ try {
     # ---------- J4: interrupção da comunicação (REAL) ----------
     $disc0 = Log-Count 'PLATFORM_DISCONNECTED'
     $lines0 = @(Read-Shared $atividade).Count
-    Note '[REAL]' 'J4 nginx do laboratório PARADO (sem caminho até a Platform) com a automação rodando'
-    $null = Dc @('stop', '-t', '1', 'nginx')
-    Wait-Until { (Log-Count 'PLATFORM_DISCONNECTED') -gt $disc0 } 60 'Agent percebe a queda' | Out-Null
+    Note '[REAL]' 'J4 nginx do laboratório PAUSADO (nenhuma resposta da Platform) com a automação rodando'
+    $null = Dc @('pause', 'nginx')
+    Wait-Until { (Log-Count 'PLATFORM_DISCONNECTED') -gt $disc0 } 90 'Agent percebe a queda' | Out-Null
     Check 'J4 o Agent registra o problema de comunicação (PLATFORM_DISCONNECTED AGT-PLT-010)' ((Log-Text) -match 'PLATFORM_DISCONNECTED.*AGT-PLT-010')
     Start-Sleep -Seconds 12
     $st = (Get-Content -Raw $estado | ConvertFrom-Json).state
     Check "J4 automação segue durante a queda (estado $st, atividade crescendo)" ($st -eq 'RUNNING' -and (Read-Shared $atividade).Length -gt 0)
     Capture 'j4-sem-comunicacao'
-    $null = Dc @('start', 'nginx')
+    $null = Dc @('unpause', 'nginx')
     Note '[REAL]' 'J4 nginx de volta'
     $ack0 = Log-Count "PLATFORM_ACK execution=$execId"
-    Wait-Until { (Log-Count "PLATFORM_ACK execution=$execId") -gt $ack0 } 120 'entrega retoma' | Out-Null
+    Wait-Until { (Log-Count "PLATFORM_ACK execution=$execId") -gt $ack0 } 240 'entrega retoma' | Out-Null
     Check 'J4 entrega retomada depois da volta (novo PLATFORM_ACK)' ((Log-Count "PLATFORM_ACK execution=$execId") -gt $ack0)
 
     # ---------- J5: ACK perdido (INJETADA) ----------
@@ -295,8 +313,13 @@ try {
     Wait-Until { (Log-Count 'EXEC_RECONCILED') -ge 1 } 60 'reconciliação' | Out-Null
     Check 'J6 reconciliação depois do reinício, sem relançar (EXEC_RECONCILED)' ((Log-Count 'EXEC_RECONCILED') -ge 1)
     $pyAlive = @(Get-Process -Id $pyPid -ErrorAction SilentlyContinue).Count
-    $pyCount = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$execId*" }).Count
-    Check "J6 a mesma automação (PID $pyPid ainda vivo=$pyAlive), nenhuma segunda instância ($pyCount processo da execução)" ($pyCount -le 1)
+    # o python.exe do venv no Windows é um lançador que sobe o interpretador base como FILHO (mesma linha de comando):
+    # conta só as raízes (processos da execução cujo pai não é outro processo da execução)
+    $procs = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$execId*" })
+    $ids = @($procs | ForEach-Object { [int]$_.ProcessId })
+    $roots = @($procs | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
+    $tree = ($procs | ForEach-Object { "$($_.ProcessId)<-$($_.ParentProcessId)" }) -join ' '
+    Check "J6 a mesma automação (PID $pyPid vivo=$pyAlive), uma só instância: $($roots.Count) raiz ($tree)" ($roots.Count -le 1 -and ($roots.Count -eq 0 -or [int]$roots[0].ProcessId -eq [int]$pyPid))
 
     # ---------- J7: desfecho e completude ----------
     Wait-Until { $s = (Get-Content -Raw $estado | ConvertFrom-Json).state; $s -ne 'RUNNING' -and $s -ne 'STARTING' } 600 'fim da automação' | Out-Null
@@ -318,11 +341,11 @@ try {
     Check "J7 uma execução registrada ($runs), nunca repetida" ($runs -eq '1')
     $outs = @(Get-ChildItem (Join-Path $Lab 'saida-automacao') -Directory).Count
     Check "J7 uma pasta de saída da automação ($outs): a automação não foi repetida" ($outs -eq 1)
-    $reports = Sql "SELECT string_agg(r.supervisor_state || ':' || r.outcome, ' ' ORDER BY r.received_at) FROM agent_run_reports r JOIN agent_runs a ON a.agent_run_id = r.agent_run_id WHERE a.agent_execution_id = '$execId'"
-    Note '[REAL]' "J7 relatórios do supervisor na Platform (estado:desfecho do relatório): $reports"
+    $reports = Sql "SELECT string_agg(r.state || ':' || r.outcome, ' ' ORDER BY r.received_at) FROM agent_run_reports r JOIN agent_runs a ON a.agent_run_id = r.agent_run_id WHERE a.agent_execution_id = '$execId'"
+    Note '[REAL]' "J7 relatórios do supervisor na Platform (estado:desfecho; códigos da 025: 3=RUNNING 4=SUCCEEDED; 1=APPLIED 2=UNCHANGED 3=STALE 4=CONFLICT): $reports"
     & python -I (Join-Path $PSScriptRoot 'pessoa.py') consultar $Id $execId | Out-File -Encoding utf8 (Join-Path $Out 'j7-consulta-platform.json')
-    $q = Get-Content -Raw (Join-Path $Out 'j7-consulta-platform.json')
-    Check 'J7 consulta da Platform pela pessoa: correlação, desfecho e completude gravados' ($q -match $execId)
+    $q = [string](Get-Content -Raw (Join-Path $Out 'j7-consulta-platform.json'))
+    Check 'J7 consulta da Platform pela pessoa: correlação, desfecho SUCCEEDED/KNOWN e histórico COMPLETE' ([bool]($q -match $execId) -and [bool]($q -match '"outcome": "KNOWN"') -and [bool]($q -match '"completeness": "COMPLETE"'))
 
     # ---------- J8: revogação ----------
     $refused0 = Log-Count 'PLATFORM_CREDENTIAL_REFUSED'
@@ -335,6 +358,13 @@ try {
     $gw1 = @(& docker @composeArgs logs --no-color agent-gateway 2>$null | Select-String 'autenticacao_recusada').Count
     Check "J8 nenhuma nova tentativa autenticada depois da recusa (recusas no gateway: $gw0 → $gw1)" ($gw1 -eq $gw0)
     Capture 'j8-credencial-recusada'
+    }
+    else {
+        $execId = (Get-ChildItem (Join-Path $script:data 'execucoes') -Directory | Sort-Object CreationTime | Select-Object -First 1).Name
+        $code = $null
+        Note '[REAL]' "J8 retomada sobre os dados existentes (vínculo recusado; execução registrada $execId)"
+        Check 'J8 o vínculo continua recusado (nenhuma chamada autenticada)' ((Log-Count 'PLATFORM_CREDENTIAL_REFUSED') -ge 1)
+    }
     # uma execução local depois da revogação: só local (nenhuma autorização é oferecida)
     Focus $w.Handle
     [System.Windows.Forms.SendKeys]::SendWait('%e')
@@ -343,10 +373,19 @@ try {
     $started0 = Log-Count 'EXEC_STARTED'
     Choose-Path $dlg '%p' 'Pasta do pacote da automação' (Join-Path $Lab 'pacote-laboratorio')
     Start-Sleep -Seconds 2
+    # pacote curto: aprovação local própria (impressão diferente da do pacote longo)
+    $approved0 = Log-Count 'EXEC_PACKAGE_APPROVED'
+    $pos = Find-Button $dlg @(@(109, 60, 82), @(118, 71, 92)) 185 330 450 1000
+    if ($pos) {
+        Click-In $dlg $pos[0] $pos[1]
+        $confirm = Wait-Until { $h = Get-AgentWindow $script:jvm 'Aprovar este pacote?'; if (Test-WindowShown $h) { $h } } 20 'confirmação da aprovação'
+        Start-Sleep -Milliseconds 500
+        $pos = Find-Button $confirm @(, @(240, 163, 184)) 200 420 120 400 -FromRight
+        Click-In $confirm $pos[0] $pos[1]
+        Wait-Until { (Log-Count 'EXEC_PACKAGE_APPROVED') -gt $approved0 } 20 'aprovação do pacote curto' | Out-Null
+    }
     Choose-Path $dlg '%y' 'Python do ambiente do projeto' $Python
     Wait-Until { (Log-Count 'EXEC_PYTHON_CHECKED') -ge 2 } 60 'Python conferido' | Out-Null
-    Choose-Path $dlg '%e' 'Entrada da automação' (Join-Path $Lab 'entrada-ficticia.csv')
-    Start-Sleep -Seconds 1
     Choose-Path $dlg '%a' 'Pasta de saída (uma subpasta por execução)' (Join-Path $Lab 'saida-automacao')
     Start-Sleep -Seconds 1
     Capture 'j8-execucao-local-depois-da-revogacao' 'Execução local'
@@ -372,7 +411,10 @@ finally {
     }
     foreach ($q in @(Get-CimInstance Win32_Process -Filter "Name='Nekkora Agent.exe'" | Where-Object { $_.ExecutablePath -eq $exe })) { Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue }
     $null = Dc @('unpause', 'nginx')
-    $null = Dc @('start', 'nginx')
+    # automação de laboratório que tenha ficado viva (ex.: jornada interrompida): encerrada para não prender a pasta
+    foreach ($q in @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($Lab) })) {
+        Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------- J9: varredura de segredos ----------

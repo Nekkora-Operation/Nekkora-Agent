@@ -1,0 +1,100 @@
+{
+    "schema":  "nekkora-agent/platform-lab-journey",
+    "version":  "1.0.0",
+    "laboratorio":  "agentlab-001",
+    "execucao":  "ex-31d00cfd38400b5d071f651bddafa094",
+    "agent":  "Nekkora Agent 0.1.0 - distribuiÃ§Ã£o de laboratÃ³rio (Windows x64, sem assinatura digital)\r / commit: e4e5617c5efc43c437ac9623a15a46ac4870a375\r / data do commit: 2026-10-29T00:37:29Z\r",
+    "rotulos":  "[REAL] processo e API reais; [INJETADA] falha controlada identificada",
+    "checks":  [
+                   {
+                       "check":  "J1 Agent empacotado abriu com a configuração do laboratório",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 pareamento confirmado pela Platform real (PLATFORM_PAIRED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 vínculo gravado sem segredo (vinculo.json) e credencial só no arquivo protegido",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 Agent ACTIVE e associado ao Worker na Platform (2|a7196ba7-c93b-439d-b616-e9b669724c71)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J2 autorizações baixadas (2 válidas para o Worker, uma por impressão)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J3 execução vinculada à autorização escolhida (PLATFORM_RUN_LINKED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J3 execução registrada na Platform (PLATFORM_RUN_REGISTERED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J4 o Agent registra o problema de comunicação (PLATFORM_DISCONNECTED AGT-PLT-010)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J4 automação segue durante a queda (estado RUNNING, atividade crescendo)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J4 entrega retomada depois da volta (novo PLATFORM_ACK)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J5 reenvio do lote cujo ACK se perdeu devolveu DUPLICATE (sem duplicar no servidor)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J6 reconciliação depois do reinício, sem relançar (EXEC_RECONCILED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J6 a mesma automação (PID 40552 vivo=1), uma só instância: 1 raiz (40552\u003c-28444 42200\u003c-40552)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J7 envio concluído e confirmado (PLATFORM_DELIVERY_COMPLETED)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J7 banco: estado=4 stored=1936 settled=1936 eventos=1936 (local até 1936) recusas=0 ausências=0",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J7 uma execução registrada (1), nunca repetida",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J7 uma pasta de saída da automação (1): a automação não foi repetida",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J7 consulta da Platform pela pessoa: correlação, desfecho SUCCEEDED/KNOWN e histórico COMPLETE",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J8 a primeira chamada autenticada depois da revogação foi recusada e o transporte parou",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "J8 nenhuma nova tentativa autenticada depois da recusa (recusas no gateway: 1 → 1)",
+                       "ok":  true
+                   },
+                   {
+                       "check":  "jornada interrompida por exceção: tempo esgotado: execução local iniciada",
+                       "ok":  false
+                   },
+                   {
+                       "check":  "J9 nenhum segredo (código, credencial, senha e fator da pessoa: 6 valores) em evidências, dados, logs dos 5 serviços e envelopes",
+                       "ok":  true
+                   }
+               ],
+    "total":  22,
+    "ok":  21
+}
