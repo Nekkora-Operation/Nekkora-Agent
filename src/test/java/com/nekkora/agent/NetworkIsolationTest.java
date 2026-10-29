@@ -57,6 +57,20 @@ class NetworkIsolationTest {
             Map.entry("java.net.http", "cliente HTTP"),
             Map.entry("HttpURLConnection", "cliente HTTP"),
             Map.entry("openConnection", "conexão por URL"),
+            // INTEGRATION-CONSOLIDATION-001 (revisão da base, A7-1): formas que o guarda ainda deixava passar
+            Map.entry("openStream", "leitura por URL (URL.openStream)"),
+            Map.entry("toURL(", "conversão para URL (URI.toURL / Path.toUri().toURL)"),
+            Map.entry("java.net.URL", "URL (java.net.URL, URLClassLoader, URLConnection)"),
+            Map.entry("new URL(", "URL"),
+            Map.entry("javax.naming", "JNDI"),
+            Map.entry("curl", "cliente de rede por processo (curl)"),
+            Map.entry("wget", "cliente de rede por processo (wget)"),
+            Map.entry("Invoke-WebRequest", "cliente de rede por PowerShell"),
+            Map.entry("Invoke-RestMethod", "cliente de rede por PowerShell"),
+            Map.entry("Start-BitsTransfer", "transferência BITS"),
+            Map.entry("bitsadmin", "transferência BITS"),
+            Map.entry("certutil", "download por certutil"),
+            Map.entry("WebClient", "cliente de rede .NET por PowerShell"),
             Map.entry("import java.net.*", "importação curinga de rede"),
             Map.entry("import java.nio.channels.*", "importação curinga de canais"));
 
@@ -117,6 +131,19 @@ class NetworkIsolationTest {
         assertTrue(scan("platform/X.java", "java.net.http.HttpClient.newHttpClient()").isEmpty(), "cliente HTTPS no transporte");
         assertFalse(scan("platform/X.java", "var s = ServerSocketChannel.open();").isEmpty(), "escuta no transporte");
         assertFalse(scan("platform/X.java", "import com.sun.net.httpserver.HttpServer;").isEmpty(), "servidor HTTP no transporte");
+        // INTEGRATION-CONSOLIDATION-001 (A7-1): contraprovas das formas acrescentadas, em qualquer pacote
+        Map<String, String> added = Map.of(
+                "url-stream", "try (var in = uri.toURL().openStream()) {}",
+                "url-classico", "var u = new java.net.URL(endereco);",
+                "jndi", "new javax.naming.InitialContext().lookup(nome);",
+                "curl", "new ProcessBuilder(List.of(\"curl\", \"-s\", endereco)).start();",
+                "powershell", "new ProcessBuilder(\"powershell\", \"-c\", \"Invoke-WebRequest \" + endereco).start();",
+                "bits", "new ProcessBuilder(\"bitsadmin\", \"/transfer\", \"x\", endereco, destino).start();",
+                "certutil", "new ProcessBuilder(\"certutil\", \"-urlcache\", \"-f\", endereco, destino).start();");
+        for (Map.Entry<String, String> e : added.entrySet()) {
+            assertFalse(scan("exec/" + e.getKey(), e.getValue()).isEmpty(), "o guarda pega: " + e.getKey());
+            assertFalse(scan("platform/" + e.getKey(), e.getValue()).isEmpty(), "o guarda pega também no transporte: " + e.getKey());
+        }
     }
 
     @Test
