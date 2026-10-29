@@ -78,6 +78,13 @@ final class PairingDialog extends FittedDialog {
             return false; // fecha quando a resposta local voltar
         });
         submit.setEnabled(host != null && secretStore);
+        // o foco abre no campo do código (colar e Enter; também para leitores de tela)
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowOpened(java.awt.event.WindowEvent e) {
+                code.requestFocusInWindow();
+            }
+        });
     }
 
     private NekkoraButton submit() {

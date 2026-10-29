@@ -146,7 +146,8 @@ $script:data = Join-Path $Lab 'agent-dados'
 if (-not (Test-Path $script:data)) {
     New-Item -ItemType Directory -Force $script:data | Out-Null
     $origin = 'https://localhost:' + $secrets['E2E_PORTA']
-    [IO.File]::WriteAllText((Join-Path $script:data 'agent-config.json'), "{`n  `"format`": `"nekkora-agent/config`",`n  `"version`": 1,`n  `"themeId`": `"sakura-dark`",`n  `"platformUrl`": `"$origin`",`n  `"studioExecutable`": null`n}`n", (New-Object System.Text.UTF8Encoding $false))
+    New-Item -ItemType Directory -Force (Join-Path $script:data 'config') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $script:data 'configgent-config.json'), "{`n  `"format`": `"nekkora-agent/config`",`n  `"version`": 1,`n  `"theme`": `"sakura-dark`",`n  `"shortcuts`": {`n    `"platformUrl`": `"$origin`",`n    `"studioExecutable`": null`n  }`n}`n", (New-Object System.Text.UTF8Encoding $false))
 }
 $agentVersions = Get-Content -Raw (Join-Path $app 'VERSOES.txt')
 function Start-Agent {
