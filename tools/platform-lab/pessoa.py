@@ -52,7 +52,10 @@ def compose(env):
     api = winpath(env['LAB_API_REPO'])
     full = dict(os.environ)
     full.update(env)
-    return ['docker', 'compose', '-f', str(Path(api) / 'api' / 'e2e' / 'compose.e2e.yml'), '-f', str(AQUI / 'compose.lab.yml')], full
+    cmd = ['docker', 'compose', '-f', str(Path(api) / 'api' / 'e2e' / 'compose.e2e.yml'), '-f', str(AQUI / 'compose.lab.yml')]
+    if env.get('LAB_COMPOSE_EXTRA'):
+        cmd += ['-f', str(AQUI / env['LAB_COMPOSE_EXTRA'])]
+    return cmd, full
 
 
 def sql(env, text):

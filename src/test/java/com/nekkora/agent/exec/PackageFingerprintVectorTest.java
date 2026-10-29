@@ -11,7 +11,6 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -52,13 +51,16 @@ class PackageFingerprintVectorTest {
     }
 
     @Test
-    @DisplayName("V2: vetor real (pacote do Studio da7bb94 da COMPAT-001) = 5664f1a5…, quando o pacote está disponível nesta máquina")
+    @DisplayName("V2: vetor real (pacote do Studio da7bb94 da COMPAT-001, versionado nos recursos de teste) = 5664f1a5…")
     void realVector() throws Exception {
-        String p = System.getenv("NEKKORA_REAL_PACKAGE");
-        Assumptions.assumeTrue(p != null && Files.isRegularFile(Path.of(p, "manifest.json")), "NEKKORA_REAL_PACKAGE ausente (o pacote do Studio não é versionado)");
-        ExecutionPackage pkg = ExecutionPackage.inspect(Path.of(p));
+        // o mesmo pacote gerado pelo Studio que os testes de protocolo usam (manifest.json sha256 ca9439c7…)
+        Path p = Path.of(PackageFingerprintVectorTest.class.getResource("real/pacote-studio/manifest.json").toURI()).getParent();
+        ExecutionPackage pkg = ExecutionPackage.inspect(p);
         assertEquals("sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d", pkg.fingerprint());
         assertEquals("5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d", PackageFingerprint.wire(pkg.fingerprint()).orElseThrow());
+        // a impressão não é o hash dos bytes do manifesto (artifact.sha256 e package-fingerprint/1 não se comparam)
+        String manifestBytes = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(p.resolve("manifest.json"))));
+        assertNotEquals(manifestBytes, PackageFingerprint.wire(pkg.fingerprint()).orElseThrow());
     }
 
     @Test

@@ -17,6 +17,8 @@
 #
 # Uso: tools/platform-lab/subir.sh <id> <cópia da API na main>
 #      LAB_PORTA=55871 LAB_PG_PORTA=55872 tools/platform-lab/subir.sh agentlab-001 ../npa-main-agentlab
+#      LAB_REDE=48 LAB_PORTA=55873 LAB_PG_PORTA=55874 tools/platform-lab/subir.sh agentlab-002 ../npa-main-agentlab
+#      (LAB_REDE=48: sub-rede 10.251.48.0/24 pelo compose.lab-rede.yml, quando outro laboratório preservado ocupa a 47)
 set -euo pipefail
 
 ID="${1:?uso: subir.sh <id> <copia da API>}"
@@ -29,6 +31,13 @@ export E2E_PG_PORTA="${LAB_PG_PORTA:-55872}"
 SEG="$HOME/.nekkora/agent-lab/$ID"
 SAIDA="$AQUI/saidas/$ID"
 COMPOSE=(docker compose -f "$API_REPO/api/e2e/compose.e2e.yml" -f "$AQUI/compose.lab.yml")
+REDE="10.251.47.0/24"
+EXTRA=""
+case "${LAB_REDE:-47}" in
+    47) ;;
+    48) REDE="10.251.48.0/24"; EXTRA="compose.lab-rede.yml"; COMPOSE+=(-f "$AQUI/$EXTRA") ;;
+    *) echo "ERRO: LAB_REDE aceita 47 ou 48" >&2; exit 1;;
+esac
 
 falha() { echo "ERRO: $*" >&2; exit 1; }
 limpar_chave() { rm -f "$SEG/tls/key.pem"; }
@@ -43,8 +52,8 @@ for p in "$E2E_PORTA" "$E2E_PG_PORTA"; do
 done
 [ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$E2E_PROJETO")" ] || falha "projeto $E2E_PROJETO já tem containers"
 docker network inspect "${E2E_PROJETO}_e2e" >/dev/null 2>&1 && falha "rede ${E2E_PROJETO}_e2e já existe"
-if docker network ls -q | xargs -r docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null | grep -q '10.251.47.0/24'; then
-    falha "sub-rede 10.251.47.0/24 (da stack E2E) já em uso por outra rede"
+if docker network ls -q | xargs -r docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null | grep -q "$REDE"; then
+    falha "sub-rede $REDE já em uso por outra rede"
 fi
 for j in nekkora-platform nekkora-portal nekkora-agent-gateway; do
     ls "$API_REPO/api/$j/target/$j-0.1.0-SNAPSHOT.jar" >/dev/null 2>&1 || falha "jar ausente: $j (rode mvnw -DskipTests package na cópia da API)"
@@ -77,6 +86,7 @@ umask 077
     echo "E2E_PG_SUPER_SENHA=$(senha)"; echo "E2E_PLATFORM_SENHA=$(senha)"; echo "E2E_PORTAL_SENHA=$(senha)"; echo "E2E_INGESTAO_SENHA=$(senha)"
     echo "E2E_MFA_CHAVES=k1:$(aleatorio 32)"; echo "E2E_HMAC_CHAVE=$(aleatorio 32)"
     echo "LAB_API_REPO=$(cygpath -m "$API_REPO" 2>/dev/null || echo "$API_REPO")"
+    echo "LAB_COMPOSE_EXTRA=$EXTRA"
 } > "$SEG/segredos.env"
 set -a; . "$SEG/segredos.env"; set +a
 
@@ -114,7 +124,7 @@ done
 rm -f "$SEG/tls/key.pem" # o nginx já carregou; a chave não fica em disco
 
 {
-    echo "id=$ID"; echo "projeto=$E2E_PROJETO"; echo "api_commit=$COMMIT"; echo "migrations=001-$ATE"
+    echo "id=$ID"; echo "projeto=$E2E_PROJETO"; echo "api_commit=$COMMIT"; echo "migrations=001-$ATE"; echo "sub_rede=$REDE"
     echo "origem=$BASE"; echo "certificado_sha256=$(sha256sum "$CA" | cut -c1-64)"
     echo "subido_em=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$SAIDA/laboratorio.txt"
