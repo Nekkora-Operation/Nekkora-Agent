@@ -160,6 +160,10 @@ public final class ActivityService implements AutoCloseable {
                 pending.remove(id);
                 if (open.containsKey(id)) continue;
                 ActivityCollector.open(store, id, clock).ifPresent(c -> {
+                    if (c.deferred()) {
+                        pending.add(id); // outro programa impede a leitura do histórico: nova tentativa na próxima rodada
+                        return;
+                    }
                     health.put(id, c.health(!c.completed()));
                     if (!c.completed()) open.put(id, c);
                 });

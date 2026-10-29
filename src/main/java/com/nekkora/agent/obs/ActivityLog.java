@@ -125,6 +125,11 @@ final class ActivityLog {
     private int unreadable;
     private boolean storeFailed;
     private boolean tooLarge;
+    /**
+     * O arquivo existe mas não pôde ser lido ao abrir para gravar (ex.: outro programa nega a leitura no Windows). Sem o
+     * que já está lá, a sequência e as posições das origens seriam recomeçadas: nada é gravado, e a coleta fica para depois.
+     */
+    private boolean loadFailed;
     private final ArrayDeque<Pending> pending = new ArrayDeque<>();
     private long pendingBytes;
     /** Fim, no arquivo, do que este histórico pôs lá e conferiu (sincronizado ou não). */
@@ -212,7 +217,8 @@ final class ActivityLog {
             syncedBytes = bytes;
             syncedSequence = prev;
         } catch (IOException | RuntimeException e) {
-            storeFailed = true;
+            if (repair) loadFailed = true;
+            else storeFailed = true;
         }
     }
 
@@ -222,7 +228,7 @@ final class ActivityLog {
      * gravação fique pendente; um lote vazio só tenta gravar as pendentes.
      */
     synchronized List<ActivityEvent> append(List<ActivityEvent> batch, Instant now) {
-        if (tooLarge) {
+        if (tooLarge || loadFailed) {
             dropped += batch.size();
             return List.of();
         }
@@ -621,6 +627,10 @@ final class ActivityLog {
 
     synchronized boolean tooLarge() {
         return tooLarge;
+    }
+
+    synchronized boolean loadFailed() {
+        return loadFailed;
     }
 
     /** Eventos aceitos ainda sem gravação sincronizada no disco (a gravação será tentada de novo). */

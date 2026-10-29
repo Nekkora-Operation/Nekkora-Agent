@@ -54,6 +54,7 @@ final class ActivityCollector {
     private boolean agentTerminalSeen;
     private Instant terminalSince;
     private boolean completed;
+    private boolean deferred;
     private int individualInvalid;
     private long invalid;
     private long excluded;
@@ -76,6 +77,10 @@ final class ActivityCollector {
         if (rec.isEmpty()) return Optional.empty();
         ExecutionRecord r = rec.get();
         ActivityCollector c = new ActivityCollector(store, id, clock, ActivityLog.open(store.dir(id), id.value()));
+        if (c.log.loadFailed()) {
+            c.deferred = true; // histórico existente ilegível agora: retomar sem ele recomeçaria a sequência e as origens
+            return Optional.of(c);
+        }
         c.completed = c.log.has("COLLECTION_COMPLETED") || c.log.has("HISTORY_PURGED") || c.log.tooLarge();
         if (c.completed) return Optional.of(c);
         c.frameworkExpected = r.kind() == ExecutionPackage.Kind.STUDIO_PYTHON;
@@ -106,6 +111,11 @@ final class ActivityCollector {
                     .count("restarts", c.restarts).build()), now);
         }
         return Optional.of(c);
+    }
+
+    /** O histórico existente não pôde ser lido nesta tentativa: nada foi coletado nem gravado; tentar de novo depois. */
+    boolean deferred() {
+        return deferred;
     }
 
     boolean completed() {
