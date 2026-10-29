@@ -36,7 +36,8 @@ EXTRA=""
 case "${LAB_REDE:-47}" in
     47) ;;
     48) REDE="10.251.48.0/24"; EXTRA="compose.lab-rede.yml"; COMPOSE+=(-f "$AQUI/$EXTRA") ;;
-    *) echo "ERRO: LAB_REDE aceita 47 ou 48" >&2; exit 1;;
+    49) REDE="10.251.49.0/24"; EXTRA="compose.lab-rede-49.yml"; COMPOSE+=(-f "$AQUI/$EXTRA") ;;
+    *) echo "ERRO: LAB_REDE aceita 47, 48 ou 49" >&2; exit 1;;
 esac
 
 falha() { echo "ERRO: $*" >&2; exit 1; }

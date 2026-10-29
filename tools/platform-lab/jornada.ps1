@@ -40,6 +40,8 @@ $Lab = Join-Path $PSScriptRoot "saidas\$Id"
 $Seg = Join-Path $env:USERPROFILE ".nekkora\agent-lab\$Id"
 $Out = Join-Path $Lab ('jornada-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ'))
 New-Item -ItemType Directory -Force $Out | Out-Null
+# a pasta de saída da automação precisa existir (num laboratório novo o Agent recusa o início com AGT-EXE-011)
+New-Item -ItemType Directory -Force (Join-Path $Lab 'saida-automacao') | Out-Null
 $checks = New-Object System.Collections.Generic.List[object]
 $timeline = New-Object System.Collections.Generic.List[string]
 function Check([string]$What, [bool]$Ok) {

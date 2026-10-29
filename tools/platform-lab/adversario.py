@@ -10,7 +10,7 @@ Agent nunca faz e confere a recusa do servidor:
   A5 reenviar 1..3 iguais                                                -> DUPLICATE (idempotente)
   A6 sequence 2 com conteúdo adulterado                                  -> CONFLICT (o original fica e conta)
   A7 evento com campo fora do envelope (texto livre)                     -> INVALID
-  A8 credencial vencida (expires_at no passado, declarado no banco)      -> 401 e nada aceito
+  A8 vencimento antecipado no banco: recusado (expires_at imutavel); credencial encerrada pela pessoa -> 401
   A9 rota da máquina sem cabeçalho de contrato / contrato 2              -> 400 unsupported_contract
   A10 trilha auditável: o que o banco gravou (contagens, sem conteúdo)
 Nenhum segredo vai para a saída. Uso: adversario.py <id> <impressao-64-hex>
@@ -127,16 +127,27 @@ def main(i, fingerprint):
     ok('A9-contrato-ausente-ou-maior', st == 400 and st2 == 400 and j.get('error') == j2.get('error') == 'unsupported_contract',
        {'sem_cabecalho': [st, j.get('error')], 'contrato_2': [st2, j2.get('error')]})
 
-    pessoa.sql(env, f"UPDATE agent_credentials SET expires_at = now() - interval '1 second' WHERE agent_id = '{agent2}' AND revoked_at IS NULL;")
+    # vencimento: expires_at e imutavel no banco (nem o administrador do banco descartavel o antecipa); a recusa do
+    # gatilho e a prova. A credencial e entao ENCERRADA pela rota real da pessoa (revogacao) e o canal recusa
+    try:
+        pessoa.sql(env, f"UPDATE agent_credentials SET expires_at = now() - interval '1 second' WHERE agent_id = '{agent2}' AND revoked_at IS NULL;")
+        imutavel = False
+        motivo = 'alterado'
+    except SystemExit as e:
+        imutavel = True
+        motivo = str(e)[-90:]
+    st, _ = b.call('POST', f"/api/v1/o/{p['org']}/agents/{agent2}/revoke", {'reason': 'ADMINISTRATIVE'})
+    rev = st
     st, j = m('POST', '/agent/api/v1/heartbeat', {'agentVersion': '0', 'contractVersion': CONTRATO, 'capabilities': []})
     st2, j2 = m('POST', f'/agent/api/v1/runs/{ex}/events', {'events': [envelope(ex, 5)]})
-    ok('A8-credencial-vencida', st == 401 and st2 == 401, {'heartbeat': st, 'lote': st2})
+    ok('A8-vencimento-imutavel-e-credencial-encerrada', imutavel and rev == 204 and st == 401 and st2 == 401,
+       {'expires_at_imutavel': imutavel, 'recusa_do_banco': motivo, 'revogacao': rev, 'heartbeat': st, 'lote': st2})
 
-    q = pessoa.sql(env, f"SELECT events_stored || '|' || stored_through || '|' || settled_through || '|' || conflicts FROM agent_runs WHERE agent_execution_id = '{ex}'")
+    q = pessoa.sql(env, f"SELECT events_stored || '|' || stored_through || '|' || settled_through || '|' || invalid_refused FROM agent_runs WHERE agent_execution_id = '{ex}'")
     seqs = pessoa.sql(env, f"SELECT string_agg(e.sequence::text || ':' || e.event_code, ',' ORDER BY e.sequence) FROM agent_run_events e JOIN agent_runs r ON r.agent_run_id = e.agent_run_id WHERE r.agent_execution_id = '{ex}'")
     trilha = pessoa.sql(env, f"SELECT count(*) FROM agent_admin_events WHERE organization_id = '{p['org']}'")
     ok('A10-trilha-no-banco', q.startswith('3|3|3') and seqs == '1:STEP_COMPLETED,2:STEP_COMPLETED,3:STEP_COMPLETED',
-       {'events_stored|stored|settled|conflicts': q, 'gravados': seqs, 'eventos_administrativos_da_org': trilha})
+       {'events_stored|stored|settled|invalid_refused': q, 'gravados': seqs, 'eventos_administrativos_da_org': trilha})
 
     # varredura: nenhum segredo desta prova na saída
     texto = json.dumps(r, ensure_ascii=False)
