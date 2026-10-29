@@ -1,0 +1,4 @@
+﻿15:43:18.491 [REAL] J1 Agent empacotado do commit 7986e84afc656c1c7e2b791aa4411e55fe0ee961
+15:43:20.621 [REAL] J1 Agent empacotado aberto (JVM 52320), sem Java no PATH
+15:43:29.708 [REAL] J2 código digitado no campo de senha; arquivo do código apagado
+15:44:26.330 ERRO tempo esgotado: execução iniciada @linha 63

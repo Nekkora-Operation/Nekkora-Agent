@@ -10,12 +10,12 @@ import com.nekkora.agent.obs.ActivityEvent.Category;
 import com.nekkora.agent.obs.ActivityEvent.Level;
 import com.nekkora.agent.obs.ActivityEvent.Source;
 import com.nekkora.agent.obs.ActivityView.FrameworkState;
+import com.nekkora.agent.storage.AtomicWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -160,6 +160,10 @@ public final class ActivityService implements AutoCloseable {
                 pending.remove(id);
                 if (open.containsKey(id)) continue;
                 ActivityCollector.open(store, id, clock).ifPresent(c -> {
+                    if (c.deferred()) {
+                        pending.add(id); // outro programa impede a leitura do histórico: nova tentativa na próxima rodada
+                        return;
+                    }
                     health.put(id, c.health(!c.completed()));
                     if (!c.completed()) open.put(id, c);
                 });
@@ -318,9 +322,9 @@ public final class ActivityService implements AutoCloseable {
             Instant now = clock.instant();
             ActivityEvent e = ActivityEvent.of(id.value(), now, Source.COLLECTOR, "HISTORY_PURGED", Level.INFO, Category.TELEMETRY)
                     .error(ErrorCode.OBS_HISTORY_PURGED.code()).count("purged_until_sequence", last).build().withSequence(last + 1);
-            Path tmp = dir.resolve(ActivityLog.FILE + ".tmp");
-            Files.writeString(tmp, ActivityCodec.encode(e) + "\n", StandardCharsets.UTF_8);
-            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            // a troca é o próprio registro da perda: o arquivo novo (só o HISTORY_PURGED, sincronizado antes da troca) ou o
+            // anterior inteiro, nunca bytes apagados sem o registro (INTEGRATION-CONSOLIDATION-001, D-AP-7)
+            AtomicWriter.DEFAULT.write(f, (ActivityCodec.encode(e) + "\n").getBytes(StandardCharsets.UTF_8));
             return true;
         } catch (IOException | RuntimeException ex) {
             return false; // fica para a próxima verificação

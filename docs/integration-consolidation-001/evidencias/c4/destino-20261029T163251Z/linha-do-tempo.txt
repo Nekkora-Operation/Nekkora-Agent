@@ -1,0 +1,2 @@
+﻿16:32:51.700 [REAL] J1 Agent empacotado do commit 7986e84afc656c1c7e2b791aa4411e55fe0ee961
+16:32:57.574 [REAL] D1 Agent aberto com a configuração em https://localhost:55999 (pareado em https://localhost:55877)

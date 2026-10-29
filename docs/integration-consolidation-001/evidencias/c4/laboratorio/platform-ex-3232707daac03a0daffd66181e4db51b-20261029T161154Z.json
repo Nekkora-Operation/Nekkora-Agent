@@ -1,0 +1,88 @@
+{
+  "detalhe": {
+    "runId": "f74f5dbf-a9d1-4c6f-bbd6-5d50a4e8f2c2",
+    "correlation": {
+      "agentExecutionId": "ex-3232707daac03a0daffd66181e4db51b",
+      "frameworkExecutionId": "ex-6d513df566d7435681ff",
+      "platformExecutionId": null,
+      "agentId": "a8a11c9e-38e3-4fcf-a3b2-8854353d10e9",
+      "workerId": "c06d20b2-2b01-49a3-9761-08c06741accd",
+      "workspaceId": "9cba3b38-9d65-4b5f-b0cf-4bc07814b893",
+      "automationId": "27b1325f-b501-4928-a6f5-c7cd20d609b5",
+      "automationVersionId": "f1f401b9-360c-478c-8f38-1bbf1cffae6f",
+      "authorizationId": "33e2eb7e-42cd-4e9e-8626-285fc18d1f67"
+    },
+    "origin": "LOCAL_AUTHORIZED",
+    "authorizationStateAtRegistration": "ACTIVE",
+    "registeredAt": "2026-10-29T16:03:52.993145Z",
+    "supervisor": {
+      "state": "SUCCEEDED",
+      "code": null,
+      "exitCode": 0,
+      "counts": {
+        "SUCCEEDED": 400
+      },
+      "agentCreatedAt": "2026-10-29T16:03:34.026675Z",
+      "agentStartedAt": "2026-10-29T16:03:35.069889Z",
+      "agentEndedAt": "2026-10-29T16:10:36.164529Z",
+      "adopted": false,
+      "suspensions": 0,
+      "locks": 0,
+      "reports": 2,
+      "conflicts": 0,
+      "lastReportAt": "2026-10-29T16:10:36.4295Z"
+    },
+    "process": "ENDED",
+    "outcome": "KNOWN",
+    "transport": {
+      "connectivity": "CONNECTED",
+      "lastHeartbeatAt": "2026-10-29T16:10:48.550654Z",
+      "lastEventAt": "2026-10-29T16:10:36.449504Z"
+    },
+    "history": {
+      "completeness": "INCOMPLETE",
+      "reasons": [
+        "LOST_LOCAL"
+      ],
+      "eventsStored": 2914,
+      "storedThrough": 359,
+      "settledThrough": 3214,
+      "maxSequence": 3214,
+      "declaredMissing": 300,
+      "collectionCompletedSequence": 3214,
+      "invalidRefused": 0,
+      "stepsAvailable": true
+    },
+    "transactionsSeen": {
+      "TRANSACTION_COMPLETED": 362,
+      "TRANSACTION_STARTED": 362
+    },
+    "retention": {
+      "state": "AVAILABLE",
+      "eventsPurged": 0
+    }
+  },
+  "eventos": {
+    "quantidade": 2914,
+    "primeira": 1,
+    "ultima": 3214,
+    "sequencias_repetidas": 0,
+    "em_ordem": true,
+    "codigos": [
+      "ACTION_COMPLETED",
+      "ACTION_STARTED",
+      "COLLECTION_COMPLETED",
+      "COLLECTION_STARTED",
+      "ENGINE_COMPLETED",
+      "ENGINE_STARTED",
+      "EVENT_GAP",
+      "PHASE_COMPLETED",
+      "PHASE_STARTED",
+      "RUNNING",
+      "STARTING",
+      "SUCCEEDED",
+      "TRANSACTION_COMPLETED",
+      "TRANSACTION_STARTED"
+    ]
+  }
+}

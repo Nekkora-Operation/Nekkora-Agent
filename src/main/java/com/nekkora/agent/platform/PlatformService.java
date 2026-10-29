@@ -348,6 +348,15 @@ public final class PlatformService implements AutoCloseable {
 
     // ------------------------------------------------------------------------------------------- autorização e vínculo da execução
 
+    /**
+     * D-AP-1: a pré-escolha da janela de execução. Exatamente uma autorização válida = ela; nenhuma ou mais de uma = nenhuma
+     * ("Não registrar" fica escolhido e ninguém escolhe pela pessoa entre várias).
+     */
+    public static Optional<UUID> preselected(List<AuthorizationChoice> choices) {
+        List<AuthorizationChoice> usable = choices.stream().filter(AuthorizationChoice::usable).toList();
+        return usable.size() == 1 ? Optional.of(usable.get(0).authorizationId()) : Optional.empty();
+    }
+
     /** Autorizações guardadas que citam esta impressão (forma do Agent, {@code sha256:…}), com a situação de cada uma. */
     public List<AuthorizationChoice> authorizationsFor(String agentFingerprint) {
         Optional<String> fp = PackageFingerprint.wire(agentFingerprint);
@@ -378,7 +387,7 @@ public final class PlatformService implements AutoCloseable {
         if (l.get().refused()) return Action.refused(ErrorCode.PLT_CREDENTIAL_REFUSED);
         Optional<Authorization> z = authorizations.find(authorizationId);
         if (fp.isEmpty() || z.isEmpty() || !z.get().fingerprint().equals(fp.get()) || !PackageFingerprint.RULE.equals(z.get().rule())
-                || !clock.instant().isBefore(z.get().validUntil())) {
+                || !authorizations.effective(clock.instant()).isBefore(z.get().validUntil())) {
             return Action.refused(ErrorCode.PLT_AUTHORIZATION_REFUSED);
         }
         try {
@@ -616,6 +625,7 @@ public final class PlatformService implements AutoCloseable {
         Result<MachineClient.Presence> r = client.heartbeat(l.destination(), token);
         if (!(r instanceof Ok<MachineClient.Presence> ok)) return handleFailure(r, now, null);
         contact(now);
+        authorizations.observe(ok.value().serverTime());
         nextHeartbeat = now.plus(HEARTBEAT);
         try {
             vault.expiresAt(ok.value().credentialExpiresAt());

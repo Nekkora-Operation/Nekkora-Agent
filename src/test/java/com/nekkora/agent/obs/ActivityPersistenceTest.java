@@ -223,6 +223,46 @@ class ActivityPersistenceTest {
         second.close();
     }
 
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void reopeningWhileAnotherProgramDeniesReadingDefersTheCollectionNeverRestartingTheSequenceOrRereadingTheSources() throws Exception {
+        ObsFixtures.Run run = ObsFixtures.running(store, saida, ExecutionPackage.Kind.STUDIO_PYTHON, clock.instant());
+        List<String> fwLines = ActivityServiceTest.rebase(ObsFixtures.g1Events(), clock.instant());
+        run.frameworkLines(fwLines.subList(0, 30));
+        ActivityService first = new ActivityService(store, clock, Duration.ofMillis(50), ActivityService.MAX_TOTAL_BYTES);
+        first.track(run.id());
+        first.tick();
+        assertEquals(0, first.view(run.id(), 0).orElseThrow().health().pendingWrites());
+        // queda do Agent com tudo gravado; a automação segue
+        Path dir = store.dir(run.id());
+        List<Long> before = diskSequences(dir, run.id().value());
+        run.frameworkLines(fwLines.subList(30, 70));
+        ActivityService second = new ActivityService(store, clock, Duration.ofMillis(50), ActivityService.MAX_TOTAL_BYTES);
+        second.catchUp();
+        try (FileChannel other = FileChannel.open(dir.resolve(ActivityLog.FILE), StandardOpenOption.READ, ExtendedOpenOption.NOSHARE_READ,
+                ExtendedOpenOption.NOSHARE_WRITE)) {
+            for (int i = 0; i < 4; i++) {
+                clock.plusMillis(1000);
+                second.tick();
+            }
+        }
+        assertEquals(before, diskSequences(dir, run.id().value()), "com a leitura negada nada é gravado (nem COLLECTION_STARTED de novo)");
+        run.frameworkLines(fwLines.subList(70, fwLines.size()));
+        run.finish(ExecutionState.SUCCEEDED, clock.instant());
+        for (int i = 0; i < 6; i++) {
+            clock.plusMillis(1000);
+            second.tick();
+        }
+        List<Long> seqs = diskSequences(dir, run.id().value());
+        assertEquals(range(1, seqs.size()), seqs, "sequência contínua, sem recomeçar em 1");
+        ActivityLog onDisk = ActivityLog.read(dir, run.id().value());
+        assertEquals(fwLines.size(), onDisk.all().stream().filter(e -> e.source() == Source.FRAMEWORK).count(),
+                "cada evento do Framework uma vez: nada relido do começo das origens");
+        ActivityView v = second.view(run.id(), 0).orElseThrow();
+        assertEquals(Integrity.COMPLETE, ActivityView.completeness(v.health(), v.events()).integrity());
+        second.close();
+    }
+
     // ------------------------------------------------------------------------------------- negativos (todas as plataformas)
 
     @Test

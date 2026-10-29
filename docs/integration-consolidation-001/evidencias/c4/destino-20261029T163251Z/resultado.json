@@ -1,0 +1,10 @@
+﻿[
+    {
+        "check":  "D1 nenhuma requisição ao canal da máquina com o destino alterado (nginx /agent/: 775 -\u003e 775) e presença parada (2026-10-29 16:31:15.355112+00 -\u003e 2026-10-29 16:31:15.355112+00)",
+        "ok":  true
+    },
+    {
+        "check":  "D2 com a origem do pareamento a presença retoma pela credencial guardada (nginx /agent/: 775 -\u003e 777; heartbeat 2026-10-29 16:31:15.355112+00 -\u003e 2026-10-29 16:34:16.913182+00), sem novo pareamento",
+        "ok":  true
+    }
+]
