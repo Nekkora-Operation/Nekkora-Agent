@@ -352,7 +352,7 @@ public final class PlatformService implements AutoCloseable {
     public List<AuthorizationChoice> authorizationsFor(String agentFingerprint) {
         Optional<String> fp = PackageFingerprint.wire(agentFingerprint);
         Optional<Link> l = vault.link();
-        if (fp.isEmpty() || l.isEmpty()) return List.of();
+        if (fp.isEmpty() || l.isEmpty() || l.get().refused()) return List.of();
         List<AuthorizationChoice> out = new ArrayList<>();
         for (Map.Entry<Authorization, Usability> e : authorizations.forFingerprint(fp.get(), clock.instant()).entrySet()) {
             Authorization z = e.getKey();
@@ -374,6 +374,8 @@ public final class PlatformService implements AutoCloseable {
         Optional<String> fp = PackageFingerprint.wire(agentFingerprint);
         Optional<Link> l = vault.link();
         if (l.isEmpty()) return Action.refused(ErrorCode.PLT_NOT_PAIRED);
+        // credencial recusada: nada novo é registrado por este vínculo (a execução pode seguir só local)
+        if (l.get().refused()) return Action.refused(ErrorCode.PLT_CREDENTIAL_REFUSED);
         Optional<Authorization> z = authorizations.find(authorizationId);
         if (fp.isEmpty() || z.isEmpty() || !z.get().fingerprint().equals(fp.get()) || !PackageFingerprint.RULE.equals(z.get().rule())
                 || !clock.instant().isBefore(z.get().validUntil())) {

@@ -299,6 +299,9 @@ class PlatformDeliveryTest {
         assertEquals(1, refused, "uma recusa só");
         assertTrue(lab.svc.retains(id), "a cópia local não entregue continua protegida");
         assertEquals(ExecutionState.SUCCEEDED, lab.runs.record(id).orElseThrow().state(), "a execução local não é afetada");
+        // nada novo é registrado por um vínculo recusado: a próxima execução segue só local
+        assertTrue(lab.svc.authorizationsFor("sha256:" + PlatformFixtures.FP).isEmpty());
+        assertEquals(ErrorCode.PLT_CREDENTIAL_REFUSED, lab.svc.prepare(authorization(lab), "sha256:" + PlatformFixtures.FP).problem());
     }
 
     @Test
