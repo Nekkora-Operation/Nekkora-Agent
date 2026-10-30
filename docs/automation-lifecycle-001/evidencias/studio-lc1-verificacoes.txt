@@ -1,0 +1,106 @@
+OK    Conexão autenticada Studio ⇄ host ⇄ extensão
+OK    G1: automação com as cinco sessões funcionais do PDD
+OK    C02: busca = Preencher + Pressionar Enter (o Enter não vira clique inventado)
+OK    C02: valor digitado fora do modelo
+OK    C02: campo recriado identificado sem posição (localizador preferido único e não posicional)
+OK    C02: Enter observado como envio da busca (FORM_SUBMITTED/NAVIGATION_FOLLOWED)
+OK    C03: etapa Observar sem alvo (endereço da página) criada pelo editor
+OK    C03: Selecionar dado não executa nada (link da data não navegou)
+OK    C03: sete leituras Observar com alvo (título + seis células), nenhuma interação
+OK    C03: cada leitura tem localizador preferido único e sem posição (ID do título; linha da tabela pelo rótulo)
+OK    C03: as células são ancoradas pelo cabeçalho da linha (ROW_CONTEXT com o rótulo)
+OK    C03: nenhum texto do artigo no modelo (só elementos e rótulos de linha)
+OK    variável de entrada endereco_do_artigo declarada sem valor
+OK    C04: o endereço lido será CONFERIDO com a entrada (Observar com valor = variável)
+OK    projeto salvo pelo Studio (.nekkora)
+OK    G2: Machado de Assis · Ler o título identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Nome completo” identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Nascimento” identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Morte” identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Nacionalidade” identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Ocupação” identidade comprovada no elemento certo
+OK    G2: Machado de Assis · Ler “Campo(s)” ausente na página → não confirmado num elemento parecido (AMBIGUOUS)
+OK    G2: Clarice Lispector · Ler o título identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Nome completo” identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Nascimento” identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Morte” identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Nacionalidade” identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Ocupação” identidade comprovada no elemento certo
+OK    G2: Clarice Lispector · Ler “Campo(s)” ausente na página → não confirmado num elemento parecido (AMBIGUOUS)
+OK    G2: Marie Curie · Ler o título identidade comprovada no elemento certo
+OK    G2: Marie Curie · Ler “Nome completo” identidade comprovada no elemento certo
+OK    G2: Marie Curie · Ler “Nascimento” identidade comprovada no elemento certo
+OK    G2: Marie Curie · Ler “Morte” identidade comprovada no elemento certo
+OK    G2: Marie Curie · Ler “Nacionalidade” identidade comprovada no elemento certo
+OK    G2: Marie Curie · Ler “Ocupação” ausente na página → não confirmado num elemento parecido (AMBIGUOUS)
+OK    G2: Marie Curie · Ler “Campo(s)” identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler o título identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler “Nome completo” ausente na página → não confirmado num elemento parecido (AMBIGUOUS)
+OK    G2: Albert Einstein · Ler “Nascimento” identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler “Morte” identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler “Nacionalidade” identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler “Ocupação” identidade comprovada no elemento certo
+OK    G2: Albert Einstein · Ler “Campo(s)” ausente na página → não confirmado num elemento parecido (AMBIGUOUS)
+OK    G2: todas as etapas com alvo têm decisão CONFIRMED (TEST_AGENT)
+OK    PDD: textos revisados; sem pendência que bloqueie ([Inicialização do processo, Pesquisa do artigo, Extração dos dados, Transferência de dados (Excel), Encerramento])
+OK    SPEC-OC G2: cada coluna (menos a chave URL) aparece em Pendências como INFORMAÇÃO, obrigatória por padrão
+OK    SPEC-OC G1: antes da decisão, o código exige "Morte" (comportamento de sempre)
+OK    SPEC-OC G2: "Morte" agora opcional (com o motivo); as outras quatro continuam obrigatórias por padrão
+OK    SPEC-OC G4: código de novo CODE_VALIDATED depois da decisão
+OK    SPEC-OC G2: a decisão mudou a especificação (o código anterior não vale; o Studio gerou de novo)
+OK    SPEC-OC G3: main.py — OutputColumn("Morte", "death_date", ColumnKind.ISO_DATE, required=False); cabeçalho igual; as outras obrigatórias
+OK    SPEC-OC G3: ProfileData.death_date: str | None; leitura _date_if_present; Nascimento continua _date
+OK    SPEC-OC G3: a linha exige só REQUIRED_FIELDS (sem death_date)
+OK    SPEC-OC G4: manifesto 1.5.0 com a regra por coluna (Morte OPTIONAL, motivo) e o esquema da regra
+OK    G4: código gerado PELO STUDIO e verificado (CODE_VALIDATED)
+OK    G4: código sem texto de artigo e sem 'wikipedia' em nome de função do framework
+OK    G4: código usa a planilha do framework (XlsxResultSink) e as seis colunas na ordem
+OK    G4: só a origem autorizada no código
+OK    R3/Q10: layout em pacote — automation/{__init__,selectors,pages,process}.py, nenhum selectors.py nem paginas.py na raiz
+OK    CQ: duas Pages por evidência (busca e ficha separadas pela troca de documento)
+OK    CQ-01/Q11: a tela da ficha pelo DONO dos dados no PDD em inglês: ProfilePage, read_profile_data, ProfileData
+OK    Q11: método da busca pelo passo do PDD em inglês (search_article(search_term))
+OK    CQ: leituras da ficha num método que devolve dados tipados (dataclass)
+OK    CQ-R5-01: dataclasses de dados (ProfileData, InputRow) sem repr automático — os valores não aparecem no repr
+OK    Rodada 5 (glossário 1.2.0): article_url no código; a coluna da lista continua "endereco_do_artigo"
+OK    Q10: toda chave de alvo é SelectorKey.<NOME>.value (nenhuma chave como texto nas telas); act só na PageBase
+OK    Q10: automation/selectors.py tem SelectorKey (StrEnum) e TARGETS, sem UUID; rótulos da página não traduzidos
+OK    CQ-03: docstring da tela diz onde está no PDD; sem comentário solto da espera
+OK    CQ-07 + ajuste da rodada 3: coluna vazia ou só com espaços recusa com o NOME do campo (nunca o conteúdo)
+OK    CQ-08: abertura inicial na convenção (process.open_start_page) e os ids anteriores declarados no manifesto
+OK    Q11: colunas da lista e cabeçalhos da planilha continuam o contrato (não traduzidos); mapeamento explícito no código
+OK    R3: o Enter da busca confirma a chegada à ficha pela troca de endereço (a leitura do endereço não corre contra a navegação)
+OK    Q11: manifesto 1.4.0 (1.5.0 com coluna opcional) em inglês com o mapa de nomes (origem → código) e sem palavra sem tradução
+OK    Q10: manifesto liga SelectorKey ↔ chave ↔ traceId/studioStepId e declara a equivalência .py ↔ JSON
+OK    CQ: nenhum UUID nem comentário por etapa no corpo das Pages e do processo
+OK    CQ: sem nomes opacos (a = self.act, etapas_sessao_N, fill, press_key, campo_s, TelaPesquisa)
+OK    CQ: step_id legível em inglês e mapeado 1:1 para a etapa do Studio (manifesto 1.4.0; 1.5.0 com coluna opcional)
+OK    Q11: processo com o nome de negócio em inglês (WikipediaBiographiesProcess); o nome do processo nas execuções não muda
+OK    CQ: requisito do framework preservado (nekkora-rpa[excel]==0.3.0) e planilha pelo XlsxResultSink
+OK    CQ: prévia da arquitetura na aba Plano (Pages, métodos e de onde vêm os nomes)
+OK    CQ: Revisar código mostra arquitetura, mapa step_id → etapa e localizadores
+OK    G5: PDF com o apêndice Dados do processo
+OK    G5: PDF lista as seis colunas na ordem
+OK    G5: PDF declara as fontes alternativas (título e Campo(s))
+OK    G5: PDF sem texto de artigo
+OK    SPEC-OC G2: o apêndice do PDD diz que "Morte" é OPCIONAL e por quê; as outras continuam obrigatórias
+OK    G3: PDD desatualizado bloqueia — nenhum código gerado (PDD_OUTDATED)
+OK    G3: Ctrl+Z desfaz a etapa acrescentada (o PDD volta a valer)
+OK    G6: código de novo CODE_VALIDATED na revisão atual
+OK    G6: o Studio pede a lista com as colunas das variáveis de entrada
+OK    G6: a confirmação diz o site, o destino, a lista e que não é produção
+OK    C11: Cancelar interrompe o teste autorizado e a planilha NÃO é gravada
+OK    G6: o Studio pede a lista com as colunas das variáveis de entrada
+OK    G6: a confirmação diz o site, o destino, a lista e que não é produção
+OK    G6: teste autorizado terminou com planilha gravada e conferida
+OK    G6: planilha no destino escolhido
+OK    SPEC-OC G6: cabeçalho "Morte" preservado (coluna não removida) e nenhuma célula extra
+OK    SPEC-OC G6: uma linha por artigo (5)
+OK    SPEC-OC G6: pessoa viva → célula Morte verdadeiramente vazia (sem valor, nem "", nem N/A)
+OK    SPEC-OC G6: pessoa viva → Nascimento gravado como data (obrigatória continua exigida)
+OK    SPEC-OC G6: pessoas falecidas → Morte AAAA-MM-DD
+OK    SPEC-OC G6: colunas obrigatórias preenchidas em todas as linhas
+OK    G6: V6 Execução real comprovada pelo teste autorizado desta revisão
+OK    G6: V3 descreve lista → planilha
+OK    CQ: VQ Qualidade da geração aprovada na validação (critérios objetivos; legibilidade = titular)
+RESULTADO: 105 verificações, 0 falha(s)

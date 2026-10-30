@@ -1,0 +1,11 @@
+3cea15aa7cd65814105ce0fc801b92377187baaa28d6f7077ea5c2d6cb190b9d *./README.md
+472c60ef4c8ba5a0d5f45d34e60ad857de21d4843ac140f443d0efefa52a9d8c *./automation/__init__.py
+000787dbeace763202df4dad4da6195ea1eb91b093a1f48e34b93956779aaccb *./automation/pages.py
+f05fdb58bd41481a5eac5aefa424d3f349be274eec9ed152c899c292a502c277 *./automation/process.py
+3eeca41b0aa8fc8f528c17985cb18588c5781b16814b45db84076d83ffda7963 *./automation/selectors.py
+1b69b5e7888cd645cd28d95e2847ea3339944f2a44c8f4ccb9058a017fd3caaa *./config/execution.toml
+13b4fc438fbe47dee5c76e4469bb75467e2446f6c5b3cf98ecf27306652ea167 *./main.py
+e74b9348e7103ea58ce59e45dfc256334263fdd4da0db67c2f755e30aa5bd96e *./manifest.json
+2b955b6798efb6e70449554c0e5d4e31616da8bf0516a3a3424496bb2c13e818 *./requirements.txt
+3d8956baec6dd7abf80bf546c65f390e86ba9318d7fe76c4d6c7e5e3d67f0455 *./selectors.json
+a7e735a2cd71a8f27deb86d7adc2f9aaa1bbddee6fe30748a39d99880fc017ea *biografias-python-lc1.zip (ZIP deterministico enviado a API; data fixa 2026-01-01, ordem lexicografica)

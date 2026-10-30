@@ -1,0 +1,25 @@
+[INFO] nekkora-api                                                        [pom]
+[INFO] nekkora-core                                                       [jar]
+[INFO] nekkora-ops                                                        [jar]
+[INFO] nekkora-platform                                                   [jar]
+[INFO] nekkora-portal                                                     [jar]
+[INFO] nekkora-agent-gateway                                              [jar]
+[INFO] Building nekkora-api 0.1.0-SNAPSHOT                                [1/6]
+[INFO] Building nekkora-core 0.1.0-SNAPSHOT                               [2/6]
+[INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Building nekkora-ops 0.1.0-SNAPSHOT                                [3/6]
+[INFO] Tests run: 182, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Building nekkora-platform 0.1.0-SNAPSHOT                           [4/6]
+[INFO] Tests run: 468, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Building nekkora-portal 0.1.0-SNAPSHOT                             [5/6]
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Building nekkora-agent-gateway 0.1.0-SNAPSHOT                      [6/6]
+[INFO] Tests run: 33, Failures: 0, Errors: 0, Skipped: 0
+[INFO] nekkora-api ........................................ SUCCESS [  0.003 s]
+[INFO] nekkora-core ....................................... SUCCESS [ 22.017 s]
+[INFO] nekkora-ops ........................................ SUCCESS [07:09 min]
+[INFO] nekkora-platform ................................... SUCCESS [23:33 min]
+[INFO] nekkora-portal ..................................... SUCCESS [ 18.480 s]
+[INFO] nekkora-agent-gateway .............................. SUCCESS [ 24.315 s]
+[INFO] BUILD SUCCESS
+[INFO] Total time:  31:47 min

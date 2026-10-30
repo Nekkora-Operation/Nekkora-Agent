@@ -1,0 +1,37 @@
+{
+  "organizacao": "6c7539a4-f1ed-48a7-845c-7e7a0386c45d",
+  "workspace": "4930d39b-ef21-4d06-9cfa-c37858e597f5",
+  "automacao": "f7e01073-87d8-42a2-8ee0-0ad5b4c5311b",
+  "versao_publicada": "5495cb9f-bb6e-4233-b4ac-51cd7af74730",
+  "numero_da_versao": 1,
+  "publicada_por_membership": "fd73f507-4d0f-48da-a294-b749e424a395",
+  "membership_da_pessoa": "fd73f507-4d0f-48da-a294-b749e424a395",
+  "publicada_em": "2026-10-29T20:43:56.005926Z",
+  "artefato": {
+    "artifactId": "c579d009-42bc-452b-8876-5ca19ff88340",
+    "sha256": "a7e735a2cd71a8f27deb86d7adc2f9aaa1bbddee6fe30748a39d99880fc017ea",
+    "sizeBytes": 15451,
+    "fingerprintRule": "nekkora-agent/package-fingerprint/1",
+    "fingerprint": "f199bda417a04ddb898082c2fcce0edb0c4ebb3b87b8c2710a2c3151cec1a8d1",
+    "filesCount": 9,
+    "manifestVersion": "1.5.0",
+    "framework": "nekkora-rpa[excel]==0.3.0",
+    "executionMode": "list",
+    "declaredGenerator": "nekkora-studio-codegen/1.2.0",
+    "provenance": "DECLARED"
+  },
+  "artifact_reference": "nekkora-artifact:c579d009-42bc-452b-8876-5ca19ff88340",
+  "sha256_local_do_zip": "a7e735a2cd71a8f27deb86d7adc2f9aaa1bbddee6fe30748a39d99880fc017ea",
+  "worker": "fc93e9d8-b9b4-4481-80de-d049a2fd18b5",
+  "autorizacao": "89f26075-7492-4744-bd7f-f91e5a5e19a0",
+  "impressao_autorizada": "f199bda417a04ddb898082c2fcce0edb0c4ebb3b87b8c2710a2c3151cec1a8d1",
+  "valida_ate": "2026-11-28T20:44:00Z",
+  "canal_antes_da_autorizacao_agent_runs_autorizacoes_execucoes": "0|0|0",
+  "trilha_atos": "1,2,3,5,6",
+  "versoes_publicadas_sem_ato_de_publicacao_da_api": "0",
+  "fixtures_declaradas": [
+    "identidade da pessoa",
+    "limites da organizacao (010)"
+  ],
+  "codigo_pareamento": "<arquivo protegido fora do repositório; consumido pela jornada>"
+}

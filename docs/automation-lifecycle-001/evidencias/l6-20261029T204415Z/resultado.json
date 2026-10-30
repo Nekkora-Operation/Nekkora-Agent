@@ -1,0 +1,38 @@
+﻿[
+    {
+        "check":  "L1 pareado; a autorização baixada é a da versão PUBLICADA pela API com a impressão do pacote (f199bda417a0…)",
+        "ok":  true
+    },
+    {
+        "check":  "L2 execução vinculada à autorização da versão publicada (PLATFORM_RUN_LINKED)",
+        "ok":  true
+    },
+    {
+        "check":  "L3 sem Platform a automação seguiu (SUCCEEDED) e nada foi relançado (processos da execução: 2 -\u003e 0)",
+        "ok":  true
+    },
+    {
+        "check":  "L4 execução SUCCEEDED (SUCCEEDED), uma pasta de saída (1) e um registro na Platform",
+        "ok":  true
+    },
+    {
+        "check":  "L4 banco: estado=4 stored=292 settled=292 eventos=292 recusas=0; versão e autorização da publicação",
+        "ok":  true
+    },
+    {
+        "check":  "L4 consulta autenticada: versão publicada, autorização, Worker, Agent e execução local; supervisor SUCCEEDED/KNOWN; histórico COMPLETE",
+        "ok":  true
+    },
+    {
+        "check":  "L5 OUTCOME_UNKNOWN sem relançar (0 processos novos, 1 registro); Platform OUTCOME_UNKNOWN/UNKNOWN",
+        "ok":  true
+    },
+    {
+        "check":  "L5 publicação e autorização não geraram execução por conta própria: só as 2 iniciadas pela pessoa",
+        "ok":  true
+    },
+    {
+        "check":  "L6 nenhum segredo (3 valores) em evidências, dados do Agent e logs dos serviços",
+        "ok":  true
+    }
+]
