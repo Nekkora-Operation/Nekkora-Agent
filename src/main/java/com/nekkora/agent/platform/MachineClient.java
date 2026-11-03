@@ -50,6 +50,15 @@ final class MachineClient {
 
     record Authorizations(List<AuthorizationCache.Authorization> items, int rejected) {}
 
+    /** AGENT-PYTHON-001: pedido de execução entregue a esta máquina (só identificadores, validade e o pacote esperado). */
+    record PendingRequest(UUID runRequestId, UUID authorizationId, UUID automationVersionId, String sourceKind, String fingerprint, String rule,
+                          Instant validUntil, String state, String executionId) {}
+
+    record PendingRequests(List<PendingRequest> items, int rejected) {}
+
+    /** Resultado de uma decisão: {@code outcome} APPLIED, UNCHANGED, EXPIRED, REVOKED ou CONFLICT; {@code state} o vigente. */
+    record Decision(UUID runRequestId, String outcome, String state, String executionId) {}
+
     private final HttpTransport http;
     private final String agentVersion;
 
@@ -92,6 +101,43 @@ final class MachineClient {
                 else ok.add(z);
             }
             return new Authorizations(ok, rejected);
+        });
+    }
+
+    Result<PendingRequests> runRequests(Destination d, String token) {
+        return call(d, "GET", "/agent/api/v1/run-requests", token, null, j -> {
+            List<?> items = Json.list(j, "items");
+            if (items == null || items.size() > 50) return null;
+            List<PendingRequest> ok = new ArrayList<>();
+            int rejected = 0;
+            for (Object o : items) {
+                Map<String, Object> m = Json.object(o);
+                UUID id = m == null ? null : Json.uuid(m, "runRequestId");
+                UUID auth = m == null ? null : Json.uuid(m, "authorizationId");
+                String fp = m == null ? null : Json.text(m, "packageFingerprint");
+                String rule = m == null ? null : Json.text(m, "packageFingerprintRule");
+                Instant until = m == null ? null : Json.instant(m, "validUntil");
+                String st = m == null ? null : Json.text(m, "state");
+                String ex = m == null ? null : Json.text(m, "agentExecutionId");
+                if (id == null || auth == null || fp == null || !fp.matches("[0-9a-f]{64}") || !PackageFingerprint.known(rule) || until == null
+                        || !("DELIVERED".equals(st) || "ACCEPTED".equals(st)) || ex != null && !ex.matches("ex-[0-9a-f]{32}")) {
+                    rejected++;
+                    continue;
+                }
+                ok.add(new PendingRequest(id, auth, Json.uuid(m, "automationVersionId"), Json.text(m, "sourceKind"), fp, rule, until, st, ex));
+            }
+            return new PendingRequests(ok, rejected);
+        });
+    }
+
+    Result<Decision> decide(Destination d, String token, UUID runRequest, String decision, String reason, String executionId) {
+        Json.Obj o = Json.obj().str("decision", decision);
+        if (reason != null) o.str("reason", reason);
+        if (executionId != null) o.str("agentExecutionId", executionId);
+        return call(d, "POST", "/agent/api/v1/run-requests/" + runRequest + "/decision", token, o.toString(), j -> {
+            String outcome = Json.text(j, "outcome");
+            if (outcome == null || !java.util.Set.of("APPLIED", "UNCHANGED", "EXPIRED", "REVOKED", "CONFLICT").contains(outcome)) return null;
+            return new Decision(Json.uuid(j, "runRequestId"), outcome, Json.text(j, "state"), Json.text(j, "agentExecutionId"));
         });
     }
 

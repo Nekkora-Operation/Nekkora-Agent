@@ -55,6 +55,8 @@ public final class PlatformService implements AutoCloseable {
     static final Duration TICK = Duration.ofSeconds(1);
     static final Duration HEARTBEAT = Duration.ofSeconds(60);
     static final Duration AUTHORIZATIONS = Duration.ofMinutes(5);
+    /** AGENT-PYTHON-001: consulta dos pedidos de execução (puxados pela máquina; nenhum canal aberto pela Platform). */
+    static final Duration RUN_REQUESTS = Duration.ofSeconds(10);
     /** Conectividade só é dada como ativa até este tempo depois da última resposta (o mesmo critério da Platform). */
     static final Duration CONTACT_FRESH = Duration.ofSeconds(180);
     /** Pedidos HTTP no máximo por rodada (a rodada seguinte continua de onde parou). */
@@ -135,6 +137,8 @@ public final class PlatformService implements AutoCloseable {
     private final CredentialVault vault;
     private final AuthorizationCache authorizations;
     private final DeliveryStore deliveries;
+    private final RunRequestStore requests;
+    private Instant nextRunRequests = Instant.MIN;
     private final MachineClient client;
     private final Backoff net;
     private final Backoff redeemBackoff;
@@ -176,6 +180,7 @@ public final class PlatformService implements AutoCloseable {
         this.vault = new CredentialVault(dir, secrets, writer);
         this.authorizations = new AuthorizationCache(dir, writer);
         this.deliveries = new DeliveryStore(dir, writer);
+        this.requests = new RunRequestStore(dir, writer);
         this.client = new MachineClient(http, agentVersion);
         this.net = new Backoff(random);
         this.redeemBackoff = new Backoff(random);
@@ -492,6 +497,150 @@ public final class PlatformService implements AutoCloseable {
         }
     }
 
+    // ------------------------------------------------------------------------------------------- pedido de execução (030)
+
+    /** O que o coordenador do app vê de um pedido (sem rede). {@code fingerprint}: forma do Agent ({@code sha256:…}). */
+    public record RunRequestView(UUID runRequestId, UUID authorizationId, UUID automationVersionId, String fingerprint, String rule, Instant validUntil,
+                                 String stage, String decision, String reason, String executionId) {}
+
+    /** Pedidos do vínculo atual, como estão gravados nesta máquina. */
+    public List<RunRequestView> runRequests() {
+        Optional<Link> l = vault.link();
+        if (l.isEmpty()) return List.of();
+        List<RunRequestView> out = new ArrayList<>();
+        for (RunRequestStore.Request r : requests.all()) {
+            if (!r.agentId().equals(l.get().agentId())) continue;
+            out.add(new RunRequestView(r.runRequestId(), r.authorizationId(), r.automationVersionId(), "sha256:" + r.fingerprint(), r.rule(), r.validUntil(),
+                    r.stage().name(), r.decision(), r.reason(), r.executionId()));
+        }
+        return out;
+    }
+
+    /**
+     * A decisão desta máquina sobre um pedido RECEBIDO: gravada ANTES do envio (aceitar reserva o {@code agentExecutionId}).
+     * Uma segunda decisão sobre o mesmo pedido é recusada (o pedido reentregue nunca gera outra).
+     */
+    public synchronized Action decideRunRequest(UUID id, String decision, String reason, ExecutionId reserved) {
+        Optional<RunRequestStore.Request> r = requests.get(id);
+        if (r.isEmpty() || r.get().stage() != RunRequestStore.Stage.RECEIVED) return Action.refused(ErrorCode.EXT_REQUEST_REFUSED);
+        if ("ACCEPTED".equals(decision) == (reserved == null)) return Action.refused(ErrorCode.EXT_REQUEST_REFUSED);
+        try {
+            requests.save(r.get().with(RunRequestStore.Stage.DECIDED, decision, reason, reserved == null ? null : reserved.value(), null, clock.instant()));
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            return Action.refused(ErrorCode.PLT_STORAGE_FAILED);
+        }
+        wake();
+        return Action.ok();
+    }
+
+    /** O lançamento de um pedido CONFIRMADO foi tentado (a pasta da execução existe): nada mais a decidir. */
+    public synchronized void runRequestLaunched(UUID id) {
+        requests.get(id).filter(r -> r.stage() == RunRequestStore.Stage.CONFIRMED).ifPresent(r -> {
+            try {
+                requests.save(r.with(RunRequestStore.Stage.LAUNCHED, r.decision(), r.reason(), r.executionId(), r.serverOutcome(), clock.instant()));
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            }
+        });
+    }
+
+    /** Aceito e confirmado, mas o processo comprovadamente não foi criado: vira NOT_STARTED (enviado; nunca relançado). */
+    public synchronized void runRequestNotStarted(UUID id) {
+        requests.get(id).filter(r -> r.stage() == RunRequestStore.Stage.CONFIRMED).ifPresent(r -> {
+            try {
+                requests.save(r.with(RunRequestStore.Stage.DECIDED, "NOT_STARTED", "LAUNCH_NOT_ATTEMPTED", r.executionId(), null, clock.instant()));
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            }
+        });
+        wake();
+    }
+
+    /** A autorização guardada serve a este pacote agora (vínculo atual, mesma impressão e regra, no prazo com o piso do relógio)? */
+    public boolean authorizationUsable(UUID authorizationId, String fingerprintHex, String rule) {
+        Optional<Link> l = vault.link();
+        if (l.isEmpty() || l.get().refused()) return false;
+        Optional<Authorization> z = authorizations.find(authorizationId);
+        return z.isPresent() && fingerprintHex.equals(z.get().fingerprint()) && rule.equals(z.get().rule()) && PackageFingerprint.known(rule)
+                && authorizations.effective(clock.instant()).isBefore(z.get().validUntil());
+    }
+
+    /** O pedido de vínculo que o lançamento de um pedido grava na pasta da execução (antes do STARTING). */
+    public Optional<LocalGate.LinkRequest> linkRequestFor(UUID runRequestId) {
+        Optional<Link> l = vault.link();
+        Optional<RunRequestStore.Request> r = requests.get(runRequestId);
+        if (l.isEmpty() || r.isEmpty() || !r.get().agentId().equals(l.get().agentId())) return Optional.empty();
+        return Optional.of(new LocalGate.LinkRequest(l.get().agentId(), r.get().authorizationId(), r.get().sourceKind(), r.get().fingerprint(), runRequestId,
+                clock.instant()));
+    }
+
+    private boolean pollRunRequests(Link l, String token, Instant now, int[] budget) {
+        budget[0]--;
+        Result<MachineClient.PendingRequests> res = client.runRequests(l.destination(), token);
+        if (!(res instanceof Ok<MachineClient.PendingRequests> ok)) return handleFailure(res, now, null);
+        contact(now);
+        nextRunRequests = now.plus(RUN_REQUESTS);
+        for (MachineClient.PendingRequest p : ok.value().items()) {
+            if (requests.get(p.runRequestId()).isPresent()) continue; // já conhecido: a decisão (se houver) é desta máquina
+            RunRequestStore.Stage stage = RunRequestStore.Stage.RECEIVED;
+            String decision = null, reason = null, exec = null;
+            if ("ACCEPTED".equals(p.state())) {
+                // aceito pela Platform, mas sem registro local (dados locais perdidos): nunca lançado de novo. Se a pasta da execução
+                // existe, o lançamento foi tentado; senão, o processo comprovadamente não foi criado
+                exec = p.executionId();
+                if (exec != null && Files.exists(runs.dir(new ExecutionId(exec)))) {
+                    stage = RunRequestStore.Stage.LAUNCHED;
+                    decision = "ACCEPTED";
+                } else {
+                    stage = RunRequestStore.Stage.DECIDED;
+                    decision = "NOT_STARTED";
+                    reason = "LAUNCH_NOT_ATTEMPTED";
+                }
+            }
+            try {
+                requests.save(new RunRequestStore.Request(p.runRequestId(), l.agentId(), p.authorizationId(), p.automationVersionId(),
+                        p.sourceKind() == null ? AuthorizationCache.STUDIO_PACKAGE : p.sourceKind(), p.fingerprint(), p.rule(), p.validUntil(), now, stage, decision,
+                        reason, exec, null, now));
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+                return false;
+            }
+        }
+        publish();
+        return true;
+    }
+
+    private boolean sendDecisions(Link l, String token, Instant now, int[] budget) {
+        for (RunRequestStore.Request r : requests.all()) {
+            if (r.stage() != RunRequestStore.Stage.DECIDED || !r.agentId().equals(l.agentId())) continue;
+            if (budget[0]-- <= 0) return true;
+            Result<MachineClient.Decision> res = client.decide(l.destination(), token, r.runRequestId(), r.decision(),
+                    "ACCEPTED".equals(r.decision()) ? null : r.reason(), "REFUSED".equals(r.decision()) ? null : r.executionId());
+            RunRequestStore.Stage next;
+            String server;
+            if (res instanceof Ok<MachineClient.Decision> ok) {
+                contact(now);
+                server = ok.value().outcome();
+                boolean applied = "APPLIED".equals(server) || "UNCHANGED".equals(server);
+                // só uma aceitação CONFIRMADA libera o lançamento; vencido, revogado ou conflito: nada é lançado
+                next = applied && "ACCEPTED".equals(r.decision()) ? RunRequestStore.Stage.CONFIRMED : RunRequestStore.Stage.CLOSED;
+            } else if (res instanceof Refused<MachineClient.Decision> rf && (rf.status() == 404 || rf.status() == 400)) {
+                server = rf.status() == 404 ? "NOT_FOUND" : "INVALID";
+                next = RunRequestStore.Stage.CLOSED;
+            } else {
+                return handleFailure(res, now, null);
+            }
+            try {
+                requests.save(r.with(next, r.decision(), r.reason(), r.executionId(), server, now));
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** O pedido da Platform que originou a execução (se houver), lido do pedido de vínculo gravado na pasta dela. */
     private UUID runRequestOf(ExecutionId id) {
         return LocalGate.readLinkRequest(runs.dir(id)).map(LocalGate.LinkRequest::runRequestId).orElse(null);
@@ -557,6 +706,11 @@ public final class PlatformService implements AutoCloseable {
             }
             if (authorizationsDue || !now.isBefore(nextAuthorizations)) {
                 if (!downloadAuthorizations(l, token.get(), now, budget)) return;
+            }
+            // AGENT-PYTHON-001: decisões gravadas vão primeiro (uma resposta perdida é repetida antes de qualquer pedido novo)
+            if (!sendDecisions(l, token.get(), now, budget)) return;
+            if (!now.isBefore(nextRunRequests)) {
+                if (!pollRunRequests(l, token.get(), now, budget)) return;
             }
             for (Delivery d : ordered()) {
                 if (budget[0] <= 0) break;

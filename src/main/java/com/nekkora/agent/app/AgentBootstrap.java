@@ -12,6 +12,7 @@ import com.nekkora.agent.exec.ApprovalStore;
 import com.nekkora.agent.exec.ExecutionController;
 import com.nekkora.agent.exec.ExecutionId;
 import com.nekkora.agent.exec.ExecutionState;
+import com.nekkora.agent.exec.PackageShelf;
 import com.nekkora.agent.exec.RunStore;
 import com.nekkora.agent.exec.SessionProbe;
 import com.nekkora.agent.obs.ActivityService;
@@ -181,6 +182,9 @@ public final class AgentBootstrap {
         platform.start();
         // AGENT-PYTHON-001: execuções do lançador (outro processo): noticiadas à coleta e reconciliadas quando o lançador morre
         new ExternalWatcher(runs, activity::track, e.clock()).start();
+        // AGENT-PYTHON-001 (Marco 2): pedidos de execução da Platform — decididos por fatos locais, lançados só depois da aceitação
+        new RunRequestCoordinator(platform, execution, new PackageShelf(PackageShelf.defaultRoot(dir.root()), e.writer()), execution.approvals(), runs,
+                dir.root().resolve("execucao").resolve("sonda"), e.clock()).start();
         if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
                 Field.of("adopted", execution.running()));
 
