@@ -193,7 +193,7 @@ public final class RunStore {
                 if (v instanceof Long n) counts.put(String.valueOf(k), n);
             });
             return Optional.of(new ExecutionRecord(new ExecutionId((String) m.get("id")), m.get("kind") instanceof String k ? ExecutionPackage.Kind.valueOf(k) : null,
-                    (String) m.get("package"), (String) m.get("fingerprint"), ExecutionState.valueOf((String) m.get("state")), code(m.get("code")),
+                    (String) m.get("package"), m.get("fingerprint") instanceof String fp ? fp : null, ExecutionState.valueOf((String) m.get("state")), code(m.get("code")),
                     Instant.parse((String) m.get("created")), instant(m.get("started")), instant(m.get("ended")), owner,
                     m.get("exitCode") instanceof Long x ? Math.toIntExact(x) : null, counts, Math.toIntExact((Long) m.get("suspensions")),
                     Math.toIntExact((Long) m.get("locks")), Boolean.TRUE.equals(m.get("adopted")), (Long) m.get("outputBytes"), origin(m.get("origin")),

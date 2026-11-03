@@ -38,7 +38,12 @@ import java.util.regex.Pattern;
 public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<String, String> files, String fingerprint,
                                Map<String, String> options, String frameworkVersion, String entry, List<String> origins, String generator) {
 
-    public enum Kind { STUDIO_PYTHON, LAB_GENERIC }
+    /**
+     * AGENT-PYTHON-001: {@code EXTERNAL_PYTHON} = pacote Python externo ({@code nekkora-external.json}, regra
+     * {@code nekkora-agent/external-python-fingerprint/1}); {@code EXTERNAL_MONITORED} = processo do cliente disparado pelo
+     * agendador dele e supervisionado pelo lançador (sem pacote e sem impressão: só aparece no registro da execução).
+     */
+    public enum Kind { STUDIO_PYTHON, LAB_GENERIC, EXTERNAL_PYTHON, EXTERNAL_MONITORED }
 
     /** Como o processo recebe dados: execução única, lista → planilha, planilha baixada (tabular) ou laboratório. */
     public enum Mode { SINGLE, LIST, TABULAR, LAB }

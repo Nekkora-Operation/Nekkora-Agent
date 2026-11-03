@@ -143,6 +143,8 @@ public final class PlatformService implements AutoCloseable {
     /** Execuções cuja cópia local não pode ser apagada pela retenção (entrega pendente do vínculo atual). */
     private final Set<ExecutionId> protectedRuns = ConcurrentHashMap.newKeySet();
     private final Map<ExecutionId, Long> lastSequence = new ConcurrentHashMap<>();
+    /** AGENT-PYTHON-001: pastas de execução já vistas SEM pedido de vínculo (com estado.json): não são lidas de novo. */
+    private final Set<ExecutionId> withoutLinkRequest = ConcurrentHashMap.newKeySet();
     /**
      * As entregas, lidas uma vez na abertura e mantidas aqui a cada gravação: só este processo grava em
      * {@code entregas/} (a trava de instância única garante), então a memória é a cópia fiel do disco.
@@ -386,7 +388,7 @@ public final class PlatformService implements AutoCloseable {
         // credencial recusada: nada novo é registrado por este vínculo (a execução pode seguir só local)
         if (l.get().refused()) return Action.refused(ErrorCode.PLT_CREDENTIAL_REFUSED);
         Optional<Authorization> z = authorizations.find(authorizationId);
-        if (fp.isEmpty() || z.isEmpty() || !z.get().fingerprint().equals(fp.get()) || !PackageFingerprint.RULE.equals(z.get().rule())
+        if (fp.isEmpty() || z.isEmpty() || !fp.get().equals(z.get().fingerprint()) || !PackageFingerprint.known(z.get().rule())
                 || !authorizations.effective(clock.instant()).isBefore(z.get().validUntil())) {
             return Action.refused(ErrorCode.PLT_AUTHORIZATION_REFUSED);
         }
@@ -425,9 +427,13 @@ public final class PlatformService implements AutoCloseable {
     }
 
     private void createDelivery(ExecutionId id, DeliveryStore.Intent i) {
+        createDelivery(id, i.agentId(), i.authorizationId(), i.fingerprint());
+    }
+
+    private void createDelivery(ExecutionId id, UUID agentId, UUID authorizationId, String fingerprint) {
         if (known.containsKey(id)) return;
         try {
-            Delivery d = Delivery.linked(id, i.agentId(), i.authorizationId(), i.fingerprint(), clock.instant());
+            Delivery d = Delivery.linked(id, agentId, authorizationId, fingerprint, clock.instant());
             deliveries.save(d);
             known.put(id, d);
             protectedRuns.add(id);
@@ -460,6 +466,35 @@ public final class PlatformService implements AutoCloseable {
         } catch (IOException e) {
             diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
         }
+    }
+
+    /**
+     * AGENT-PYTHON-001: execuções iniciadas FORA da janela (lançador do Python externo; pedido da Platform) trazem, na própria
+     * pasta, o pedido de vínculo ({@link LocalGate#LINK_REQUEST}) gravado ANTES do registro da execução. A entrega nasce aqui,
+     * só quando o {@code estado.json} já existe e só para o vínculo atual (outro Agent: ignorado). Só lê.
+     */
+    private void adoptLinkRequests(Link l, Instant now) {
+        java.io.File[] dirs = runs.root().toFile().listFiles(java.io.File::isDirectory);
+        if (dirs == null) return;
+        for (java.io.File f : dirs) {
+            if (!ExecutionId.valid(f.getName())) continue;
+            ExecutionId id = new ExecutionId(f.getName());
+            if (known.containsKey(id) || withoutLinkRequest.contains(id)) continue;
+            Path dir = f.toPath();
+            boolean hasRecord = Files.isRegularFile(dir.resolve("estado.json"));
+            Optional<LocalGate.LinkRequest> req = LocalGate.readLinkRequest(dir);
+            if (req.isEmpty()) {
+                if (hasRecord && !Files.exists(dir.resolve(LocalGate.LINK_REQUEST))) withoutLinkRequest.add(id);
+                continue;
+            }
+            if (!hasRecord || !req.get().agentId().equals(l.agentId())) continue;
+            createDelivery(id, req.get().agentId(), req.get().authorizationId(), req.get().fingerprint());
+        }
+    }
+
+    /** O pedido da Platform que originou a execução (se houver), lido do pedido de vínculo gravado na pasta dela. */
+    private UUID runRequestOf(ExecutionId id) {
+        return LocalGate.readLinkRequest(runs.dir(id)).map(LocalGate.LinkRequest::runRequestId).orElse(null);
     }
 
     // ------------------------------------------------------------------------------------------- consultas (sem rede)
@@ -507,6 +542,7 @@ public final class PlatformService implements AutoCloseable {
             Optional<Link> ol = vault.link();
             if (ol.isEmpty() || ol.get().refused() || contractRefused) return;
             Link l = ol.get();
+            adoptLinkRequests(l, now); // local, sem rede: a entrega nasce (e protege a cópia local) mesmo offline
             Optional<Destination> cfg = Destination.parse(configuredUrl.get());
             if (cfg.isEmpty() || !cfg.get().equals(l.destination())) return; // DESTINATION_CHANGED: nada é enviado
             Optional<String> token = vault.token();
@@ -666,7 +702,8 @@ public final class PlatformService implements AutoCloseable {
         if (d.runId() == null) {
             budget[0]--;
             SupervisorReports.Report rep = SupervisorReports.of(r);
-            Result<MachineClient.Registered> res = client.register(l.destination(), token, id.value(), d.authorizationId(), d.fingerprint(), rep.json());
+            Result<MachineClient.Registered> res = client.register(l.destination(), token, id.value(), d.authorizationId(), d.fingerprint(), runRequestOf(id),
+                    rep.json());
             if (res instanceof Ok<MachineClient.Registered> ok) {
                 contact(now);
                 String outcome = ok.value().outcome();

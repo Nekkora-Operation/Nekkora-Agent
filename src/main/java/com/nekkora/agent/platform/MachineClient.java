@@ -19,7 +19,7 @@ import java.util.UUID;
  */
 final class MachineClient {
     static final String CONTRACT = "1.0";
-    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0");
+    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0", "EXTERNAL_PYTHON_1_0", "RUN_REQUEST_1_0");
 
     /** Resultado de uma chamada. */
     sealed interface Result<T> permits Ok, Refused, Malformed, NoResponse {}
@@ -96,8 +96,19 @@ final class MachineClient {
     }
 
     Result<Registered> register(Destination d, String token, String executionId, UUID authorization, String fingerprint, String supervisorJson) {
-        String body = Json.obj().str("agentExecutionId", executionId).str("authorizationId", authorization.toString()).str("packageFingerprint", fingerprint)
-                .raw("supervisor", supervisorJson).toString();
+        return register(d, token, executionId, authorization, fingerprint, null, supervisorJson);
+    }
+
+    /**
+     * AGENT-PYTHON-001: {@code fingerprint} nulo (monitoramento de Python externo: sem impressão) vai AUSENTE do corpo;
+     * {@code runRequest}: execução de um pedido da Platform aceito por esta máquina.
+     */
+    Result<Registered> register(Destination d, String token, String executionId, UUID authorization, String fingerprint, UUID runRequest,
+                                String supervisorJson) {
+        Json.Obj o = Json.obj().str("agentExecutionId", executionId).str("authorizationId", authorization.toString());
+        if (fingerprint != null) o.str("packageFingerprint", fingerprint);
+        if (runRequest != null) o.str("runRequestId", runRequest.toString());
+        String body = o.raw("supervisor", supervisorJson).toString();
         return call(d, "POST", "/agent/api/v1/runs", token, body, j -> {
             UUID run = Json.uuid(j, "runId");
             Boolean created = Json.bool(j, "created");

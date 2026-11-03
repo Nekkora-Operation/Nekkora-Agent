@@ -34,7 +34,21 @@ final class AuthorizationCache {
 
     /** Uma autorização como o servidor a publicou. {@code fingerprint}: 64 hex, sem o prefixo {@code sha256:}. */
     record Authorization(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String fingerprint, String rule,
-                         Instant validUntil) {}
+                         Instant validUntil, String sourceKind) {
+        /** Pacote do formato Studio (o único tipo antes da AGENT-PYTHON-001). */
+        Authorization(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String fingerprint, String rule, Instant validUntil) {
+            this(authorizationId, workspaceId, automationId, automationVersionId, fingerprint, rule, validUntil, STUDIO_PACKAGE);
+        }
+
+        boolean monitored() {
+            return EXTERNAL_MONITORED.equals(sourceKind);
+        }
+    }
+
+    /** Origem explícita (030). Ausente no item (servidor anterior) = pacote Studio. */
+    static final String STUDIO_PACKAGE = "STUDIO_PACKAGE";
+    static final String EXTERNAL_PACKAGE = "EXTERNAL_PACKAGE";
+    static final String EXTERNAL_MONITORED = "EXTERNAL_MONITORED";
 
     /**
      * Situação de uma autorização diante de um pacote, no instante {@code now} do relógio local — nunca antes do último
@@ -102,8 +116,18 @@ final class AuthorizationCache {
         String fp = Json.text(m, "packageFingerprint");
         String rule = Json.text(m, "packageFingerprintRule");
         Instant until = Json.instant(m, "validUntil");
-        if (id == null || fp == null || !fp.matches("[0-9a-f]{64}") || rule == null || rule.length() > 80 || until == null) return null;
-        return new Authorization(id, Json.uuid(m, "workspaceId"), Json.uuid(m, "automationId"), Json.uuid(m, "automationVersionId"), fp, rule, until);
+        String kind = Json.text(m, "sourceKind");
+        if (kind == null) kind = STUDIO_PACKAGE;
+        if (id == null || until == null) return null;
+        if (EXTERNAL_MONITORED.equals(kind)) {
+            // monitoramento: sem versão e sem impressão; a automação é obrigatória (é ela que o vínculo local cita)
+            UUID automation = Json.uuid(m, "automationId");
+            if (fp != null || rule != null || automation == null) return null;
+            return new Authorization(id, Json.uuid(m, "workspaceId"), automation, null, null, null, until, kind);
+        }
+        if (!STUDIO_PACKAGE.equals(kind) && !EXTERNAL_PACKAGE.equals(kind)) return null; // origem desconhecida: não serve a nada
+        if (fp == null || !fp.matches("[0-9a-f]{64}") || rule == null || rule.length() > 80) return null;
+        return new Authorization(id, Json.uuid(m, "workspaceId"), Json.uuid(m, "automationId"), Json.uuid(m, "automationVersionId"), fp, rule, until, kind);
     }
 
     /** Download bem-sucedido: substitui a lista; as que estavam e sumiram passam a "encerradas na Platform". */
@@ -117,7 +141,7 @@ final class AuthorizationCache {
         for (Authorization z : fresh) {
             js.add(Json.obj().str("authorizationId", z.authorizationId().toString()).str("workspaceId", s(z.workspaceId())).str("automationId", s(z.automationId()))
                     .str("automationVersionId", s(z.automationVersionId())).str("packageFingerprint", z.fingerprint()).str("packageFingerprintRule", z.rule())
-                    .str("validUntil", z.validUntil().toString()).toString());
+                    .str("validUntil", z.validUntil().toString()).str("sourceKind", z.sourceKind()).toString());
         }
         List<String> endedJs = new ArrayList<>();
         for (UUID g : gone) endedJs.add(com.nekkora.agent.storage.StrictJson.quote(g.toString()));
@@ -146,11 +170,21 @@ final class AuthorizationCache {
         now = effective(now);
         Map<Authorization, Usability> out = new LinkedHashMap<>();
         for (Authorization z : items) {
-            if (!z.fingerprint().equals(fingerprintHex)) continue;
-            Usability u = !PackageFingerprint.RULE.equals(z.rule()) ? Usability.RULE_UNKNOWN : now.isBefore(z.validUntil()) ? Usability.USABLE : Usability.EXPIRED;
+            if (z.fingerprint() == null || !z.fingerprint().equals(fingerprintHex)) continue;
+            Usability u = !PackageFingerprint.known(z.rule()) ? Usability.RULE_UNKNOWN : now.isBefore(z.validUntil()) ? Usability.USABLE : Usability.EXPIRED;
             out.put(z, u);
         }
         return out;
+    }
+
+    /**
+     * AGENT-PYTHON-001: a autorização de MONITORAMENTO usável agora para a automação ({@code validUntil} depois do instante com
+     * piso). Mais de uma: a de prazo mais longo (desempate pelo identificador), escolha determinística e registrada na execução.
+     */
+    synchronized Optional<Authorization> monitoredFor(UUID automationId, Instant now) {
+        Instant t = effective(now);
+        return items.stream().filter(Authorization::monitored).filter(z -> automationId.equals(z.automationId())).filter(z -> t.isBefore(z.validUntil()))
+                .max(java.util.Comparator.comparing(Authorization::validUntil).thenComparing(Authorization::authorizationId));
     }
 
     /** Instante usado para conferir prazos: o relógio local, nunca abaixo do piso; a consulta também eleva o piso. */

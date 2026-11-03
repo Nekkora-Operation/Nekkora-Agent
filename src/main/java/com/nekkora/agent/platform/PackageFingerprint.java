@@ -10,6 +10,13 @@ import java.util.Optional;
  */
 public final class PackageFingerprint {
     public static final String RULE = "nekkora-agent/package-fingerprint/1";
+    /** AGENT-PYTHON-001: regra PRÓPRIA do pacote Python externo (mesmo algoritmo; tipo e descritor próprios). */
+    public static final String EXTERNAL_RULE = "nekkora-agent/external-python-fingerprint/1";
+
+    /** Regras que este Agent sabe calcular; qualquer outra = a autorização não serve. */
+    public static boolean known(String rule) {
+        return RULE.equals(rule) || EXTERNAL_RULE.equals(rule);
+    }
 
     private PackageFingerprint() {}
 

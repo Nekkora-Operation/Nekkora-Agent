@@ -85,6 +85,8 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         return switch (p.kind()) {
             case STUDIO_PYTHON -> "Pacote local importado (projeto Python com nekkora-rpa)";
             case LAB_GENERIC -> "Processo de laboratório (sem framework)";
+            case EXTERNAL_PYTHON -> "Pacote Python externo (sem framework Nekkora)";
+            case EXTERNAL_MONITORED -> "Python do cliente monitorado (agendador do cliente)";
         };
     }
 
@@ -180,6 +182,8 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         return switch (o) {
             case LOCAL_UI -> "Janela do Agent (pessoa operadora)";
             case STUDIO_LOCAL -> "Studio nesta máquina (canal local)";
+            case EXTERNAL_SCHEDULER -> "Agendador do cliente, pelo lançador do Agent";
+            case PLATFORM_REQUEST -> "Pedido de execução da Platform, aceito nesta máquina";
             case UNKNOWN -> "Não registrada (execução anterior a esta versão)";
         };
     }

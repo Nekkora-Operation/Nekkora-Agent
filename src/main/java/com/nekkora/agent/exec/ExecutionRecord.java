@@ -33,6 +33,10 @@ public record ExecutionRecord(ExecutionId id, ExecutionPackage.Kind kind, String
         LOCAL_UI,
         /** Reservado para o canal local (D-SA-01): ainda não produzido por esta versão. */
         STUDIO_LOCAL,
+        /** AGENT-PYTHON-001: o agendador do cliente chamou o lançador do Agent (processo do cliente, vínculo aprovado). */
+        EXTERNAL_SCHEDULER,
+        /** AGENT-PYTHON-001: pedido de execução da Platform, aceito por esta máquina (decisão gravada antes do início). */
+        PLATFORM_REQUEST,
         UNKNOWN
     }
 

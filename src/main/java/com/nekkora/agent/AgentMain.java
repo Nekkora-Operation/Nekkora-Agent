@@ -28,6 +28,11 @@ public final class AgentMain {
     private AgentMain() {}
 
     public static void main(String[] args) throws InterruptedException, InvocationTargetException {
+        // AGENT-PYTHON-001: comandos de console (lançador e vínculo do Python externo), sem janela e sem a trava de instância
+        if (com.nekkora.agent.app.ExternalCli.handles(args)) {
+            System.exit(com.nekkora.agent.app.ExternalCli.run(args, System.out, System.err, System.in, java.time.Clock.systemUTC()));
+            return;
+        }
         // antes de qualquer uso de Preferences: o tema do Studio não é lido nem alterado (D-05)
         IsolatedPreferencesFactory.install();
         AgentOptions options = AgentOptions.parse(args);

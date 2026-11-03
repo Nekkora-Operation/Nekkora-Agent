@@ -675,6 +675,9 @@ public final class ExecutionController implements AutoCloseable {
         int n = 0;
         for (ExecutionRecord r : store.all()) {
             if (r.state().terminal() || unsaved.containsKey(r.id()) || isActive(r.id())) continue;
+            // AGENT-PYTHON-001: execução do LANÇADOR (outro processo é o supervisor dela): nunca adotada aqui; ExternalRuns a
+            // reconcilia só quando o lançador dono já não existe
+            if (r.kind() == ExecutionPackage.Kind.EXTERNAL_MONITORED) continue;
             n++;
             store.event(r.id(), clock.instant(), "RECONCILE", Map.of("state", r.state().name()));
             if (r.state() == ExecutionState.STARTING) {

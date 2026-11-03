@@ -179,6 +179,8 @@ public final class AgentBootstrap {
         platform.load();
         activity.start(); // retoma a coleta pendente (inclusive da execução adotada) a partir das posições gravadas
         platform.start();
+        // AGENT-PYTHON-001: execuções do lançador (outro processo): noticiadas à coleta e reconciliadas quando o lançador morre
+        new ExternalWatcher(runs, activity::track, e.clock()).start();
         if (reconciled > 0) log.warn(LogEvent.EXEC_RECONCILED, ErrorCode.EXEC_AGENT_RESTARTED, Field.of("records", reconciled),
                 Field.of("adopted", execution.running()));
 

@@ -69,7 +69,7 @@ final class FakeGateway implements HttpTransport {
 
     static final class Authz {
         UUID org, id, worker, workspace, automation, version;
-        String fingerprint, rule;
+        String fingerprint, rule, sourceKind = "STUDIO_PACKAGE";
         Instant validUntil;
         boolean revoked;
     }
@@ -145,6 +145,20 @@ final class FakeGateway implements HttpTransport {
         z.version = UUID.randomUUID();
         z.fingerprint = fingerprint;
         z.rule = rule;
+        z.validUntil = until;
+        authorizations.put(z.id, z);
+        return z.id;
+    }
+
+    /** AGENT-PYTHON-001: autorização de MONITORAMENTO (sem versão e sem impressão) para a automação. */
+    UUID authorizeMonitored(UUID org, UUID worker, UUID automation, Instant until) {
+        Authz z = new Authz();
+        z.org = org;
+        z.id = UUID.randomUUID();
+        z.worker = worker;
+        z.workspace = UUID.randomUUID();
+        z.automation = automation;
+        z.sourceKind = "EXTERNAL_MONITORED";
         z.validUntil = until;
         authorizations.put(z.id, z);
         return z.id;
@@ -226,8 +240,8 @@ final class FakeGateway implements HttpTransport {
             for (Authz z : authorizations.values()) {
                 if (!z.org.equals(m.org) || !z.worker.equals(m.worker) || z.revoked || !clock.instant().isBefore(z.validUntil)) continue;
                 items.add(Json.obj().str("authorizationId", z.id.toString()).str("workspaceId", z.workspace.toString()).str("automationId", z.automation.toString())
-                        .str("automationVersionId", z.version.toString()).str("packageFingerprint", z.fingerprint).str("packageFingerprintRule", z.rule)
-                        .str("validUntil", z.validUntil.toString()).toString());
+                        .str("automationVersionId", z.version == null ? null : z.version.toString()).str("packageFingerprint", z.fingerprint)
+                        .str("packageFingerprintRule", z.rule).str("validUntil", z.validUntil.toString()).str("sourceKind", z.sourceKind).toString());
             }
             return ok("{\"items\":" + Json.list(items) + "}");
         }
@@ -324,18 +338,18 @@ final class FakeGateway implements HttpTransport {
         UUID auth = Json.uuid(j, "authorizationId");
         String fp = Json.text(j, "packageFingerprint");
         Map<String, Object> sup = Json.object(j.get("supervisor"));
-        if (ex == null || !ex.matches("ex-[0-9a-f]{32}") || auth == null || fp == null || !fp.matches("[0-9a-f]{64}") || sup == null || !validReport(sup)) {
+        if (ex == null || !ex.matches("ex-[0-9a-f]{32}") || auth == null || fp != null && !fp.matches("[0-9a-f]{64}") || sup == null || !validReport(sup)) {
             return err(400, "invalid_request", null);
         }
         Run existing = runs.get(m.id + "/" + ex);
         if (existing != null) {
-            if (!existing.authorization.equals(auth) || !existing.fingerprint.equals(fp)) return err(409, "conflict", null);
+            if (!existing.authorization.equals(auth) || !java.util.Objects.equals(existing.fingerprint, fp)) return err(409, "conflict", null);
             String o = decide(existing, sup);
             return status(200, Json.obj().str("runId", existing.id.toString()).bool("created", false).str("state", existing.state).str("reportOutcome", o).toString());
         }
         Authz z = authorizations.get(auth);
         if (z == null || !z.org.equals(m.org) || !z.worker.equals(m.worker)) return err(403, "forbidden", null);
-        if (!z.fingerprint.equals(fp)) return err(403, "forbidden", null);
+        if (!java.util.Objects.equals(z.fingerprint, fp)) return err(403, "forbidden", null); // monitoramento: ambos nulos
         Run run = new Run();
         run.id = UUID.randomUUID();
         run.agent = m.id;
