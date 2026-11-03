@@ -1,0 +1,1 @@
+# sem dependencias externas (o ambiente preparado so precisa do Python)

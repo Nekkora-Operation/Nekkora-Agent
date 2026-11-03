@@ -57,6 +57,9 @@ public final class PlatformService implements AutoCloseable {
     static final Duration AUTHORIZATIONS = Duration.ofMinutes(5);
     /** AGENT-PYTHON-001: consulta dos pedidos de execução (puxados pela máquina; nenhum canal aberto pela Platform). */
     static final Duration RUN_REQUESTS = Duration.ofSeconds(10);
+    /** Só laboratório (AGENT-PYTHON-001): propriedade que descarta, uma vez, a resposta de uma decisão já gravada pela Platform. */
+    public static final String LAB_LOSE_DECISION_RESPONSE = "nekkora.agent.lab.perderConfirmacaoDecisao";
+    static final java.util.concurrent.atomic.AtomicBoolean LOST_DECISION_RESPONSE = new java.util.concurrent.atomic.AtomicBoolean();
     /** Conectividade só é dada como ativa até este tempo depois da última resposta (o mesmo critério da Platform). */
     static final Duration CONTACT_FRESH = Duration.ofSeconds(180);
     /** Pedidos HTTP no máximo por rodada (a rodada seguinte continua de onde parou). */
@@ -619,6 +622,11 @@ public final class PlatformService implements AutoCloseable {
                     "ACCEPTED".equals(r.decision()) ? null : r.reason(), "REFUSED".equals(r.decision()) ? null : r.executionId());
             RunRequestStore.Stage next;
             String server;
+            if (res instanceof Ok<MachineClient.Decision> && Boolean.getBoolean(LAB_LOSE_DECISION_RESPONSE) && LOST_DECISION_RESPONSE.compareAndSet(false, true)) {
+                // SÓ LABORATÓRIO (injeção de falha, nunca definida na distribuição): a Platform gravou a decisão, mas a resposta
+                // "se perde" aqui UMA vez — a decisão gravada é reenviada e a Platform responde UNCHANGED (sem outro processo)
+                res = new MachineClient.NoResponse<>();
+            }
             if (res instanceof Ok<MachineClient.Decision> ok) {
                 contact(now);
                 server = ok.value().outcome();

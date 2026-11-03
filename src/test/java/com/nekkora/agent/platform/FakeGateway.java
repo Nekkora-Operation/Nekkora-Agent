@@ -74,8 +74,17 @@ final class FakeGateway implements HttpTransport {
         boolean revoked;
     }
 
-    static final class Run {
+    /** AGENT-PYTHON-001: pedido de execução (030), lado do servidor simulado. */
+    static final class Req {
         UUID id, agent, authorization;
+        String fingerprint, rule, state = "REQUESTED", execution, reason;
+        Instant validUntil;
+        int deliveries, decisions;
+        UUID run;
+    }
+
+    static final class Run {
+        UUID id, agent, authorization, runRequest;
         String execution, fingerprint, state, details;
         final TreeMap<Long, String> events = new TreeMap<>();
         final List<long[]> declared = new ArrayList<>();
@@ -90,6 +99,7 @@ final class FakeGateway implements HttpTransport {
     final Map<UUID, Credential> credentials = new LinkedHashMap<>();
     final Map<UUID, Authz> authorizations = new LinkedHashMap<>();
     final Map<String, Run> runs = new LinkedHashMap<>();
+    final Map<UUID, Req> runRequests = new LinkedHashMap<>();
     final Map<String, Deque<Fault>> faults = new LinkedHashMap<>();
     final List<Request> requests = new CopyOnWriteArrayList<>();
     final List<String> bodies = new CopyOnWriteArrayList<>();
@@ -148,6 +158,20 @@ final class FakeGateway implements HttpTransport {
         z.validUntil = until;
         authorizations.put(z.id, z);
         return z.id;
+    }
+
+    /** AGENT-PYTHON-001: pedido de execução da versão da autorização para este Agent (REQUESTED). */
+    UUID request(UUID agent, UUID authorization, Instant until) {
+        Authz z = authorizations.get(authorization);
+        Req q = new Req();
+        q.id = UUID.randomUUID();
+        q.agent = agent;
+        q.authorization = authorization;
+        q.fingerprint = z.fingerprint;
+        q.rule = z.rule;
+        q.validUntil = until;
+        runRequests.put(q.id, q);
+        return q.id;
     }
 
     /** AGENT-PYTHON-001: autorização de MONITORAMENTO (sem versão e sem impressão) para a automação. */
@@ -246,6 +270,9 @@ final class FakeGateway implements HttpTransport {
             return ok("{\"items\":" + Json.list(items) + "}");
         }
         if (path.equals("/agent/api/v1/runs")) return register(m, j);
+        if (path.equals("/agent/api/v1/run-requests") && r.method().equals("GET")) return listRequests(m);
+        Matcher dec = Pattern.compile("/agent/api/v1/run-requests/([0-9a-f-]{36})/decision").matcher(path);
+        if (dec.matches()) return decide(m, UUID.fromString(dec.group(1)), j);
         Matcher sup = Pattern.compile("/agent/api/v1/runs/(ex-[0-9a-f]{32})/supervisor").matcher(path);
         if (sup.matches()) return supervisor(m, sup.group(1), j);
         Matcher ev = Pattern.compile("/agent/api/v1/runs/(ex-[0-9a-f]{32})/events").matcher(path);
@@ -331,6 +358,63 @@ final class FakeGateway implements HttpTransport {
         return c != null && c.org.toString().equals(m.group(2)) ? c : null; // RLS: só a credencial da organização do token
     }
 
+    // ----- pedido de execução (030)
+
+    private Response listRequests(Agent m) {
+        List<String> items = new ArrayList<>();
+        for (Req q : runRequests.values()) {
+            if (!q.agent.equals(m.id)) continue;
+            if ((q.state.equals("REQUESTED") || q.state.equals("DELIVERED")) && !clock.instant().isBefore(q.validUntil)) {
+                q.state = "EXPIRED";
+                continue;
+            }
+            if (!List.of("REQUESTED", "DELIVERED", "ACCEPTED").contains(q.state)) continue;
+            if (!q.state.equals("ACCEPTED")) {
+                q.state = "DELIVERED";
+                q.deliveries++;
+            }
+            items.add(Json.obj().str("runRequestId", q.id.toString()).str("authorizationId", q.authorization.toString()).str("sourceKind", "EXTERNAL_PACKAGE")
+                    .str("packageFingerprint", q.fingerprint).str("packageFingerprintRule", q.rule).str("validUntil", q.validUntil.toString())
+                    .str("state", q.state).str("agentExecutionId", q.execution).toString());
+        }
+        return ok("{\"items\":" + Json.list(items) + "}");
+    }
+
+    private Response decide(Agent m, UUID id, Map<String, Object> j) {
+        Req q = runRequests.get(id);
+        if (q == null || !q.agent.equals(m.id)) return err(404, "not_found", null);
+        String d = Json.text(j, "decision");
+        String ex = Json.text(j, "agentExecutionId");
+        String reason = Json.text(j, "reason");
+        q.decisions++;
+        String outcome;
+        if (q.state.equals("REVOKED") || q.state.equals("EXPIRED")) outcome = q.state;
+        else if ((q.state.equals("REQUESTED") || q.state.equals("DELIVERED")) && !clock.instant().isBefore(q.validUntil)) {
+            q.state = "EXPIRED";
+            outcome = "EXPIRED";
+        } else if ("ACCEPTED".equals(d)) {
+            if (q.state.equals("REQUESTED") || q.state.equals("DELIVERED")) {
+                q.state = "ACCEPTED";
+                q.execution = ex;
+                outcome = "APPLIED";
+            } else outcome = List.of("ACCEPTED", "NOT_STARTED", "RUN_LINKED").contains(q.state) && ex.equals(q.execution) ? "UNCHANGED" : "CONFLICT";
+        } else if ("REFUSED".equals(d)) {
+            if (q.state.equals("REQUESTED") || q.state.equals("DELIVERED")) {
+                q.state = "REFUSED";
+                q.reason = reason;
+                outcome = "APPLIED";
+            } else outcome = q.state.equals("REFUSED") && reason.equals(q.reason) ? "UNCHANGED" : "CONFLICT";
+        } else {
+            if (q.state.equals("ACCEPTED") && ex.equals(q.execution)) {
+                q.state = "NOT_STARTED";
+                outcome = "APPLIED";
+            } else outcome = q.state.equals("NOT_STARTED") && ex.equals(q.execution) ? "UNCHANGED" : "CONFLICT";
+        }
+        boolean okStatus = outcome.equals("APPLIED") || outcome.equals("UNCHANGED");
+        return status(okStatus ? 200 : 409, Json.obj().str("runRequestId", id.toString()).str("outcome", outcome).str("state", q.state)
+                .str("agentExecutionId", q.execution).toString());
+    }
+
     // ----- registro e relatório (sec. 6.3 e 7)
 
     private Response register(Agent m, Map<String, Object> j) {
@@ -341,17 +425,29 @@ final class FakeGateway implements HttpTransport {
         if (ex == null || !ex.matches("ex-[0-9a-f]{32}") || auth == null || fp != null && !fp.matches("[0-9a-f]{64}") || sup == null || !validReport(sup)) {
             return err(400, "invalid_request", null);
         }
+        UUID runRequest = Json.uuid(j, "runRequestId");
         Run existing = runs.get(m.id + "/" + ex);
         if (existing != null) {
-            if (!existing.authorization.equals(auth) || !java.util.Objects.equals(existing.fingerprint, fp)) return err(409, "conflict", null);
+            if (!existing.authorization.equals(auth) || !java.util.Objects.equals(existing.fingerprint, fp)
+                    || !java.util.Objects.equals(existing.runRequest, runRequest)) return err(409, "conflict", null);
             String o = decide(existing, sup);
             return status(200, Json.obj().str("runId", existing.id.toString()).bool("created", false).str("state", existing.state).str("reportOutcome", o).toString());
         }
         Authz z = authorizations.get(auth);
         if (z == null || !z.org.equals(m.org) || !z.worker.equals(m.worker)) return err(403, "forbidden", null);
         if (!java.util.Objects.equals(z.fingerprint, fp)) return err(403, "forbidden", null); // monitoramento: ambos nulos
+        if (runRequest != null) {
+            Req q = runRequests.get(runRequest);
+            if (q == null) return err(404, "not_found", null);
+            if (!q.state.equals("ACCEPTED") || !ex.equals(q.execution) || !q.agent.equals(m.id)) return err(409, "conflict", null);
+        }
         Run run = new Run();
         run.id = UUID.randomUUID();
+        run.runRequest = runRequest;
+        if (runRequest != null) {
+            runRequests.get(runRequest).state = "RUN_LINKED";
+            runRequests.get(runRequest).run = run.id;
+        }
         run.agent = m.id;
         run.execution = ex;
         run.authorization = auth;
