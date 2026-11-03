@@ -41,7 +41,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ExecutionController implements AutoCloseable {
 
     /** Pedido tipado (nenhuma linha de comando livre). {@code input} só quando o pacote exige entrada. */
-    public record Request(Path packageDir, String fingerprint, Path python, Path input, Path outputRoot, Duration timeout) {
+    public record Request(Path packageDir, String fingerprint, Path python, Path input, Path outputRoot, Duration timeout, ExecutionId presetId,
+                          ExecutionRecord.Origin origin, PreLaunch preLaunch) {
         public Request {
             Objects.requireNonNull(packageDir);
             Objects.requireNonNull(fingerprint);
@@ -49,6 +50,20 @@ public final class ExecutionController implements AutoCloseable {
             Objects.requireNonNull(outputRoot);
             timeout = timeout == null ? DEFAULT_TIMEOUT : timeout;
         }
+
+        /** Pedido da janela do Agent (identificador novo, origem LOCAL_UI). */
+        public Request(Path packageDir, String fingerprint, Path python, Path input, Path outputRoot, Duration timeout) {
+            this(packageDir, fingerprint, python, input, outputRoot, timeout, null, null, null);
+        }
+    }
+
+    /**
+     * AGENT-PYTHON-001: gravação feita na pasta da execução DEPOIS de todas as conferências e ANTES do estado STARTING (e,
+     * portanto, antes da criação do processo) — o pedido de vínculo de uma execução pedida pela Platform. Falha aqui = nada
+     * é lançado.
+     */
+    public interface PreLaunch {
+        void write(Path runDir, ExecutionId id) throws IOException;
     }
 
     /**
@@ -213,18 +228,22 @@ public final class ExecutionController implements AutoCloseable {
         synchronized (lock) {
             if (active != null) throw new ExecRefused(ErrorCode.EXEC_ALREADY_RUNNING);
             flushUnsaved();
-            ExecutionId id = ExecutionId.random();
+            // identificador reservado (pedido da Platform: gravado na decisão ANTES do aceite). Uma pasta que já existe significa
+            // que este identificador já foi usado: nada é lançado de novo (no máximo um processo por pedido)
+            ExecutionId id = req.presetId() != null ? req.presetId() : ExecutionId.random();
+            if (req.presetId() != null && Files.exists(store.dir(id))) throw new ExecRefused(ErrorCode.EXEC_STORAGE_FAILED);
+            ExecutionRecord.Origin origin = req.origin() != null ? req.origin() : ORIGIN;
             Instant now = clock.instant();
             ExecutionPackage pkg;
             try {
                 pkg = ExecutionPackage.inspect(req.packageDir());
             } catch (ExecRefused e) {
                 throw blocked(new ExecutionRecord(id, null, "pacote", "sha256:" + "0".repeat(64), ExecutionState.READY, null, now, null, null, null, null,
-                        Map.of(), 0, 0, false, 0).withOrigin(ORIGIN), e.code());
+                        Map.of(), 0, 0, false, 0).withOrigin(origin), e.code());
             }
             // no registro, o pacote é identificado só pelo tipo e pela impressão digital (o nome da pasta pode ser de um cliente)
             ExecutionRecord r = new ExecutionRecord(id, pkg.kind(), "pacote " + pkg.shortFingerprint(), pkg.fingerprint(), ExecutionState.READY, null, now,
-                    null, null, null, null, Map.of(), 0, 0, false, 0).withOrigin(ORIGIN);
+                    null, null, null, null, Map.of(), 0, 0, false, 0).withOrigin(origin);
             // a impressão digital conferida AGORA precisa ser a que a pessoa escolheu e aprovou
             if (!pkg.fingerprint().equals(req.fingerprint())) throw blocked(r, ErrorCode.EXEC_PACKAGE_CHANGED);
             if (!approvals.approved(pkg)) throw blocked(r, ErrorCode.EXEC_NOT_APPROVED);
@@ -234,6 +253,7 @@ public final class ExecutionController implements AutoCloseable {
             try {
                 probe = PythonRuntime.probe(req.python(), agentDir.resolve("sonda"));
                 PythonRuntime.requireCompatible(probe, pkg);
+                if (pkg.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) PythonRuntime.requireDependencies(probe.python(), pkg);
             } catch (ExecRefused e) {
                 throw blocked(r, e.code());
             }
@@ -245,6 +265,13 @@ public final class ExecutionController implements AutoCloseable {
             Path outRoot = req.outputRoot().toAbsolutePath().normalize();
             if (!Files.isDirectory(outRoot) || inside(outRoot, pkg.dir()) || inside(outRoot, agentDir) || inside(agentDir, outRoot)) {
                 throw blocked(r, ErrorCode.EXEC_OUTPUT_INVALID);
+            }
+            if (req.preLaunch() != null) {
+                try {
+                    req.preLaunch().write(store.dir(id), id);
+                } catch (IOException | RuntimeException e) {
+                    throw blocked(r, ErrorCode.EXEC_STORAGE_FAILED);
+                }
             }
             // a partir daqui: STARTING (registro gravado antes de lançar — uma queda deixa rastro)
             r = r.moveTo(ExecutionState.STARTING, null, clock.instant());
@@ -267,6 +294,10 @@ public final class ExecutionController implements AutoCloseable {
             try {
                 ProcessBuilder pb = new ProcessBuilder(spec.command()).directory(spec.workDir().toFile());
                 PythonRuntime.minimalEnvironment(pb.environment());
+                if (pkg.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+                    pb.environment().put("NEKKORA_SAIDA", output.toString());
+                    pb.environment().put(ExternalLaunch.SIGNAL_ENV, output.resolve(ExternalLaunch.SIGNAL_FILE).toString());
+                }
                 p = pb.start();
                 p.getOutputStream().close();
             } catch (IOException | RuntimeException e) {

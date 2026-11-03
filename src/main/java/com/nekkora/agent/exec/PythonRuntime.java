@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -100,12 +101,66 @@ public final class PythonRuntime {
     /** O Python serve para o pacote? (3.12+; para o Studio, o {@code nekkora_rpa} na versão exata do manifesto). */
     public static void requireCompatible(Probe probe, ExecutionPackage pkg) throws ExecRefused {
         String[] v = probe.pythonVersion().split("\\.");
+        if (pkg.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+            // pacote externo: a faixa do descritor decide (nada de framework)
+            if (!ExecutionPackage.pythonSatisfies(pkg.pythonRequirement(), Integer.parseInt(v[0]), Integer.parseInt(v[1]))) {
+                throw new ExecRefused(ErrorCode.EXT_ENVIRONMENT_INCOMPATIBLE);
+            }
+            return;
+        }
         if (Integer.parseInt(v[0]) < 3 || Integer.parseInt(v[0]) == 3 && Integer.parseInt(v[1]) < 12) {
             throw new ExecRefused(ErrorCode.EXEC_PYTHON_INCOMPATIBLE);
         }
         Optional<String> need = pkg.requiredFramework();
         if (need.isPresent() && !need.equals(probe.framework())) throw new ExecRefused(ErrorCode.EXEC_PYTHON_INCOMPATIBLE);
     }
+
+    /**
+     * AGENT-PYTHON-001: pacote externo. A versão do Python precisa atender ao descritor e cada dependência declarada precisa
+     * estar instalada NA VERSÃO EXATA no ambiente preparado pela pessoa. Nada é instalado: a conferência roda um código FIXO
+     * ({@code python -I -B -c ...}) que só lê os metadados das distribuições instaladas.
+     */
+    public static void requireDependencies(Path python, ExecutionPackage pkg) throws ExecRefused {
+        if (pkg.dependencies().isEmpty()) return;
+        List<String> cmd = new ArrayList<>(List.of(python.toString(), "-I", "-B", "-c", DEPS_PROBE));
+        java.util.Map<String, String> wanted = new java.util.LinkedHashMap<>();
+        for (String d : pkg.dependencies()) {
+            String name = d.replaceAll("\\[.*]", "").split("==", 2)[0];
+            wanted.put(ExecutionPackage.normalized(name), d.split("==", 2)[1]);
+            cmd.add(name);
+        }
+        java.util.Map<String, Object> installed;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+            minimalEnvironment(pb.environment());
+            Process p = pb.start();
+            p.getOutputStream().close();
+            String out = new String(p.getInputStream().readNBytes(64 * 1024), java.nio.charset.StandardCharsets.UTF_8);
+            if (!p.waitFor(PROBE_TIMEOUT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                p.destroyForcibly();
+                throw new ExecRefused(ErrorCode.EXT_ENVIRONMENT_INCOMPATIBLE);
+            }
+            int i = out.indexOf("NEKKORA-AGENT-DEPS ");
+            if (i < 0) throw new ExecRefused(ErrorCode.EXT_ENVIRONMENT_INCOMPATIBLE);
+            installed = JsonReader.object(out.substring(i + "NEKKORA-AGENT-DEPS ".length()).strip());
+        } catch (IOException | JsonReader.Invalid | InterruptedException | RuntimeException e) {
+            throw new ExecRefused(ErrorCode.EXT_ENVIRONMENT_INCOMPATIBLE);
+        }
+        for (java.util.Map.Entry<String, String> w : wanted.entrySet()) {
+            Object v = null;
+            for (java.util.Map.Entry<String, Object> e : installed.entrySet()) if (ExecutionPackage.normalized(e.getKey()).equals(w.getKey())) v = e.getValue();
+            if (!w.getValue().equals(v)) throw new ExecRefused(ErrorCode.EXT_ENVIRONMENT_INCOMPATIBLE);
+        }
+    }
+
+    static final String DEPS_PROBE = "import sys, json, importlib.metadata as m\n"
+            + "out = {}\n"
+            + "for n in sys.argv[1:]:\n"
+            + "    try:\n"
+            + "        out[n] = m.version(n)\n"
+            + "    except Exception:\n"
+            + "        out[n] = None\n"
+            + "print('NEKKORA-AGENT-DEPS ' + json.dumps(out))\n";
 
     /** Deixa só as variáveis da lista fechada (nada de chaves de API, segredos, PYTHONPATH…). */
     public static void minimalEnvironment(Map<String, String> env) {

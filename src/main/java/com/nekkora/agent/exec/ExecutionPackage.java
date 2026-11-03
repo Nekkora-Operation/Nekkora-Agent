@@ -36,7 +36,8 @@ import java.util.regex.Pattern;
  * como DECLARAÇÃO do pacote ({@link #declaredGenerator()}) e a interface o mostra como não verificado.
  */
 public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<String, String> files, String fingerprint,
-                               Map<String, String> options, String frameworkVersion, String entry, List<String> origins, String generator) {
+                               Map<String, String> options, String frameworkVersion, String entry, List<String> origins, String generator,
+                               String pythonRequirement, List<String> dependencies, String packageVersion) {
 
     /**
      * AGENT-PYTHON-001: {@code EXTERNAL_PYTHON} = pacote Python externo ({@code nekkora-external.json}, regra
@@ -51,6 +52,13 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
     public static final String STUDIO_MANIFEST = "manifest.json";
     public static final String LAB_DESCRIPTOR = "nekkora-agent-lab.json";
     public static final String LAB_SCHEMA = "nekkora-agent/lab-package";
+    /** AGENT-PYTHON-001: pacote Python externo (sem framework Nekkora) e a regra PRÓPRIA da impressão dele. */
+    public static final String EXTERNAL_DESCRIPTOR = "nekkora-external.json";
+    public static final String EXTERNAL_SCHEMA = "nekkora-agent/external-python-package";
+    public static final String EXTERNAL_RULE = "nekkora-agent/external-python-fingerprint/1";
+    public static final String STUDIO_RULE = "nekkora-agent/package-fingerprint/1";
+    private static final Pattern EXTERNAL_PYTHON_REQ = Pattern.compile("(>=|==|~=)([0-9]{1,2})\\.([0-9]{1,2})(\\.\\*)?(,<([0-9]{1,2})\\.([0-9]{1,2}))?");
+    private static final Pattern EXTERNAL_DEP = Pattern.compile("([A-Za-z0-9][A-Za-z0-9._-]{0,79})(\\[[A-Za-z0-9,._-]{1,80}])?==([0-9][0-9A-Za-z.+!-]{0,40})");
     static final int MAX_FILES = 500;
     static final long MAX_BYTES = 50L * 1024 * 1024;
     private static final Pattern OPTION = Pattern.compile("--[a-z][a-z-]{0,30}");
@@ -66,6 +74,28 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         files = java.util.Collections.unmodifiableMap(new TreeMap<>(files));
         options = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(options));
         origins = List.copyOf(origins);
+        dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
+    }
+
+    /** Pacote do Studio ou de laboratório (sem os campos do pacote externo). */
+    public ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<String, String> files, String fingerprint, Map<String, String> options,
+                            String frameworkVersion, String entry, List<String> origins, String generator) {
+        this(kind, dir, name, mode, files, fingerprint, options, frameworkVersion, entry, origins, generator, null, List.of(), null);
+    }
+
+    /** O descritor do tipo (o arquivo que entra na impressão junto com os listados). */
+    public static String descriptorOf(Kind kind) {
+        return switch (kind) {
+            case STUDIO_PYTHON -> STUDIO_MANIFEST;
+            case LAB_GENERIC -> LAB_DESCRIPTOR;
+            case EXTERNAL_PYTHON -> EXTERNAL_DESCRIPTOR;
+            case EXTERNAL_MONITORED -> throw new IllegalArgumentException("monitoramento não tem pacote");
+        };
+    }
+
+    /** A regra da impressão do tipo: pacote externo tem a sua; Studio e laboratório, a /1. */
+    public static String ruleOf(Kind kind) {
+        return kind == Kind.EXTERNAL_PYTHON ? EXTERNAL_RULE : STUDIO_RULE;
     }
 
     /** As 12 primeiras posições da impressão digital, para a interface. */
@@ -89,6 +119,12 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         if (!Files.isDirectory(dir)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_NOT_FOUND);
         Path studio = dir.resolve(STUDIO_MANIFEST);
         Path lab = dir.resolve(LAB_DESCRIPTOR);
+        Path external = dir.resolve(EXTERNAL_DESCRIPTOR);
+        if (Files.isRegularFile(external, LinkOption.NOFOLLOW_LINKS)) {
+            // um pacote não passa por dois tipos
+            if (Files.exists(studio, LinkOption.NOFOLLOW_LINKS) || Files.exists(lab, LinkOption.NOFOLLOW_LINKS)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+            return external(dir, read(external));
+        }
         if (Files.isRegularFile(lab, LinkOption.NOFOLLOW_LINKS)) return lab(dir, read(lab));
         if (Files.isRegularFile(studio, LinkOption.NOFOLLOW_LINKS)) return studio(dir, read(studio));
         throw new ExecRefused(ErrorCode.EXEC_PACKAGE_UNKNOWN);
@@ -160,6 +196,79 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
                 Map.of("output", "--output"), null, entry, List.of(), generator(m));
     }
 
+    /**
+     * AGENT-PYTHON-001: pacote Python externo. Descritor 1.0.x com nome, versão do projeto, entrada relativa {@code .py} listada,
+     * versão de Python, dependências com versão EXATA e os arquivos com hash. Ambiente virtual, credenciais e cache nunca
+     * entram (recusa). O pacote não pede segredo nem framework: o processo roda com o Python preparado pela pessoa.
+     */
+    private static ExecutionPackage external(Path dir, Map<String, Object> m) throws ExecRefused {
+        String version = JsonReader.text(m, "version");
+        if (!EXTERNAL_SCHEMA.equals(JsonReader.text(m, "schema")) || version == null || !version.matches("1\\.0\\.[0-9]{1,3}")) {
+            throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+        }
+        String name = JsonReader.text(m, "name");
+        String pkgVersion = JsonReader.text(m, "packageVersion");
+        String entry = JsonReader.text(m, "entry");
+        String python = JsonReader.text(m, "python");
+        if (name == null || !name.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}") || pkgVersion == null || !pkgVersion.matches("[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}")
+                || python == null || !EXTERNAL_PYTHON_REQ.matcher(python).matches()) {
+            throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+        }
+        List<?> deps = JsonReader.list(m, "dependencies");
+        if (deps == null || deps.size() > 200) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+        List<String> dependencies = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Object d : deps) {
+            Matcher dm = d instanceof String s ? EXTERNAL_DEP.matcher(s) : null;
+            if (dm == null || !dm.matches() || !seen.add(normalized(dm.group(1)))) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+            dependencies.add((String) d);
+        }
+        Map<String, String> files = files(JsonReader.obj(m, "files"));
+        if (files.containsKey(EXTERNAL_DESCRIPTOR) || files.containsKey(STUDIO_MANIFEST) || files.containsKey(LAB_DESCRIPTOR)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_UNSAFE);
+        for (String rel : files.keySet()) if (forbidden(rel)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_UNSAFE);
+        if (entry == null || !entry.endsWith(".py") || !entry.matches("[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}") || entry.contains("..") || entry.startsWith("/")) {
+            throw new ExecRefused(ErrorCode.EXEC_PACKAGE_UNSAFE); // entrada fora da raiz
+        }
+        if (!files.containsKey(entry)) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
+        verify(dir, files);
+        return new ExecutionPackage(Kind.EXTERNAL_PYTHON, dir, name, Mode.LAB, files, fingerprint(Kind.EXTERNAL_PYTHON, dir, files, EXTERNAL_DESCRIPTOR), Map.of(),
+                null, entry, List.of(), generator(m), python, dependencies, pkgVersion);
+    }
+
+    /** Nome de distribuição normalizado (PEP 503): comparação de dependências sem diferença de caixa, "_" ou ".". */
+    public static String normalized(String name) {
+        return name.toLowerCase(java.util.Locale.ROOT).replace('_', '-').replace('.', '-');
+    }
+
+    /** Nunca no pacote externo: ambiente virtual, cache, controle de versão, credenciais. */
+    static boolean forbidden(String rel) {
+        for (String seg : rel.split("/")) {
+            String l = seg.toLowerCase(java.util.Locale.ROOT);
+            if (List.of(".venv", "venv", "env", "__pycache__", ".git", ".hg", ".svn", ".idea", ".vscode", "node_modules").contains(l) || l.startsWith(".env")
+                    || l.endsWith(".pem") || l.endsWith(".key") || l.endsWith(".pfx") || l.endsWith(".p12") || l.startsWith("id_rsa") || l.startsWith("id_ed25519")
+                    || l.equals(".netrc") || l.equals(".pypirc") || l.endsWith(".pyc")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code python} do descritor ({@code >=3.10,<3.14}, {@code ==3.12.*}, {@code ~=3.11}) atende à versão {@code major.minor}? */
+    public static boolean pythonSatisfies(String requirement, int major, int minor) {
+        Matcher m = EXTERNAL_PYTHON_REQ.matcher(requirement == null ? "" : requirement);
+        if (!m.matches()) return false;
+        int rM = Integer.parseInt(m.group(2));
+        int rm = Integer.parseInt(m.group(3));
+        int cmp = Integer.compare(major * 100 + minor, rM * 100 + rm);
+        boolean ok = switch (m.group(1)) {
+            case ">=" -> cmp >= 0;
+            case "==" -> cmp == 0;
+            default -> major == rM && cmp >= 0; // ~=X.Y: mesma versão maior, menor >= Y
+        };
+        if (ok && m.group(5) != null) ok = major * 100 + minor < Integer.parseInt(m.group(6)) * 100 + Integer.parseInt(m.group(7));
+        return ok;
+    }
+
     private static Map<String, String> files(Map<String, Object> declared) throws ExecRefused {
         if (declared == null || declared.isEmpty()) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
         if (declared.size() > MAX_FILES) throw new ExecRefused(ErrorCode.EXEC_PACKAGE_UNSAFE);
@@ -213,7 +322,8 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
 
     /** Impressão digital: tipo + descritor + cada arquivo e hash (ordem fixa). Qualquer arquivo mudado a muda. */
     static String fingerprint(Kind kind, Path dir, Map<String, String> files, String descriptor) throws ExecRefused {
-        StringBuilder b = new StringBuilder("nekkora-agent/package-fingerprint/1\n").append(kind).append('\n');
+        // a primeira linha é a regra: o pacote externo tem a sua (external-python-fingerprint/1); a /1 do Studio não muda
+        StringBuilder b = new StringBuilder(ruleOf(kind)).append('\n').append(kind).append('\n');
         try {
             b.append(descriptor).append('\t').append(hash(Files.readAllBytes(dir.resolve(descriptor)))).append('\n');
         } catch (IOException e) {
