@@ -3,6 +3,16 @@
 Instruções curtas para os dois marcos da AGENT-PYTHON-001. **[pessoa]** marca um ato da pessoa, na Platform ou na máquina,
 que nenhum programa faz por ela. Nada aqui exige o Studio.
 
+> **Antes do primeiro teste, duas coisas que mudam o que você vê:**
+>
+> 1. **O lançador registra a execução mesmo com a janela do Agent fechada, mas a entrega à Platform espera o Agent aberto.**
+>    A tarefa agendada roda, o script recebe o mesmo código de saída e a execução fica gravada na máquina. Ela só aparece na
+>    Supervisão depois que o `Nekkora Agent.exe` (janela ou bandeja) estiver aberto e conectado; nada se perde nesse meio-tempo.
+> 2. **Uma autorização nova pode levar até 5 minutos para chegar à máquina.** O Agent baixa as autorizações periodicamente.
+>    Logo depois de clicar em **Autorizar monitoramento** ou **Autorizar execução local**, o lançador ainda pode sair com `121`
+>    (sem autorização válida, nada roda) e um pedido pode ser recusado com "a máquina não tem a autorização válida". Espere até 5 minutos com o
+>    Agent aberto e tente de novo.
+
 Os executáveis ficam na pasta do Agent instalado (`Nekkora Agent\`):
 - `Nekkora Agent.exe`: a janela e a bandeja; precisa estar aberto para **entregar** os fatos à Platform;
 - `nekkora-lancar.exe`: o lançador que a tarefa agendada chama;
@@ -33,7 +43,8 @@ resumo.
    | antes | `C:\cliente\venv\Scripts\python.exe` | `"C:\cliente\relatorio.py" --entrada vendas.csv --saida resumo.txt` |
    | depois | `C:\...\Nekkora Agent\nekkora-lancar.exe` | `--vinculo relatorio-csv -- "C:\cliente\venv\Scripts\python.exe" "C:\cliente\relatorio.py" --entrada vendas.csv --saida resumo.txt` |
 
-4. O Agent precisa ter baixado a autorização. Isso acontece até 5 minutos depois de ele ficar conectado.
+4. O Agent precisa ter baixado a autorização: até **5 minutos** com o Agent aberto e conectado (veja o aviso no início).
+   As execuções feitas com a janela fechada ficam guardadas e são entregues quando o Agent abrir.
 
 **O que aparece na tela (Supervisão):** uma linha por invocação, com:
 - automação e máquina;

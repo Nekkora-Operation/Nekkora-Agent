@@ -96,8 +96,6 @@ public final class ExecutionController implements AutoCloseable {
     }
 
     public static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(60);
-    /** Só laboratório (AGENT-PYTHON-001): propriedade que derruba o Agent logo depois de gravar STARTING. */
-    public static final String LAB_CRASH_AFTER_STARTING = "nekkora.agent.lab.quedaAposStarting";
     /**
      * D-SA-05: origem dos pedidos que entram por {@link #start}. Nesta versão a única porta é a janela do Agent; o canal
      * local (D-SA-01), quando existir, registra a sua própria origem. Origem do PEDIDO, nunca autoria do pacote.
@@ -279,9 +277,8 @@ public final class ExecutionController implements AutoCloseable {
             r = r.moveTo(ExecutionState.STARTING, null, clock.instant());
             store.save(r);
             store.event(id, clock.instant(), "STARTING", Map.of("kind", pkg.kind().name(), "mode", pkg.mode().name(), "session", s.id()));
-            // AGENT-PYTHON-001, SÓ LABORATÓRIO (injeção de falha, nunca definida na distribuição): queda do Agent na fronteira do
-            // início — STARTING gravado, processo ainda não criado. Prova que a reconciliação fecha como desconhecido e nada relança
-            if (Boolean.getBoolean(LAB_CRASH_AFTER_STARTING)) Runtime.getRuntime().halt(86);
+            // ponto nomeado (sem efeito na distribuição normal): STARTING gravado, processo ainda não criado
+            com.nekkora.agent.core.FaultPoints.reached(com.nekkora.agent.core.FaultPoints.Point.STARTING_SAVED_BEFORE_PROCESS);
             Path copy;
             Path output = outRoot.resolve(id.value());
             try {

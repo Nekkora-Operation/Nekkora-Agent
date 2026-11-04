@@ -32,6 +32,21 @@ Set-Location $root
 #  - jdk.crypto.ec: curvas elípticas do TLS (ECDHE/X25519 e certificados EC) no JDK 21 (carregado como provedor)
 $Modules = @('java.base', 'java.desktop', 'java.prefs', 'java.logging', 'jdk.unsupported', 'jdk.accessibility', 'java.net.http', 'jdk.crypto.ec')
 
+function Assert-NoLabFaults([string]$folder) {
+    foreach ($j in Get-ChildItem -Recurse -File -Filter '*.jar' $folder) {
+        $z = [System.IO.Compression.ZipFile]::OpenRead($j.FullName)
+        try {
+            $bad = @($z.Entries | Where-Object { $_.FullName -like 'com/nekkora/agent/labfaults/*' -or $_.FullName -like 'META-INF/services/com.nekkora.agent.core.FaultPoints*' })
+        } finally { $z.Dispose() }
+        if ($bad.Count -gt 0) { throw "distribuição com artefato de falhas de laboratório: $($j.Name) ($($bad[0].FullName))" }
+    }
+    if (Get-ChildItem -Recurse -File -Filter 'nekkora-agent-lab-falhas*' $folder) { throw 'distribuição com nekkora-agent-lab-falhas.jar' }
+    foreach ($c in Get-ChildItem -Recurse -File -Filter '*.cfg' $folder) {
+        if ((Get-Content -Raw $c.FullName) -match 'nekkora\.agent\.lab\.|labfaults') { throw "distribuição com opção de laboratório em $($c.Name)" }
+    }
+    Write-Host '      conferido: sem artefato, implementação ou opção de falhas de laboratório'
+}
+
 function Invoke-Checked([string]$what, [scriptblock]$block) {
     & $block
     if ($LASTEXITCODE -ne 0) { throw "$what falhou ($LASTEXITCODE)" }
@@ -145,6 +160,10 @@ $lines += ""
 $lines += "Biblioteca nativa: app\lib\flatlaf-$flatVersion-windows-x86_64.dll (extraída do JAR do FlatLaf; -Dflatlaf.nativeLibraryPath=`$APPDIR\lib)"
 $lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xms16m -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
 [System.IO.File]::WriteAllLines((Join-Path $app 'VERSOES.txt'), [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
+
+# AGENT-PYTHON-001: a distribuição normal nunca leva o artefato de falhas de laboratório (tools\lab-faults), nem uma
+# implementação de FaultPoints$Hook, nem propriedade nekkora.agent.lab.* nas opções dos executáveis
+Assert-NoLabFaults $app
 
 if ($NoZip) {
     # AGENT-PLATFORM-001: entrega por PR, sem ZIP; a pasta da imagem é o artefato de homologação

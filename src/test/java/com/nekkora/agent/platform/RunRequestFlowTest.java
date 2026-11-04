@@ -33,8 +33,7 @@ class RunRequestFlowTest {
 
     @AfterEach
     void clearLab() {
-        System.clearProperty(PlatformService.LAB_LOSE_DECISION_RESPONSE);
-        PlatformService.LOST_DECISION_RESPONSE.set(false);
+        com.nekkora.agent.core.FaultPoints.replaceForTests(null);
     }
 
     UUID agent;
@@ -82,7 +81,9 @@ class RunRequestFlowTest {
     @Test
     void confirmacaoPerdidaReenviaAMesmaDecisaoSemOutroLancamento() {
         Lab lab = ready();
-        System.setProperty(PlatformService.LAB_LOSE_DECISION_RESPONSE, "true");
+        java.util.concurrent.atomic.AtomicBoolean lost = new java.util.concurrent.atomic.AtomicBoolean();
+        com.nekkora.agent.core.FaultPoints.replaceForTests(
+                p -> p == com.nekkora.agent.core.FaultPoints.Point.DECISION_RESPONSE_RECEIVED && lost.compareAndSet(false, true));
         UUID q = lab.gw.request(agent, authorization, lab.clock.instant().plus(Duration.ofMinutes(15)));
         lab.clock.advance(Duration.ofSeconds(11));
         lab.tick(1);
