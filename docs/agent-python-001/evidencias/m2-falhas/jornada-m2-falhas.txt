@@ -1,0 +1,11 @@
+build: {"zipSha":"12d7992f9d2e3a6ba7fa4f105835a69d266b301dcdee35e5fd5cdf5a166d016e","fingerprint":"a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833"}
+agent_preparar: Agent preparado (commit 81f09eab9cc5f8f4506ca8b8d37a1ee8da4a7473) apontando para https://localhost:55897
+distribuicao_sem_falhas_de_laboratorio: true
+api_artefato(tipo|regra|impressao|sha256): 2|nekkora-agent/external-python-fingerprint/1|a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833|12d7992f9d2e3a6ba7fa4f105835a69d266b301dcdee35e5fd5cdf5a166d016e
+instalar: Pacote a aprovar NESTA m�quina: tipo: EXTERNAL_PYTHON nome/vers�o: relatorio-pedido 1.0.0 entrada: principal.py arquivos: 4 Python: >=3.10,<3.14 depend�ncias: (nenhuma) impress�o (nekkora-agent/external-python-fingerprint/1): a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833 gerador declarado (n�o verificado): nekkora-empacotar/1.0.0 ambiente: Python 3.12.10 compat�vel; depend�ncias
+s2: {"pedido":"6|1|ex-ba72117f1e29d9655e54652adc8abb0d|-","execucao":"4|-|true","execucoes_na_api":"1","pastas_locais":1,"decisoes_enviadas":2,"efeitos":1}
+s2_registro_da_falha: ["2026-11-04T03:43:25.941418800Z\tperderConfirmacaoDecisao\tDECISION_RESPONSE_RECEIVED\tresposta descartada"]
+s5_queda: {"pedido":"3|1|ex-9249ce6d375418b0c12fb6ae9f496679|-","local":{"estado":"STARTING","arquivos":["estado.json","eventos.jsonl","plataforma.json"]},"efeitos":1,"registro_da_falha":["2026-11-04T03:43:25.941418800Z\tperderConfirmacaoDecisao\tDECISION_RESPONSE_RECEIVED\tresposta descartada","2026-11-04T03:43:56.081856600Z\tquedaAposStarting\tSTARTING_SAVED_BEFORE_PROCESS\thalt(86)"]}
+s5_volta: {"pedido":"6|1|ex-9249ce6d375418b0c12fb6ae9f496679|-","execucao":"9|AGT-EXE-025|false","execucoes":"1","efeitos":1}
+s5_local_depois: {"estado":"OUTCOME_UNKNOWN","arquivos":["atividade.jsonl","estado.json","eventos.jsonl","plataforma.json"]}
+fim: provas de falha (S2, S5) concluídas

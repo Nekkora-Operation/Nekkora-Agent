@@ -114,7 +114,7 @@
         "requested": {"$ref": "#/$defs/instant"}, "source": {"enum": ["LOCAL_UI", "AGENT_SHUTDOWN", "STUDIO_LOCAL"]},
         "outcome": {"enum": ["PENDING", "CONFIRMED", "NOT_EFFECTIVE"]}}},
       "origin": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {
-        "kind": {"enum": ["LOCAL_UI", "STUDIO_LOCAL", "UNKNOWN"]}, "pairing_id": {"$ref": "#/$defs/uuid"}, "request_id": {"$ref": "#/$defs/uuid"}},
+        "kind": {"enum": ["LOCAL_UI", "STUDIO_LOCAL", "EXTERNAL_SCHEDULER", "PLATFORM_REQUEST", "UNKNOWN"]}, "pairing_id": {"$ref": "#/$defs/uuid"}, "request_id": {"$ref": "#/$defs/uuid"}},
         "if": {"properties": {"kind": {"const": "STUDIO_LOCAL"}}}, "then": {"required": ["pairing_id", "request_id"]},
         "else": {"not": {"anyOf": [{"required": ["pairing_id"]}, {"required": ["request_id"]}]}}}},
       "allOf": [

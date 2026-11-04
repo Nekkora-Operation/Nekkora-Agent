@@ -1,0 +1,15 @@
+build: {"zipSha":"12d7992f9d2e3a6ba7fa4f105835a69d266b301dcdee35e5fd5cdf5a166d016e","fingerprint":"a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833"}
+agent_preparar: Agent preparado (commit ec82f435b4093080a2ab64c92b47f76ee6eaff5f) apontando para https://localhost:55897
+api_artefato(tipo|regra|impressao|sha256): 2|nekkora-agent/external-python-fingerprint/1|a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833|12d7992f9d2e3a6ba7fa4f105835a69d266b301dcdee35e5fd5cdf5a166d016e
+instalar: Pacote a aprovar NESTA m�quina: tipo: EXTERNAL_PYTHON nome/vers�o: relatorio-pedido 1.0.0 entrada: principal.py arquivos: 4 Python: >=3.10,<3.14 depend�ncias: (nenhuma) impress�o (nekkora-agent/external-python-fingerprint/1): a741cbb5d0c6097087e0286fedbc41481d5881452442e620fbb039f81e02e833 gerador declarado (n�o verificado): nekkora-empacotar/1.0.0 ambiente: Python 3.12.10 compat�vel; depend�ncias
+s1: {"pedido":"6|1|ex-ef10c9fca8d11af49e864256cfd77f75|-","execucao":"4|-|true","execucoes":"1","efeitos":1}
+s2: {"pedido":"6|1|ex-ba1316d3c2edd48d3b7a72c47d32c20b|-","execucao":"4|-|true","execucoes_na_api":"1","pastas_locais":1,"decisoes_enviadas":2,"efeitos":2}
+s3_offline: {"tela":"Solicitação registrada · aguardando a máquina Atualizar Revogar pedido Máquina ESTACAO-PY1-M2 Versão Relatório por pedido v1 Solicitação registrada 03/11/2026, ","pedido":"1|0|-|-"}
+s3_volta: {"pedido":"6|1|ex-eeaabb5340df6d70f6ec507ab507e504|-","execucao":"4|-|true","efeitos":3}
+s4: {"pedido":"7|0|-|-","execucoes":"0","efeitos":3}
+s5_queda: {"pedido":"3|1|ex-04fdd2ef825414e958a5ac3f9d12a086|-","pasta_local":1,"efeitos":3}
+s5_volta: {"pedido":"6|1|ex-04fdd2ef825414e958a5ac3f9d12a086|-","execucao":"9|AGT-EXE-025|false","execucoes":"1","efeitos":3}
+s6: {"pedido":"1|0|-|-","execucoes":"0","efeitos":3}
+pedidos_finais: ["3109fd46-d3ae-431f-9fc4-72b41ebc5f89|6|1|-","b42f6755-a565-4b83-8a68-cad0edc6b16f|6|1|-","27d85b87-6446-4c23-b5fc-31e942fbcf7e|6|1|-","91ed5aae-60ec-4fd1-946b-84ce8e2520d4|7|0|-","60b6fdb6-d20f-4ee4-84cb-b0cd74f51ab0|6|1|-","9c7c9e34-b800-494a-8461-8b98f202574e|1|0|-"]
+execucoes_locais: 4
+fim: M2 concluído

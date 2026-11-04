@@ -45,7 +45,7 @@ public final class Launch {
         Path copy = runDir.resolve("pacote");
         try {
             Files.createDirectories(copy);
-            String descriptor = pkg.kind() == ExecutionPackage.Kind.STUDIO_PYTHON ? ExecutionPackage.STUDIO_MANIFEST : ExecutionPackage.LAB_DESCRIPTOR;
+            String descriptor = ExecutionPackage.descriptorOf(pkg.kind());
             List<String> all = new ArrayList<>(pkg.files().keySet());
             all.add(descriptor);
             for (String rel : all) {
@@ -78,6 +78,10 @@ public final class Launch {
             if (o.containsKey("input")) a.addAll(List.of(o.get("input"), input.toString()));
             if (o.containsKey("spreadsheet")) a.addAll(List.of(o.get("spreadsheet"), output.resolve("planilha.xlsx").toString()));
             a.addAll(List.of(o.get("output"), output.toString(), "--channel", "chrome"));
+        } else if (pkg.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+            // AGENT-PYTHON-001: o projeto do cliente roda com o Python que a pessoa preparou, da cópia conferida, sem argumento
+            // da Platform (a pasta de saída e o sinal opcional chegam por variável de ambiente)
+            a.addAll(List.of("-E", "-s", "-B", pkg.entry()));
         } else {
             a.addAll(List.of("-E", "-s", "-B", pkg.entry(), "--output", output.toString()));
         }
@@ -86,6 +90,11 @@ public final class Launch {
 
     /** O resultado estruturado que o processo publicou, ou vazio (ausente, ilegível ou fora do contrato). */
     public static java.util.Optional<Reported> reported(ExecutionPackage.Kind kind, Path output) {
+        if (kind == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+            // sinal OPCIONAL do script (o mesmo do lançador): só o esquema fechado conta
+            ExternalLaunch.Signal s = ExternalLaunch.readSignal(output.resolve(ExternalLaunch.SIGNAL_FILE));
+            return s == ExternalLaunch.Signal.NONE ? java.util.Optional.empty() : java.util.Optional.of(new Reported(s.name(), Map.of(), null));
+        }
         Path f = kind == ExecutionPackage.Kind.STUDIO_PYTHON ? output.resolve("execucao").resolve("summary.json") : output.resolve(LAB_RESULT);
         try {
             if (!Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS) || Files.size(f) > 1024 * 1024) return java.util.Optional.empty();
@@ -114,6 +123,12 @@ public final class Launch {
      * código 0 → resultado desconhecido (nada é presumido).
      */
     public static Outcome classify(ExecutionPackage pkg, java.util.Optional<Reported> r, int exitCode) {
+        if (pkg.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+            // pacote externo: código 0 sem sinal = término sem erro sinalizado (AGT-EXT-001), nunca sucesso de negócio
+            ExternalLaunch.Signal s = r.map(x -> ExternalLaunch.Signal.valueOf(x.status())).orElse(ExternalLaunch.Signal.NONE);
+            ExternalLaunch.Outcome o = ExternalLaunch.classify(exitCode, s);
+            return new Outcome(o.state(), o.code());
+        }
         if (r.isEmpty()) {
             return exitCode == 0 ? new Outcome(ExecutionState.OUTCOME_UNKNOWN, ErrorCode.EXEC_NO_PROTOCOL)
                     : new Outcome(ExecutionState.FAILED, ErrorCode.EXEC_EXIT_NONZERO);

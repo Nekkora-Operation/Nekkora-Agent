@@ -1,0 +1,18 @@
+sentinela_prefixo: SENTINELA-AP1-
+agent_preparar: Agent preparado (commit fc64a00cd191d7571ba39dafb97673bfafb504eb) apontando para https://localhost:55897
+cliente: cliente pronto: tarefa Nekkora-frontlab-py1-relatorio chama o Python direto (venv do cliente), pasta C:\Users\%USERNAME%\nekkora\py1-web\tools\lab\saidas\frontlab-py1\cliente, 03:00
+tarefa_original: {"codigo":0,"efeitos":1}
+ids: {"org":"a9778810-fd73-4d26-a195-c0a4e1cd49d7","workspaceId":"5d311d35-4501-4838-b8f7-f18e819ac612","automationId":"cd6f4a4f-ddbd-4afe-a40b-48f72da6a33a"}
+autorizacao_baixada_pelo_agent: true
+vincular: V�nculo a aprovar NESTA m�quina (os caminhos nunca saem dela): nome: relatorio-csv automa��o: cd6f4a4f-ddbd-4afe-a40b-48f72da6a33a interpretador: C:\Users\%USERNAME%
+tarefa_com_lancador: tarefa: programa=C:\Users\%USERNAME%\nekkora\py1-web\tools\lab\saidas\frontlab-py1\agent-app\nekkora-lancar.exe | pasta=C:\Users\%USERNAME%\nekkora\py1-web\tools\lab\saidas\frontlab-py1\cliente | horario=2026-11-03T03:00:00-03:00
+codigos_no_agendador: {"a":0,"b":3}
+canal: canal do Agent pausado
+canal: canal do Agent retomado
+api_execucoes: 3
+api_por_execucao(exec:origem:estado:codigo:saida:eventos:sequencias_distintas:sem_impressao): ["ex-1025a3b8cc5e61d70650ce7bb9fe8caf:3:4:AGT-EXT-001:0:5:5:true","ex-433997c17de7af76d2a65401e31123b2:3:5:AGT-EXT-002:3:5:5:true","ex-e2b64a830794b89135cdb438eec34b30:3:4:AGT-EXT-001:0:5:5:true"]
+api_recusas_de_ingestao: 0
+api_vazamento(sentinela|script|csv): 0
+agent_arquivos_com_sentinela: 0
+agent_execucoes_locais: 3
+fim: M1 concluído

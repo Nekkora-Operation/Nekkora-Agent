@@ -32,6 +32,21 @@ Set-Location $root
 #  - jdk.crypto.ec: curvas elípticas do TLS (ECDHE/X25519 e certificados EC) no JDK 21 (carregado como provedor)
 $Modules = @('java.base', 'java.desktop', 'java.prefs', 'java.logging', 'jdk.unsupported', 'jdk.accessibility', 'java.net.http', 'jdk.crypto.ec')
 
+function Assert-NoLabFaults([string]$folder) {
+    foreach ($j in Get-ChildItem -Recurse -File -Filter '*.jar' $folder) {
+        $z = [System.IO.Compression.ZipFile]::OpenRead($j.FullName)
+        try {
+            $bad = @($z.Entries | Where-Object { $_.FullName -like 'com/nekkora/agent/labfaults/*' -or $_.FullName -like 'META-INF/services/com.nekkora.agent.core.FaultPoints*' })
+        } finally { $z.Dispose() }
+        if ($bad.Count -gt 0) { throw "distribuição com artefato de falhas de laboratório: $($j.Name) ($($bad[0].FullName))" }
+    }
+    if (Get-ChildItem -Recurse -File -Filter 'nekkora-agent-lab-falhas*' $folder) { throw 'distribuição com nekkora-agent-lab-falhas.jar' }
+    foreach ($c in Get-ChildItem -Recurse -File -Filter '*.cfg' $folder) {
+        if ((Get-Content -Raw $c.FullName) -match 'nekkora\.agent\.lab\.|labfaults') { throw "distribuição com opção de laboratório em $($c.Name)" }
+    }
+    Write-Host '      conferido: sem artefato, implementação ou opção de falhas de laboratório'
+}
+
 function Invoke-Checked([string]$what, [scriptblock]$block) {
     & $block
     if ($LASTEXITCODE -ne 0) { throw "$what falhou ($LASTEXITCODE)" }
@@ -87,12 +102,21 @@ Invoke-Checked 'jlink' { & (Join-Path $jbin 'jlink.exe') --add-modules ($Modules
 
 Write-Host "[5/7] Imagem de aplicativo (jpackage)"
 $image = Join-Path $pkg 'image'
+# AGENT-PYTHON-001: executáveis de CONSOLE ao lado do Agent: nekkora-lancar (o que a tarefa agendada chama no lugar do Python;
+# devolve o código de saída do script) e nekkora-console (comandos vincular, vinculos, desvincular, pacote)
+$lancar = Join-Path $pkg 'nekkora-lancar.properties'
+[System.IO.File]::WriteAllLines($lancar, [string[]]@('main-class=com.nekkora.agent.LancarMain', 'win-console=true',
+    'description=Nekkora Agent - lancador do Python externo'), (New-Object System.Text.UTF8Encoding $false))
+$console = Join-Path $pkg 'nekkora-console.properties'
+[System.IO.File]::WriteAllLines($console, [string[]]@('main-class=com.nekkora.agent.AgentMain', 'win-console=true',
+    'description=Nekkora Agent - comandos de console'), (New-Object System.Text.UTF8Encoding $false))
 Invoke-Checked 'jpackage' { & (Join-Path $jbin 'jpackage.exe') --type app-image --name 'Nekkora Agent' --app-version $version `
         --vendor 'Nekkora' --description 'Nekkora Agent (laboratório)' --copyright 'Nekkora' `
         --icon (Join-Path $pkg 'nekkora-agent.ico') --input (Join-Path $pkg 'input') --main-jar 'nekkora-agent.jar' `
         --main-class 'com.nekkora.agent.AgentMain' --runtime-image $runtime --dest $image `
         --java-options '-Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory' `
-        --java-options '-Dflatlaf.nativeLibraryPath=$APPDIR\lib' --java-options '-XX:+UseSerialGC' --java-options '-Xms16m' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' }
+        --java-options '-Dflatlaf.nativeLibraryPath=$APPDIR\lib' --java-options '-XX:+UseSerialGC' --java-options '-Xms16m' --java-options '-Xmx256m' --java-options '-XX:TieredStopAtLevel=1' `
+        --add-launcher "nekkora-lancar=$lancar" --add-launcher "nekkora-console=$console" }
 $app = Join-Path $image 'Nekkora Agent'
 
 Write-Host "[6/7] Licenças, LEIA-ME e versões"
@@ -136,6 +160,10 @@ $lines += ""
 $lines += "Biblioteca nativa: app\lib\flatlaf-$flatVersion-windows-x86_64.dll (extraída do JAR do FlatLaf; -Dflatlaf.nativeLibraryPath=`$APPDIR\lib)"
 $lines += "Opções da JVM: -Dflatlaf.nativeLibraryPath=`$APPDIR\lib -XX:+UseSerialGC -Xms16m -Xmx256m -XX:TieredStopAtLevel=1 -Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory"
 [System.IO.File]::WriteAllLines((Join-Path $app 'VERSOES.txt'), [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
+
+# AGENT-PYTHON-001: a distribuição normal nunca leva o artefato de falhas de laboratório (tools\lab-faults), nem uma
+# implementação de FaultPoints$Hook, nem propriedade nekkora.agent.lab.* nas opções dos executáveis
+Assert-NoLabFaults $app
 
 if ($NoZip) {
     # AGENT-PLATFORM-001: entrega por PR, sem ZIP; a pasta da imagem é o artefato de homologação

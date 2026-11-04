@@ -92,6 +92,20 @@ public enum ErrorCode {
     PLT_LOCAL_HISTORY_REMOVED("AGT-PLT-024", "Os registros locais desta execução não existem mais; a entrega não pode continuar."),
     PLT_PAYLOAD_INVALID("AGT-PLT-025", "A Platform recusou o conteúdo enviado como inválido; a entrega desta execução parou."),
     PLT_LINK_MISMATCH("AGT-PLT-026", "A entrega pertence a um vínculo anterior desta máquina e não é enviada pelo vínculo atual."),
+    // AGENT-PYTHON-001: Python externo (monitorado pelo lançador ou pacote externo). Código 0 não é sucesso de negócio.
+    EXT_EXIT_ZERO_NO_SIGNAL("AGT-EXT-001", "O processo terminou com código 0, sem erro sinalizado; o sucesso de negócio não foi sinalizado pelo script."),
+    EXT_EXIT_NONZERO("AGT-EXT-002", "O processo terminou com código de saída diferente de zero."),
+    EXT_BUSINESS_FAILURE("AGT-EXT-003", "O script sinalizou falha de negócio."),
+    EXT_LAUNCHER_LOST("AGT-EXT-004", "O lançador terminou sem observar o fim do processo: o desfecho é desconhecido e nada é repetido."),
+    EXT_LAUNCH_FAILED("AGT-EXT-005", "O processo do script não pôde ser criado."),
+    EXT_BINDING_UNKNOWN("AGT-EXT-010", "O vínculo informado não existe nesta máquina."),
+    EXT_BINDING_MISMATCH("AGT-EXT-011", "O interpretador, o script ou a pasta de trabalho não são os aprovados no vínculo."),
+    EXT_NOT_AUTHORIZED("AGT-EXT-012", "Não há autorização válida da Platform para esta automação nesta máquina: nada foi iniciado."),
+    EXT_STORAGE_FAILED("AGT-EXT-013", "O registro da execução não pôde ser gravado antes do início: nada foi iniciado."),
+    EXT_BINDING_INVALID("AGT-EXT-014", "O vínculo é inválido (caminho relativo, inexistente ou nome fora do formato)."),
+    EXT_REQUEST_REFUSED("AGT-EXT-020", "O pedido de execução da Platform foi recusado por esta máquina."),
+    EXT_REQUEST_NOT_STARTED("AGT-EXT-021", "O pedido foi aceito, mas o processo comprovadamente não foi criado."),
+    EXT_ENVIRONMENT_INCOMPATIBLE("AGT-EXT-022", "O ambiente Python preparado não atende à versão ou às dependências declaradas no pacote."),
     UNEXPECTED("AGT-APP-001", "Falha interna inesperada.");
 
     private final String code;
