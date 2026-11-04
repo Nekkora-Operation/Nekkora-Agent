@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -115,5 +116,34 @@ class ExternalPackageTest {
         }
         assertEquals(ErrorCode.EXEC_PACKAGE_UNSAFE, assertThrows(ExecRefused.class, () -> shelf.stage(evil)).code());
         assertFalse(Files.exists(tmp.resolve("fora.txt")));
+    }
+
+    /**
+     * No Windows, renomear a pasta preparada é negado enquanto outro programa segura algo dentro dela (IDE, sincronizador,
+     * servidor de desenvolvimento observando a árvore). A instalação COPIA, confere de novo pela impressão e só então entra no
+     * índice. Uma pasta definitiva sem entrada no índice (instalação interrompida) é refeita, nunca aceita como está.
+     */
+    @Test
+    void instalacaoCopiaQuandoRenomearENegadoERefazSobraForaDoIndice() throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"), "bloqueio de pasta só no Windows");
+        Path src = vector("projeto", descriptor("main.py", "[]", FILES));
+        PackageShelf shelf = new PackageShelf(tmp.resolve("pacotes"), AtomicWriter.DEFAULT);
+        Path target = tmp.resolve("pacotes").resolve(FINGERPRINT.substring(7));
+        // sobra parcial de uma instalação interrompida: pasta definitiva sem índice e com conteúdo alterado
+        Files.createDirectories(target.resolve("util"));
+        Files.writeString(target.resolve("main.py"), "print('adulterado')\n");
+        ExecutionPackage staged = shelf.stage(src);
+        PackageShelf.Entry e;
+        try (var held = Files.newInputStream(staged.dir().resolve("util").resolve("x.bin"))) {
+            Path probe = staged.dir().resolveSibling(staged.dir().getFileName() + "-renomeado");
+            assertThrows(java.nio.file.AccessDeniedException.class, () -> Files.move(staged.dir(), probe, java.nio.file.StandardCopyOption.ATOMIC_MOVE),
+                    "pré-condição: o Windows nega renomear a pasta enquanto há um arquivo aberto nela");
+            e = shelf.install(staged, Path.of("C:/python/python.exe"), tmp, Instant.now());
+        }
+        assertEquals(target, e.dir());
+        assertEquals(FINGERPRINT, ExecutionPackage.inspect(target).fingerprint(), "a cópia é conferida pela impressão");
+        assertTrue(shelf.find(FINGERPRINT).isPresent());
+        PackageShelf.Entry again = shelf.install(shelf.stage(src), Path.of("C:/python/python.exe"), tmp, Instant.now());
+        assertEquals(target, again.dir(), "idempotente: o pacote já presente e no índice fica");
     }
 }

@@ -80,14 +80,30 @@ public final class PackageShelf {
         }
     }
 
-    /** Fixa o pacote preparado na pasta definitiva (pela impressão) e registra Python e saída. Idempotente. */
+    /**
+     * Fixa o pacote preparado na pasta definitiva (pela impressão) e registra Python e saída. Idempotente.
+     * <p>
+     * O ponto de confirmação é o {@code indice.json}: uma pasta definitiva SEM entrada no índice é sobra de uma instalação
+     * interrompida e é refeita. No Windows, renomear uma pasta com subpastas é negado enquanto outro programa observa a árvore
+     * (IDE, sincronizador, servidor de desenvolvimento); nesse caso o pacote é COPIADO para a pasta definitiva e conferido de novo
+     * pela impressão antes de entrar no índice.
+     */
     public synchronized Entry install(ExecutionPackage staged, Path python, Path outputRoot, Instant at) throws ExecRefused {
         String hex = staged.fingerprint().substring("sha256:".length());
         Path target = root.resolve(hex);
         try {
+            Map<String, Entry> known = load();
+            if (Files.isDirectory(target) && !known.containsKey(staged.fingerprint()) && !staged.dir().equals(target)) {
+                RunStore.deleteTree(target); // sobra de instalação interrompida (nunca confirmada no índice)
+            }
             if (!Files.isDirectory(target)) {
-                Files.move(staged.dir(), target, StandardCopyOption.ATOMIC_MOVE);
-                if (!staged.dir().getParent().equals(root)) RunStore.deleteTree(stagingOf(staged.dir())); // sobra da pasta de preparo
+                try {
+                    Files.move(staged.dir(), target, StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AccessDeniedException | java.nio.file.AtomicMoveNotSupportedException denied) {
+                    RunStore.deleteTree(target);
+                    copyTree(staged.dir(), target);
+                }
+                RunStore.deleteTree(stagingOf(staged.dir())); // sobra da pasta de preparo (melhor esforço)
             } else if (!staged.dir().equals(target)) {
                 discard(staged); // o mesmo pacote já está presente: a preparação sai
             }
