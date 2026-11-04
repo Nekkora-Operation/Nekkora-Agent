@@ -188,3 +188,28 @@ há promessa de "exatamente uma vez" sob toda falha. Uma queda na fronteira do i
 
 **Fora:** distribuição de pacote, instalação de dependências, agendamento pela Platform, cancelamento remoto, Studio, adoção
 de processos e Hosting.
+
+## 5. Provas dirigidas de falha (só laboratório) e o ponto exato
+
+**Fora da distribuição normal (commit `81f09ea`).**
+- O código distribuído tem apenas os pontos nomeados de `core/FaultPoints`, que não fazem nada sem uma implementação.
+- Quem derruba o Agent ou descarta uma resposta é `tools/lab-faults/` (`LabFaults`). Ele vira o JAR separado `nekkora-agent-lab-falhas.jar` (`tools/lab-faults/build.ps1`), que o roteiro do laboratório acrescenta só à **cópia** de teste, com classpath, `-Dnekkora.agent.lab.falha=<falha>` e o arquivo de registro.
+- **Como isso é conferido:**
+  - `tools/package-windows.ps1` recusa uma distribuição que contenha esse JAR, uma classe `labfaults`, um serviço `FaultPoints$Hook` ou uma opção `nekkora.agent.lab.*`;
+  - `LabFaultsAbsentTest` recusa `halt(`, essas propriedades e qualquer implementação em `src/main`;
+  - a jornada confere, antes e depois de cada falha, que a cópia normal está limpa.
+
+| Falha | Ponto (`FaultPoints.Point`) | O que já aconteceu | O que ainda não aconteceu |
+|---|---|---|---|
+| `perderConfirmacaoDecisao` | `DECISION_RESPONSE_RECEIVED` | a Platform gravou a decisão e respondeu com sucesso; o Agent recebeu a resposta | aplicar a resposta (o pedido continua `DECIDED` no Agent e a decisão é reenviada) |
+| `quedaAposStarting` | `STARTING_SAVED_BEFORE_PROCESS` | pré-lançamento gravado (`plataforma.json`), `estado.json` = STARTING, evento STARTING | cópia do pacote, pasta de saída, `ProcessBuilder.start` e posse do processo; **o Python não chega a iniciar** |
+
+**Prova repetida no laboratório** (distribuição `81f09ea`, JAR de falhas só na cópia; `evidencias/m2-falhas/jornada-m2-falhas.txt`):
+- **S2:** o registro mostra uma resposta descartada em `DECISION_RESPONSE_RECEIVED`. Foram 2 decisões enviadas, 1 execução na API, 1 pasta local e efeito +1.
+- **S5:** o registro mostra `halt(86)` em `STARTING_SAVED_BEFORE_PROCESS`.
+  - Depois da queda, a pasta local tinha só `estado.json` (STARTING), `eventos.jsonl` e `plataforma.json`: sem cópia do pacote e sem saída.
+  - Na volta, o Agent registrou `OUTCOME_UNKNOWN` (`AGT-EXE-025`), com o início não confirmado, 1 execução e efeitos inalterados.
+
+**O que a prova sustenta:** o Agent encontrou um início incerto, registrou "desfecho desconhecido" e não relançou.
+
+**O que ela não prova:** uma queda do Agent **depois** de o Python iniciar. Nesse caso, a reconciliação atual também fecharia como desconhecido e não relançaria, mas o processo filho poderia continuar sozinho. Essa prova não foi feita e fica declarada como lacuna.
