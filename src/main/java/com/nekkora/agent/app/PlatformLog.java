@@ -56,8 +56,8 @@ final class PlatformLog implements PlatformService.Diagnostics {
     }
 
     @Override
-    public void linkRemoved() {
-        log.info(LogEvent.PLATFORM_LINK_REMOVED);
+    public void linkRemoved(int undeliveredRuns, PlatformService.ServerView server) {
+        log.info(LogEvent.PLATFORM_LINK_REMOVED, Field.of("undelivered_runs", undeliveredRuns), Field.of("server", server.name()));
     }
 
     @Override

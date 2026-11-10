@@ -330,7 +330,8 @@ class PlatformDeliveryTest {
         lab.svc.pair(lab.url, lab.gw.pairingCode(otherOrg, w2).toCharArray());
         lab.settle();
         assertEquals(LinkState.PAIRED, lab.svc.status().link());
-        assertEquals(DeliveryView.State.OTHER_LINK, lab.svc.delivery(pending).state());
+        // T06: pendente no desvínculo = identificada como NÃO entregue (e continua sem ir pelo vínculo novo)
+        assertEquals(DeliveryView.State.UNLINKED_UNDELIVERED, lab.svc.delivery(pending).state());
         assertTrue(lab.gw.run(pending.value()) == null, "nada registrado com a credencial do outro vínculo");
     }
 

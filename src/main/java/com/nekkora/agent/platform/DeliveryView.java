@@ -29,7 +29,12 @@ public record DeliveryView(State state, long settledThrough, long storedThrough,
         /** Parada à espera de decisão. */
         BLOCKED,
         /** Pertence a um vínculo anterior desta máquina: não é enviada pelo atual. */
-        OTHER_LINK
+        OTHER_LINK,
+        /**
+         * T06: o envio não tinha terminado quando a pessoa desvinculou a máquina ("Desvincular mesmo assim"). O registro fica
+         * guardado aqui, identificado como NÃO entregue, e nunca é enviado por outro vínculo.
+         */
+        UNLINKED_UNDELIVERED
     }
 
     public static DeliveryView notLinked() {

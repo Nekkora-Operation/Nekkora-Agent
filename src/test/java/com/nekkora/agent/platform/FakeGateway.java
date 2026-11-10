@@ -249,7 +249,7 @@ final class FakeGateway implements HttpTransport {
 
     private Response route(Request r, String path, Map<String, Object> j) {
         String bearer = Optional.ofNullable(r.headers().get("Authorization")).filter(h -> h.startsWith("Bearer ")).map(h -> h.substring(7)).orElse(null);
-        if (path.equals("/agent/api/v1/enrollments/redeem")) return redeem(j, bearer);
+        if (path.equals("/agent/api/v1/enrollments/redeem")) return redeem(j, bearer, r.headers().get("Nekkora-Agent-Intent"));
         Agent m = authenticate(bearer, false);
         if (m == null) {
             unauthenticated++;
@@ -282,14 +282,24 @@ final class FakeGateway implements HttpTransport {
 
     // ----- resgate (sec. 4.2 e 4.3)
 
-    private Response redeem(Map<String, Object> j, String bearer) {
+    /**
+     * PLATFORM-AGENT-V2-002 T06 (espelho do contrato da API): com {@code Nekkora-Agent-Intent}, depois de conferir hash, prazo
+     * e organização, um código do tipo errado é recusado com {@code 409} e o motivo, SEM ser consumido e sem mudar nada. Sem
+     * o cabeçalho (Agent anterior): o comportamento de antes, exceto código de pareamento com Bearer = {@code 409}.
+     */
+    private Response redeem(Map<String, Object> j, String bearer, String intent) {
         String code = Json.text(j, "code");
         String secret = Json.text(j, "credentialSecret");
         if (secret == null || !secret.matches("[A-Za-z0-9_-]{43}") || Json.text(j, "agentVersion") == null) return err(400, "invalid_request", null);
+        if (intent != null && !intent.equals("pair") && !intent.equals("rotate")) return err(400, "invalid_request", null);
         Matcher m = code == null ? null : TOKEN.matcher(code);
         if (m == null || !m.matches() || !m.group(1).equals("nkp1")) return refused();
         Enrollment e = enrollments.get(UUID.fromString(m.group(3)));
         if (e == null || !e.codeHash.equals(sha(code)) || !e.org.toString().equals(m.group(2))) return refused();
+        if (e.consumedCredential == null && (e.expired || e.cancelled)) return refused();
+        if ("rotate".equals(intent) && e.purpose == 1) return conflict("pairing_code_for_rotation");
+        if ("pair".equals(intent) && e.purpose == 2) return conflict("rotation_code_for_pairing");
+        if (intent == null && e.purpose == 1 && bearer != null) return conflict("worker_indisponivel");
         if (e.consumedCredential != null) {
             // repetição: só o MESMO segredo, e só enquanto a credencial emitida ainda vale
             Agent a = authenticate("nka1." + e.org + "." + e.consumedCredential + "." + secret, false);
@@ -625,6 +635,14 @@ final class FakeGateway implements HttpTransport {
 
     private static Response status(int s, String json) {
         return new Response(s, Optional.empty(), json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Contagem dos 409 de intenção (código do tipo errado: nada consumido). */
+    int wrongIntent;
+
+    private Response conflict(String reason) {
+        if (!reason.equals("worker_indisponivel")) wrongIntent++;
+        return new Response(409, Optional.empty(), ("{\"error\":\"conflict\",\"reason\":\"" + reason + "\"}").getBytes(StandardCharsets.UTF_8));
     }
 
     private static Response err(int s, String code, Long retryAfter) {

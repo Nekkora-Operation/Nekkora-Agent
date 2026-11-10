@@ -71,7 +71,7 @@ public enum ErrorCode {
     PLT_CODE_INVALID("AGT-PLT-003", "O código informado não tem o formato de um código de pareamento da Platform."),
     PLT_CODE_REFUSED("AGT-PLT-004", "A Platform recusou o código (inválido, vencido, cancelado ou já usado com outro segredo)."),
     PLT_WORKER_UNAVAILABLE("AGT-PLT-005", "O Worker do código já está associado a outro Agent ativo."),
-    PLT_ALREADY_PAIRED("AGT-PLT-006", "Este Agent já está pareado; remova o vínculo local antes de parear de novo."),
+    PLT_ALREADY_PAIRED("AGT-PLT-006", "Este Agent já está pareado; desvincule esta máquina antes de parear de novo."),
     PLT_NOT_PAIRED("AGT-PLT-007", "Este Agent não está pareado com a Platform."),
     PLT_CREDENTIAL_REFUSED("AGT-PLT-008", "A Platform recusou a credencial da máquina (revogada, vencida ou Agent encerrado)."),
     PLT_DESTINATION_CHANGED("AGT-PLT-009", "O endereço da Platform na configuração não é o do pareamento: nada é enviado até a pessoa decidir."),
@@ -92,6 +92,14 @@ public enum ErrorCode {
     PLT_LOCAL_HISTORY_REMOVED("AGT-PLT-024", "Os registros locais desta execução não existem mais; a entrega não pode continuar."),
     PLT_PAYLOAD_INVALID("AGT-PLT-025", "A Platform recusou o conteúdo enviado como inválido; a entrega desta execução parou."),
     PLT_LINK_MISMATCH("AGT-PLT-026", "A entrega pertence a um vínculo anterior desta máquina e não é enviada pelo vínculo atual."),
+    // PLATFORM-AGENT-V2-002 T06: intenção do código (pareamento × renovação) e desvínculo da máquina
+    PLT_PAIRING_CODE_FOR_ROTATION("AGT-PLT-027", "Este é um código de pareamento. Para renovar a credencial desta máquina, gere um código de renovação na "
+            + "Platform. Para ligar esta máquina a outro Worker ou organização, desvincule-a primeiro e pareie de novo."),
+    PLT_ROTATION_CODE_FOR_PAIRING("AGT-PLT-028", "Este é um código de renovação de credencial, que só serve para uma máquina já pareada. Para parear, "
+            + "gere um código de pareamento na Platform (Workers → Vincular Agent)."),
+    PLT_UNLINK_RUNNING("AGT-PLT-029", "Há uma execução em andamento nesta máquina: o desvínculo só pode ser concluído depois que ela terminar."),
+    PLT_UNLINK_PENDING("AGT-PLT-030", "Há envios pendentes deste vínculo: aguarde os envios ou confirme o desvínculo mesmo assim."),
+    PLT_UNDELIVERED_UNLINKED("AGT-PLT-031", "Registro guardado nesta máquina e não entregue: o vínculo foi removido antes do envio."),
     // AGENT-PYTHON-001: Python externo (monitorado pelo lançador ou pacote externo). Código 0 não é sucesso de negócio.
     EXT_EXIT_ZERO_NO_SIGNAL("AGT-EXT-001", "O processo terminou com código 0, sem erro sinalizado; o sucesso de negócio não foi sinalizado pelo script."),
     EXT_EXIT_NONZERO("AGT-EXT-002", "O processo terminou com código de saída diferente de zero."),

@@ -12,8 +12,9 @@ import java.util.List;
  * @param link situação do vínculo
  * @param connectivity resultado do último contato (só comunicação)
  * @param host host da Platform do vínculo (ou do pareamento em andamento)
+ * @param organizationId identificador da organização do vínculo (o contrato não traz o nome), ou {@code null}
  * @param agentId identificador do Agent na Platform (lógico, não é segredo), ou {@code null}
- * @param workerId identificador do Worker, ou {@code null}
+ * @param workerId identificador do Worker (o contrato não traz o nome), ou {@code null}
  * @param lastContact última resposta recebida da Platform
  * @param lastSync último avanço de entrega confirmado por ACK
  * @param pendingRuns execuções vinculadas ainda não totalmente entregues
@@ -22,7 +23,7 @@ import java.util.List;
  * @param incompleteRuns execuções com perda declarada (histórico incompleto na Platform)
  * @param problem último problema de comunicação ou do vínculo, ou {@code null}
  */
-public record PlatformStatus(LinkState link, Connectivity connectivity, String host, String agentId, String workerId, Instant lastContact, Instant lastSync,
+public record PlatformStatus(LinkState link, Connectivity connectivity, String host, String organizationId, String agentId, String workerId, Instant lastContact, Instant lastSync,
                              Instant credentialExpiresAt, int pendingRuns, long pendingEvents, List<Blocked> blocked, int incompleteRuns, int authorizations,
                              Instant authorizationsAt, ErrorCode problem, boolean secretStoreAvailable) {
 
