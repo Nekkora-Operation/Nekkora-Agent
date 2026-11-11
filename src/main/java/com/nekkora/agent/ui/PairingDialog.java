@@ -26,7 +26,7 @@ final class PairingDialog extends FittedDialog {
     enum Mode { PAIR, ROTATE }
 
     static final String TITLE_PAIR = "Parear com a Platform";
-    static final String TITLE_ROTATE = "Nova credencial da máquina";
+    static final String TITLE_ROTATE = "Renovar credencial";
 
     private final NekkoraPasswordField code = new NekkoraPasswordField("nkp1.…");
     private final NekkoraFormField codeField;
@@ -37,11 +37,11 @@ final class PairingDialog extends FittedDialog {
     PairingDialog(Component parent, Mode mode, String host, boolean secretStore, Consumer<char[]> onSubmit) {
         super(parent, mode == Mode.PAIR ? TITLE_PAIR : TITLE_ROTATE);
         setDescription(mode == Mode.PAIR
-                ? "Liga esta máquina à sua organização na Platform. Peça a quem administra a organização um código de pareamento."
-                : "Troca a credencial desta máquina por uma nova. Peça a quem administra a organização um código de rotação.");
+                ? "Liga esta máquina a um Worker da sua organização na Platform. Use um código de pareamento (Workers → Vincular Agent). Um código de renovação não serve aqui."
+                : "Troca a credencial desta máquina já pareada por uma nova, no mesmo Worker. Use um código de renovação gerado na Platform; um código de pareamento não serve aqui.");
         setDialogSize(Size.MEDIUM);
-        code.getAccessibleContext().setAccessibleName(mode == Mode.PAIR ? "Código de pareamento" : "Código de rotação");
-        codeField = new NekkoraFormField(mode == Mode.PAIR ? "Código de pareamento" : "Código de rotação", code)
+        code.getAccessibleContext().setAccessibleName(mode == Mode.PAIR ? "Código de pareamento" : "Código de renovação");
+        codeField = new NekkoraFormField(mode == Mode.PAIR ? "Código de pareamento" : "Código de renovação", code)
                 .helper("Colado como recebido. Não é exibido nem guardado em texto.");
         NekkoraKeyValueView where = new NekkoraKeyValueView();
         where.add("Platform", host == null ? "Endereço https não configurado" : host);
@@ -57,12 +57,13 @@ final class PairingDialog extends FittedDialog {
         form.addAll(where, codeField, new NekkoraParagraph(mode == Mode.PAIR
                 ? "A credencial da máquina é gerada aqui e guardada com a proteção do Windows para o seu usuário. A execução local continua "
                         + "funcionando sem a Platform."
-                : "A credencial atual só é substituída depois que a Platform confirmar a nova.", TextTone.SECONDARY));
+                : "A credencial atual só é substituída depois que a Platform confirmar a nova. Para ligar esta máquina a outro Worker ou organização, "
+                        + "desvincule-a primeiro e pareie de novo.", TextTone.SECONDARY));
         NekkoraScrollPane sp = NekkoraScrollPane.verticalOnly(form);
         sp.setBorder(null);
         setContent(sp);
         addSecondary("Cancelar");
-        submit = addPrimary(mode == Mode.PAIR ? "Parear" : "Trocar credencial", () -> {
+        submit = addPrimary(mode == Mode.PAIR ? "Parear" : "Renovar credencial", () -> {
             if (busy) return false;
             char[] c = code.getPassword();
             code.setText("");

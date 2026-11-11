@@ -76,9 +76,13 @@ final class MainWindow extends NekkoraFrame {
     private final NekkoraCard statusCard = new NekkoraCard("Esta máquina", null);
     private final NekkoraCard shortcutsCard = new NekkoraCard("Atalhos", null);
     private final NekkoraCard platformCard = new NekkoraCard("Platform", null);
-    private final NekkoraButton pair = NekkoraButton.secondary("Parear…");
-    private final NekkoraButton rotate = NekkoraButton.ghost("Nova credencial…");
-    private final NekkoraButton removeLink = NekkoraButton.ghost("Remover vínculo local…");
+    // T06: três intenções distintas, cada uma com o próprio botão e o próprio código
+    static final String PAIR_LABEL = "Parear com a Platform…";
+    static final String ROTATE_LABEL = "Renovar credencial…";
+    static final String UNLINK_LABEL = "Desvincular esta máquina…";
+    private final NekkoraButton pair = NekkoraButton.secondary(PAIR_LABEL);
+    private final NekkoraButton rotate = NekkoraButton.ghost(ROTATE_LABEL);
+    private final NekkoraButton removeLink = NekkoraButton.ghost(UNLINK_LABEL);
     private final NekkoraButton blockedButton = NekkoraButton.secondary("Ver envios parados…");
     private PlatformStatus platformStatus;
     private final NekkoraStack platformContent;
@@ -135,8 +139,10 @@ final class MainWindow extends NekkoraFrame {
         rotate.setMnemonic(KeyEvent.VK_N);
         removeLink.setMnemonic(KeyEvent.VK_M);
         blockedButton.setMnemonic(KeyEvent.VK_V);
-        pair.getAccessibleContext().setAccessibleDescription("Liga esta máquina à organização na Platform com um código de pareamento");
-        removeLink.getAccessibleContext().setAccessibleDescription("Apaga a credencial guardada nesta máquina; na Platform nada muda");
+        pair.getAccessibleContext().setAccessibleDescription("Liga esta máquina a um Worker da organização na Platform com um código de pareamento");
+        rotate.getAccessibleContext().setAccessibleDescription("Troca a credencial desta máquina já pareada com um código de renovação gerado na Platform");
+        removeLink.getAccessibleContext().setAccessibleDescription("Remove o vínculo desta máquina: apaga a credencial e as autorizações guardadas aqui. "
+                + "Na Platform, só uma pessoa com permissão revoga o Agent");
         studio.setMnemonic(KeyEvent.VK_T);
         platform.setMnemonic(KeyEvent.VK_P);
         settings.setMnemonic(KeyEvent.VK_C);
@@ -213,12 +219,15 @@ final class MainWindow extends NekkoraFrame {
         NekkoraStatusBadge link = new NekkoraStatusBadge(PlatformText.linkStatus(st.link()), PlatformText.link(st.link()));
         link.getAccessibleContext().setAccessibleName("Vínculo: " + PlatformText.link(st.link()));
         rows.add("Vínculo", link);
-        if (st.host() != null) rows.add("Endereço", st.host());
+        if (st.host() != null) rows.add("Platform", st.host());
         if (st.paired()) {
+            // T06: o contrato só traz identificadores (sem nomes): forma curta na tela, completa para leitor de tela e dica
+            if (st.organizationId() != null) rows.add("Organização", identifier("Organização", st.organizationId()));
+            if (st.workerId() != null) rows.add("Worker", identifier("Worker", st.workerId()));
+            if (st.agentId() != null) rows.add("Agent", identifier("Agent", st.agentId()));
             NekkoraStatusBadge conn = new NekkoraStatusBadge(PlatformText.connectivityStatus(st), PlatformText.connectivity(st));
             conn.getAccessibleContext().setAccessibleName("Comunicação: " + PlatformText.connectivity(st));
             rows.add("Comunicação", conn);
-            rows.add("Identificação", PlatformText.identity(st));
             rows.add("Envios", PlatformText.deliveries(st));
             rows.add("Último sincronismo", PlatformText.lastSync(st));
             if (st.incompleteRuns() > 0) rows.add("Histórico incompleto", st.incompleteRuns() + (st.incompleteRuns() == 1 ? " execução" : " execuções")
@@ -241,8 +250,8 @@ final class MainWindow extends NekkoraFrame {
         platformNotice.setVisible(platformNotice.getComponentCount() > 0);
         pair.setVisible(st.link() == PlatformStatus.LinkState.NOT_PAIRED);
         rotate.setVisible(st.link() == PlatformStatus.LinkState.PAIRED || st.link() == PlatformStatus.LinkState.REFUSED);
-        removeLink.setVisible(st.link() == PlatformStatus.LinkState.REFUSED || st.link() == PlatformStatus.LinkState.DESTINATION_CHANGED
-                || st.link() == PlatformStatus.LinkState.CONTRACT_REFUSED);
+        // T06: desvincular também com o vínculo em uso (e durante uma renovação, que é abandonada com aviso)
+        removeLink.setVisible(st.paired());
         blockedButton.setVisible(!st.blocked().isEmpty());
         platformButtons.setVisible(pair.isVisible() || rotate.isVisible() || removeLink.isVisible() || blockedButton.isVisible());
         platformCard.setVisible(true);
@@ -252,6 +261,20 @@ final class MainWindow extends NekkoraFrame {
 
     PlatformStatus platformStatus() {
         return platformStatus;
+    }
+
+    /** Identificador da Platform: curto na tela; completo na dica e no nome acessível. */
+    static JComponent identifier(String what, String full) {
+        NekkoraParagraph p = new NekkoraParagraph(PlatformText.shortId(full), TextTone.PRIMARY);
+        p.setToolTipText(full);
+        p.getAccessibleContext().setAccessibleName(what + ": " + full);
+        return p;
+    }
+
+    /** T06: o botão de desvincular mostra a espera enquanto a Platform é consultada (fora da EDT). */
+    void unlinkBusy(boolean busy) {
+        removeLink.setLoading(busy);
+        removeLink.setEnabled(!busy);
     }
 
     NekkoraButton pairButton() {

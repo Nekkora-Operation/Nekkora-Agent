@@ -77,6 +77,11 @@ public final class AgentContext implements AutoCloseable {
         return platform;
     }
 
+    /** T06: desvínculo da máquina, coordenado com a execução local (nunca concluído com execução em andamento). */
+    public MachineUnlink unlink() {
+        return new MachineUnlink(platform, () -> MachineUnlink.executionInProgress(execution));
+    }
+
     /** Atividade local das execuções (OBS-001): linha do tempo e histórico, só leitura. */
     public ActivityService activity() {
         return activity;

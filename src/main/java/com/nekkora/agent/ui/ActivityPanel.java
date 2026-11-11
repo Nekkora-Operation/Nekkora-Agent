@@ -69,6 +69,11 @@ final class ActivityPanel extends JPanel {
         void view(ExecutionId id, long after, Consumer<Loaded> onEdt);
 
         void export(ExecutionId id, List<ActivityEvent> events, ActivityView.Completeness completeness);
+
+        /** T06: envio desta execução à Platform (só memória do transporte, sem disco nem rede; seguro na EDT). */
+        default com.nekkora.agent.platform.DeliveryView delivery(ExecutionId id) {
+            return com.nekkora.agent.platform.DeliveryView.notLinked();
+        }
     }
 
     /** Resposta de uma leitura: a atividade, "sem registro" (vazio) ou falha de leitura (tenta de novo sozinho). */
@@ -511,6 +516,13 @@ final class ActivityPanel extends JPanel {
             if (r.code() != null) kv.add(r.state() == com.nekkora.agent.exec.ExecutionState.SUCCEEDED ? "Observação" : "Motivo técnico",
                     r.code().description() + " (" + r.code().code() + ")");
             kv.add("Pedido por", ExecutionSetup.originLabel(r.origin()));
+            // T06: o envio fica à parte do desfecho; uma execução deixada para trás num desvínculo aparece como "não entregue"
+            com.nekkora.agent.platform.DeliveryView dv = data.delivery(r.id());
+            if (dv.state() != com.nekkora.agent.platform.DeliveryView.State.NOT_LINKED) {
+                NekkoraStatusBadge db = new NekkoraStatusBadge(PlatformText.deliveryStatus(dv), PlatformText.delivery(dv));
+                db.getAccessibleContext().setAccessibleName("Envio à Platform: " + PlatformText.delivery(dv));
+                kv.add("Envio à Platform", db);
+            }
             if (r.cancellation() != null) kv.add("Cancelamento", ExecutionSetup.cancellationLabel(r.cancellation()));
             if (r.recovered()) kv.add("Desfecho", ExecutionSetup.RECOVERED_LABEL);
             // A03: o progresso verificado do checkpoint, separado do desfecho e das contagens derivadas dos eventos; num

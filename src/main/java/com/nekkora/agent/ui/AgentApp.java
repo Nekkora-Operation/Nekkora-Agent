@@ -222,13 +222,86 @@ public final class AgentApp {
         activeDialog = null;
     }
 
+    /**
+     * T06: "Desvincular esta máquina". Fora da EDT: confere execução em andamento e consulta a Platform; na EDT: as
+     * consequências e a confirmação; fora da EDT de novo: o desvínculo (conferindo outra vez que nada começou).
+     */
     void removeLink() {
-        if (!NekkoraConfirmationDialog.confirmDanger(window, "Remover o vínculo local?", "A credencial guardada nesta máquina é apagada. Na Platform nada "
-                + "muda: a revogação do Agent é feita lá. Envios pendentes deste vínculo ficam guardados e não são enviados por um vínculo novo.",
-                "Remover vínculo")) {
-            return;
+        if (exiting.get() || bringActiveDialogToFront() || unlinkBusy) return;
+        com.nekkora.agent.app.MachineUnlink unlink = ctx.unlink();
+        setUnlinkBusy(true);
+        background(() -> guarded(unlink::plan), plan -> {
+            setUnlinkBusy(false);
+            if (plan == null) {
+                toast(Severity.ERROR, "Não foi possível desvincular", PlatformText.problem(ErrorCode.UNEXPECTED) + " Nada foi alterado.");
+                return;
+            }
+            if (exiting.get() || bringActiveDialogToFront()) return;
+            if (plan.running()) {
+                showUnlinkBlocked();
+                return;
+            }
+            if (!plan.preview().linked()) {
+                renderPlatform();
+                return;
+            }
+            UnlinkDialog d = new UnlinkDialog(window, plan.preview());
+            activeDialog = d;
+            boolean confirmed = d.showDialog() == com.nekkora.ui.dialog.NekkoraDialog.Result.CONFIRMED;
+            activeDialog = null;
+            if (!confirmed) return; // cancelar / aguardar envios: nada muda
+            setUnlinkBusy(true);
+            background(() -> guarded(() -> unlink.confirm(plan, plan.preview().pendingRuns() > 0)), r -> {
+                setUnlinkBusy(false);
+                unlinkFinished(plan.preview(), r != null ? r : new PlatformService.UnlinkResult(false, false, ErrorCode.UNEXPECTED, 0, 0));
+            });
+        });
+    }
+
+    /** Uma falha inesperada volta como {@code null} (a tela sempre recebe resposta e o botão nunca fica ocupado). */
+    private <T> T guarded(Supplier<T> work) {
+        try {
+            return work.get();
+        } catch (RuntimeException e) {
+            ctx.log().error(LogEvent.UNEXPECTED_ERROR, ErrorCode.UNEXPECTED, Field.exception(e));
+            return null;
         }
-        background(() -> ctx.platform().removeLocalLink(), a -> renderPlatform());
+    }
+
+    private boolean unlinkBusy;
+
+    private void setUnlinkBusy(boolean busy) {
+        unlinkBusy = busy;
+        if (window != null) window.unlinkBusy(busy);
+    }
+
+    private void unlinkFinished(PlatformService.UnlinkPreview p, PlatformService.UnlinkResult r) {
+        renderPlatform();
+        if (r.done()) {
+            toast(r.problem() == null ? Severity.SUCCESS : Severity.WARNING, "Máquina desvinculada", PlatformText.unlinked(r, p.host(), p.organizationId()));
+        } else if (r.queued()) {
+            toast(Severity.INFO, "Desvínculo em andamento", "A linha de comunicação com a Platform está ocupada; o desvínculo é aplicado em seguida.");
+        } else if (r.problem() == ErrorCode.PLT_UNLINK_RUNNING) {
+            showUnlinkBlocked();
+        } else if (r.problem() == ErrorCode.PLT_UNLINK_PENDING) {
+            // apareceu envio pendente depois da confirmação: a pessoa decide de novo, vendo os números
+            toast(Severity.WARNING, "Envios pendentes", PlatformText.problem(r.problem()));
+            removeLink();
+        } else {
+            toast(Severity.ERROR, "Não foi possível desvincular", PlatformText.problem(r.problem()) + " O vínculo continua como estava.");
+        }
+    }
+
+    private void showUnlinkBlocked() {
+        FittedDialog d = new FittedDialog(window != null && window.isShowing() ? window : null, "Desvincular esta máquina");
+        d.setDescription(PlatformText.UNLINK_RUNNING);
+        d.setDialogSize(com.nekkora.ui.dialog.NekkoraDialog.Size.SMALL);
+        com.nekkora.ui.button.NekkoraButton back = d.addSecondary("Voltar");
+        back.setMnemonic(java.awt.event.KeyEvent.VK_V);
+        d.getRootPane().setDefaultButton(back);
+        activeDialog = d;
+        d.showDialog();
+        activeDialog = null;
     }
 
     void openBlocked() {
@@ -474,6 +547,11 @@ public final class AgentApp {
             @Override
             public void export(com.nekkora.agent.exec.ExecutionId id, java.util.List<ActivityEvent> events, ActivityView.Completeness completeness) {
                 exportActivity(id, events, completeness);
+            }
+
+            @Override
+            public com.nekkora.agent.platform.DeliveryView delivery(com.nekkora.agent.exec.ExecutionId id) {
+                return ctx.platform().delivery(id);
             }
         };
     }

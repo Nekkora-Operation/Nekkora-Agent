@@ -27,8 +27,11 @@ final class MachineClient {
     /** Resposta esperada (2xx; ou 409 do relatório com o desfecho {@code CONFLICT}, que a Platform registrou). */
     record Ok<T>(int status, T value) implements Result<T> {}
 
-    /** Recusa HTTP com o código do corpo ({@code {"error":"..."}}) e o {@code Retry-After}, se veio. */
-    record Refused<T>(int status, String error, Optional<Long> retryAfterSeconds) implements Result<T> {}
+    /**
+     * Recusa HTTP com o código do corpo ({@code {"error":"...","reason":"..."}}; {@code reason} é opcional) e o
+     * {@code Retry-After}, se veio.
+     */
+    record Refused<T>(int status, String error, String reason, Optional<Long> retryAfterSeconds) implements Result<T> {}
 
     /** Status de sucesso com corpo fora do contrato: nada é aceito dele. */
     record Malformed<T>(int status) implements Result<T> {}
@@ -67,10 +70,23 @@ final class MachineClient {
         this.agentVersion = agentVersion;
     }
 
-    Result<CredentialVault.Redeemed> redeem(Destination d, CredentialVault.Material m, Optional<String> currentToken) {
+    /** PLATFORM-AGENT-V2-002 T06: intenção declarada no resgate ({@code Nekkora-Agent-Intent}). */
+    enum Intent {
+        PAIR("pair"), ROTATE("rotate");
+
+        final String header;
+
+        Intent(String header) {
+            this.header = header;
+        }
+    }
+
+    static final String INTENT_HEADER = "Nekkora-Agent-Intent";
+
+    Result<CredentialVault.Redeemed> redeem(Destination d, CredentialVault.Material m, Optional<String> currentToken, Intent intent) {
         String body = Json.obj().str("code", m.code()).str("credentialSecret", m.secret()).str("agentVersion", agentVersion)
                 .raw("contractVersions", "[\"" + CONTRACT + "\"]").toString();
-        return call(d, "POST", "/agent/api/v1/enrollments/redeem", currentToken.orElse(null), body, j -> {
+        return call(d, "POST", "/agent/api/v1/enrollments/redeem", currentToken.orElse(null), Map.of(INTENT_HEADER, intent.header), body, j -> {
             UUID org = Json.uuid(j, "organizationId");
             UUID agent = Json.uuid(j, "agentId");
             UUID cred = Json.uuid(j, "credentialId");
@@ -222,12 +238,17 @@ final class MachineClient {
     }
 
     private <T> Result<T> call(Destination d, String method, String path, String token, String body, Parser<T> parser) {
+        return call(d, method, path, token, Map.of(), body, parser);
+    }
+
+    private <T> Result<T> call(Destination d, String method, String path, String token, Map<String, String> extra, String body, Parser<T> parser) {
         Map<String, String> h = new LinkedHashMap<>();
         h.put("Nekkora-Agent-Contract", CONTRACT);
         h.put("Accept", "application/json");
         h.put("User-Agent", "nekkora-agent/" + agentVersion);
         if (body != null) h.put("Content-Type", "application/json");
         if (token != null) h.put("Authorization", "Bearer " + token);
+        h.putAll(extra);
         HttpTransport.Response res;
         try {
             res = http.send(new HttpTransport.Request(method, d.resolve(path), h, body == null ? null : body.getBytes(StandardCharsets.UTF_8)));
@@ -246,6 +267,7 @@ final class MachineClient {
             return v == null ? new Malformed<>(s) : new Ok<>(s, v);
         }
         String err = json == null ? null : Json.text(json, "error");
-        return new Refused<>(s, err == null || err.length() > 40 ? null : err, res.retryAfterSeconds());
+        String reason = json == null ? null : Json.text(json, "reason");
+        return new Refused<>(s, err == null || err.length() > 40 ? null : err, reason == null || reason.length() > 60 ? null : reason, res.retryAfterSeconds());
     }
 }

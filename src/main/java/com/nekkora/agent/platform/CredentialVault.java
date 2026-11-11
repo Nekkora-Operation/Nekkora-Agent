@@ -245,13 +245,15 @@ final class CredentialVault {
      * vínculo. No servidor nada muda — a revogação é ato da Platform (sec. 4.3).
      */
     synchronized void remove() throws IOException {
-        secrets.delete(CREDENTIAL);
-        secrets.delete(REDEEM);
-        Files.deleteIfExists(dir.resolve(FILE));
+        // a memória sai primeiro: mesmo que um arquivo não possa ser apagado agora, nada mais é usado por este processo (e,
+        // sem a credencial na guarda, um vínculo que sobrar no disco nunca autentica nada depois do reinício)
         link = null;
         pending = null;
         token = null;
         lastRefusal = null;
+        secrets.delete(CREDENTIAL);
+        secrets.delete(REDEEM);
+        Files.deleteIfExists(dir.resolve(FILE));
     }
 
     static String newSecret() {
