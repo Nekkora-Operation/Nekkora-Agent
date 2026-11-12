@@ -96,6 +96,15 @@ public final class ExternalLaunch {
             // o pedido de vínculo vem PRIMEIRO: uma pasta com estado.json e sem ele nunca é de uma execução externa vinculada
             link.write(dir, id, auth.get());
             writeLauncher(dir);
+            // T13: confere de novo DEPOIS de marcar o lançador (o desvínculo grava o pedido e procura lançadores vivos): se um
+            // desvínculo foi confirmado nesse intervalo, nada é iniciado (a pasta fica sem estado.json e não é adotada)
+            Optional<UUID> again;
+            try {
+                again = gate.authorize(b.automationId());
+            } catch (RuntimeException e) {
+                again = Optional.empty();
+            }
+            if (again.isEmpty()) return refuse(err, ErrorCode.EXT_NOT_AUTHORIZED, EXIT_NOT_STARTED);
             store.save(r);
             r = r.moveTo(ExecutionState.STARTING, null, clock.instant());
             store.save(r);

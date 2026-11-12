@@ -278,7 +278,14 @@ public final class AgentApp {
     private void unlinkFinished(PlatformService.UnlinkPreview p, PlatformService.UnlinkResult r) {
         renderPlatform();
         if (r.done()) {
-            toast(r.problem() == null ? Severity.SUCCESS : Severity.WARNING, "Máquina desvinculada", PlatformText.unlinked(r, p.host(), p.organizationId()));
+            // T13: o desfecho dito pela Platform (confirmado, já encerrado, ou Platform sem suporte: só local)
+            boolean ok = r.remote() == PlatformStatus.RemoteOutcome.CONFIRMED || r.remote() == PlatformStatus.RemoteOutcome.ENDED_BY_ADMINISTRATION
+                    || r.remote() == PlatformStatus.RemoteOutcome.ENDED_BY_MACHINE;
+            toast(ok && (r.problem() == null) ? Severity.SUCCESS : Severity.WARNING, PlatformText.unlinkTitle(r),
+                    PlatformText.unlinkOutcome(r, p.host(), p.organizationId()));
+        } else if (r.pending()) {
+            // confirmado e guardado; a Platform ainda não confirmou (nunca "Worker liberado")
+            toast(Severity.WARNING, PlatformText.unlinkTitle(r), PlatformText.unlinkOutcome(r, p.host(), p.organizationId()));
         } else if (r.queued()) {
             toast(Severity.INFO, "Desvínculo em andamento", "A linha de comunicação com a Platform está ocupada; o desvínculo é aplicado em seguida.");
         } else if (r.problem() == ErrorCode.PLT_UNLINK_RUNNING) {

@@ -64,6 +64,8 @@ final class FakeGateway implements HttpTransport {
         UUID org, id, agent;
         String hash;
         boolean revoked;
+        /** T13: quem revogou (ADMIN, MACHINE, ROTATION); {@code null} enquanto vale. */
+        String revokedBy;
         Instant expires;
     }
 
@@ -102,6 +104,12 @@ final class FakeGateway implements HttpTransport {
     final Map<UUID, Req> runRequests = new LinkedHashMap<>();
     final Map<String, Deque<Fault>> faults = new LinkedHashMap<>();
     final List<Request> requests = new CopyOnWriteArrayList<>();
+    /** T13: {@code false} simula uma Platform anterior, sem a rota de desvínculo (404). */
+    boolean unlinkSupported = true;
+    /** T13: a operação de desvínculo de cada Agent encerrado pela própria máquina (uma por Agent). */
+    final Map<UUID, UUID> unlinkOps = new LinkedHashMap<>();
+    /** T13: os pedidos aceitos que a máquina informou como iniciados no desvínculo. */
+    final List<UUID> reportedLaunched = new CopyOnWriteArrayList<>();
     final List<String> bodies = new CopyOnWriteArrayList<>();
     int unauthenticated;
     /** Injeção: sequências que o servidor trata como INVALID (divergência de versão do envelope). */
@@ -192,7 +200,12 @@ final class FakeGateway implements HttpTransport {
         Agent a = agents.get(agent);
         a.active = false;
         a.assigned = false;
-        for (Credential c : credentials.values()) if (c.agent.equals(agent)) c.revoked = true;
+        for (Credential c : credentials.values()) {
+            if (c.agent.equals(agent) && !c.revoked) {
+                c.revoked = true;
+                c.revokedBy = "ADMIN";
+            }
+        }
     }
 
     void revokeAuthorization(UUID id) {
@@ -250,6 +263,10 @@ final class FakeGateway implements HttpTransport {
     private Response route(Request r, String path, Map<String, Object> j) {
         String bearer = Optional.ofNullable(r.headers().get("Authorization")).filter(h -> h.startsWith("Bearer ")).map(h -> h.substring(7)).orElse(null);
         if (path.equals("/agent/api/v1/enrollments/redeem")) return redeem(j, bearer, r.headers().get("Nekkora-Agent-Intent"));
+        if (path.equals("/agent/api/v1/link/unlink") && r.method().equals("POST")) {
+            if (!unlinkSupported) return err(404, "not_found", null); // Platform anterior: a rota não existe
+            return unlink(j, bearer);
+        }
         Agent m = authenticate(bearer, false);
         if (m == null) {
             unauthenticated++;
@@ -322,6 +339,7 @@ final class FakeGateway implements HttpTransport {
         Agent current = authenticate(bearer, true);
         if (current == null || !current.id.equals(e.agentForRotation)) return refused();
         credentialOf(bearer).revoked = true; // a anterior é revogada na MESMA transação
+        credentialOf(bearer).revokedBy = "ROTATION";
         Credential c = issue(current, secret);
         e.consumedCredential = c.id;
         return identity(c);
@@ -348,6 +366,63 @@ final class FakeGateway implements HttpTransport {
     private Response refused() {
         unauthenticated++;
         return err(401, "unauthenticated", null);
+    }
+
+    /**
+     * T13 (espelho do contrato da API, POST /agent/api/v1/link/unlink): autoridade só da credencial (segredo conferido, mesmo
+     * revogada ou vencida); o corpo só confere o Agent. Repetição da MESMA operação depois de concluída: o mesmo 200; vínculo
+     * encerrado de outro modo: 409 com o motivo; credencial substituída por rotação ou segredo errado: 401.
+     */
+    private Response unlink(Map<String, Object> j, String bearer) {
+        Credential c = credentialOf(bearer);
+        Matcher m = bearer == null ? null : TOKEN.matcher(bearer);
+        if (c == null || m == null || !m.matches() || !sha(m.group(4)).equals(c.hash)) {
+            unauthenticated++;
+            return err(401, "unauthenticated", null);
+        }
+        UUID op = Json.uuid(j, "operationId");
+        UUID agentId = Json.uuid(j, "agentId");
+        List<?> launched = Json.list(j, "launchedRunRequests");
+        if (op == null || agentId == null || launched == null || launched.size() > 50 || !agentId.equals(c.agent)) return err(400, "invalid_request", null);
+        Agent a = agents.get(c.agent);
+        if (c.revoked) {
+            if ("MACHINE".equals(c.revokedBy)) return op.equals(unlinkOps.get(c.agent)) ? unlinked(op, a) : conflict("link_ended_by_machine");
+            if ("ADMIN".equals(c.revokedBy)) return conflict("link_ended_by_administration");
+            unauthenticated++;
+            return err(401, "unauthenticated", null);
+        }
+        if (a == null || !a.active || !a.assigned) {
+            unauthenticated++;
+            return err(401, "unauthenticated", null);
+        }
+        List<UUID> started = new ArrayList<>();
+        for (Object o : launched) started.add(UUID.fromString(String.valueOf(o)));
+        reportedLaunched.addAll(started);
+        unlinkOps.put(a.id, op);
+        a.active = false;
+        a.assigned = false;
+        for (Credential x : credentials.values()) {
+            if (x.agent.equals(a.id) && !x.revoked) {
+                x.revoked = true;
+                x.revokedBy = "MACHINE";
+            }
+        }
+        for (Req q : runRequests.values()) {
+            if (!q.agent.equals(a.id)) continue;
+            if (q.state.equals("REQUESTED") || q.state.equals("DELIVERED")) {
+                q.state = clock.instant().isBefore(q.validUntil) ? "REFUSED" : "EXPIRED";
+                if (q.state.equals("REFUSED")) q.reason = "AGENT_UNLINKED";
+            } else if (q.state.equals("ACCEPTED") && !started.contains(q.id)) {
+                q.state = "NOT_STARTED";
+            }
+        }
+        return unlinked(op, a);
+    }
+
+    private Response unlinked(UUID op, Agent a) {
+        return ok(Json.obj().str("operationId", op.toString()).str("outcome", "UNLINKED").str("agentId", a.id.toString())
+                .str("workerId", a.worker == null ? null : a.worker.toString()).str("unlinkedAt", clock.instant().toString()).num("runRequestsClosed", 0)
+                .num("runRequestsKeptAccepted", 0).toString());
     }
 
     /** sec. 4.4 (e a rotação aceita a credencial vencida, nunca a revogada). */

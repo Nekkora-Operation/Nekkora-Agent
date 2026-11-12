@@ -220,6 +220,14 @@ final class MainWindow extends NekkoraFrame {
         link.getAccessibleContext().setAccessibleName("Vínculo: " + PlatformText.link(st.link()));
         rows.add("Vínculo", link);
         if (st.host() != null) rows.add("Platform", st.host());
+        if (st.link() == PlatformStatus.LinkState.UNLINKING) {
+            // T13: o vínculo que está sendo encerrado (identificadores) e o que sai pela rede agora
+            if (st.organizationId() != null) rows.add("Organização", identifier("Organização", st.organizationId()));
+            if (st.workerId() != null) rows.add("Worker", identifier("Worker", st.workerId()));
+            if (st.agentId() != null) rows.add("Agent", identifier("Agent", st.agentId()));
+            rows.add("Comunicação", "Só o pedido de desvínculo é enviado");
+            rows.add("Envios", PlatformText.deliveries(st));
+        }
         if (st.paired()) {
             // T06: o contrato só traz identificadores (sem nomes): forma curta na tela, completa para leitor de tela e dica
             if (st.organizationId() != null) rows.add("Organização", identifier("Organização", st.organizationId()));
@@ -238,7 +246,14 @@ final class MainWindow extends NekkoraFrame {
         platformRows.removeAll();
         platformRows.add(rows, BorderLayout.CENTER);
         platformNotice.removeAll();
-        if (!st.blocked().isEmpty()) {
+        if (st.unlink().pending()) {
+            platformNotice.add(new NekkoraInlineAlert(Severity.WARNING, "Desvínculo aguardando a Platform", PlatformText.unlinkPendingNotice(st.unlink())),
+                    BorderLayout.CENTER);
+        } else if (st.unlink().concluded() != null && st.link() == PlatformStatus.LinkState.NOT_PAIRED) {
+            // T13: a conclusão pode chegar depois (conexão de volta, Agent reaberto): o card diz como terminou nesta sessão
+            platformNotice.add(new NekkoraInlineAlert(st.unlink().concluded() == PlatformStatus.RemoteOutcome.UNSUPPORTED ? Severity.WARNING : Severity.SUCCESS,
+                    "Desvínculo concluído", PlatformText.remoteOutcome(st.unlink().concluded())), BorderLayout.CENTER);
+        } else if (!st.blocked().isEmpty()) {
             platformNotice.add(new NekkoraInlineAlert(Severity.WARNING, "Envio parado", st.blocked().size() + (st.blocked().size() == 1 ? " execução precisa"
                     : " execuções precisam") + " de decisão para continuar o envio. A automação não é afetada."), BorderLayout.CENTER);
         } else if (st.problem() != null && st.link() != PlatformStatus.LinkState.PAIRED) {

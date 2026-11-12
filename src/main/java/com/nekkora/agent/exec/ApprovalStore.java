@@ -53,6 +53,15 @@ public final class ApprovalStore {
         if (all.removeIf(a -> a.fingerprint().equals(p.fingerprint()))) save(all);
     }
 
+    /**
+     * PLATFORM-AGENT-V2-004 T13: o vínculo com a Platform terminou (desvínculo concluído). As aprovações valiam para os
+     * pedidos e autorizações daquele vínculo: um novo pareamento (talvez em outra organização) não as herda. Execuções só
+     * locais voltam a pedir a aprovação da pessoa.
+     */
+    public synchronized void clearAll() throws ExecRefused {
+        if (!load().isEmpty()) save(List.of());
+    }
+
     List<Approval> load() {
         if (!Files.isRegularFile(file)) return List.of();
         try {

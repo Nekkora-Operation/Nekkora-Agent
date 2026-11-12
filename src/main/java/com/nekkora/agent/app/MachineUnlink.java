@@ -43,7 +43,8 @@ public final class MachineUnlink {
      */
     public PlatformService.UnlinkResult confirm(Plan plan, boolean evenWithPending) {
         if (running.getAsBoolean()) return new PlatformService.UnlinkResult(false, false, ErrorCode.PLT_UNLINK_RUNNING, 0, 0);
-        return platform.unlink(evenWithPending, plan.preview().server());
+        // T13: a conferência é refeita DEPOIS de o pedido ser gravado (o início confere o pedido depois de se marcar)
+        return platform.unlink(evenWithPending, plan.preview().server(), () -> !running.getAsBoolean());
     }
 
     /** Execução em andamento nesta máquina: a da janela ou de um pedido da Platform (o executor) e a do lançador externo. */
@@ -53,6 +54,14 @@ public final class MachineUnlink {
         for (ExecutionRecord r : store.all()) {
             if (r.kind() != ExecutionPackage.Kind.EXTERNAL_MONITORED || r.state().terminal()) continue;
             if (ExternalLaunch.launcherOf(store.dir(r.id())).map(o -> o.alive()).orElse(false)) return true;
+        }
+        // T13: um lançador vivo que ainda não gravou o estado.json (passou pela trava e ainda vai conferir de novo) também conta
+        java.io.File[] dirs = store.root().toFile().listFiles(java.io.File::isDirectory);
+        if (dirs != null) {
+            for (java.io.File f : dirs) {
+                if (java.nio.file.Files.exists(f.toPath().resolve("estado.json"))) continue;
+                if (ExternalLaunch.launcherOf(f.toPath()).map(o -> o.alive()).orElse(false)) return true;
+            }
         }
         return false;
     }

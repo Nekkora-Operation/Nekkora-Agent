@@ -158,6 +158,20 @@ final class CredentialVault {
         return l == null || l.refused() ? Optional.empty() : Optional.ofNullable(t);
     }
 
+    /**
+     * PLATFORM-AGENT-V2-004 T13: a credencial guardada MESMO marcada como recusada. Só para a operação de desvínculo: um
+     * {@code 401} anterior não prova que o vínculo terminou, e só a rota de desvínculo responde de forma conclusiva (com o
+     * segredo desta credencial). Nenhuma outra chamada usa este acesso.
+     */
+    Optional<String> tokenForUnlink() {
+        String t = token;
+        Link l;
+        synchronized (this) {
+            l = link;
+        }
+        return l == null ? Optional.empty() : Optional.ofNullable(t);
+    }
+
     /** Material de resgate pendente (lido da guarda protegida). */
     synchronized Optional<Material> material() throws IOException {
         if (pending == null) return Optional.empty();

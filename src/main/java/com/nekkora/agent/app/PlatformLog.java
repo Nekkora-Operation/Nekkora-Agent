@@ -60,6 +60,23 @@ final class PlatformLog implements PlatformService.Diagnostics {
         log.info(LogEvent.PLATFORM_LINK_REMOVED, Field.of("undelivered_runs", undeliveredRuns), Field.of("server", server.name()));
     }
 
+    /** T13: só contagens, códigos curtos e o desfecho; nunca credencial, operação ou resposta do servidor. */
+    @Override
+    public void unlinkRequested(int undeliveredRuns, PlatformService.ServerView server) {
+        log.info(LogEvent.PLATFORM_UNLINK_REQUESTED, Field.of("undelivered_runs", undeliveredRuns), Field.of("server", server.name()));
+    }
+
+    @Override
+    public void unlinkAttempt(String result, int attempts) {
+        log.info(LogEvent.PLATFORM_UNLINK_ATTEMPT, Field.of("result", result), Field.of("attempts", attempts));
+    }
+
+    @Override
+    public void unlinkConcluded(com.nekkora.agent.platform.PlatformStatus.RemoteOutcome outcome, int undeliveredRuns, int attempts) {
+        log.info(LogEvent.PLATFORM_UNLINK_CONCLUDED, Field.of("outcome", outcome.name()), Field.of("undelivered_runs", undeliveredRuns),
+                Field.of("attempts", attempts));
+    }
+
     @Override
     public void connected() {
         log.info(LogEvent.PLATFORM_CONNECTED);

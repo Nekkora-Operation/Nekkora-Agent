@@ -25,7 +25,8 @@ class PlatformTextTest {
             String t = PlatformText.server(preview(s, LinkState.PAIRED)).toLowerCase(java.util.Locale.ROOT);
             assertFalse(t.contains("livre") || t.contains("liberado"), s + ": " + t);
         }
-        assertEquals("A Platform ainda aceita esta máquina: o vínculo continua lá até uma pessoa autorizada revogar o Agent em Workers.",
+        // T13: o pedido é enviado ao confirmar; antes da resposta, nada diz que o Worker ficou livre
+        assertEquals("A Platform aceita esta máquina agora. Ao confirmar, o pedido de desvínculo é enviado em seguida, e a resposta da Platform aparece aqui.",
                 PlatformText.server(preview(ServerView.ACCEPTED, LinkState.PAIRED)));
         assertTrue(PlatformText.server(preview(ServerView.REFUSED, LinkState.REFUSED)).startsWith("A Platform recusou a credencial desta máquina (revogada ou vencida)."));
         String offline = PlatformText.server(preview(ServerView.UNREACHABLE, LinkState.PAIRED));
@@ -36,10 +37,14 @@ class PlatformTextTest {
 
     @Test
     void consequencesAndPendingChoicesAreExplicit() {
-        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("para de enviar e de receber"));
-        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("credencial guardada nesta máquina é apagada"));
+        // T13: o desvínculo é pedido à Platform; sem conexão fica guardado; a administração continua podendo revogar
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("pede à Platform o encerramento deste vínculo"));
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("nada novo começa por este vínculo"));
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("Vinculada e Offline") && PlatformText.UNLINK_CONSEQUENCES.contains("revogar o vínculo em Workers"));
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("a credencial é apagada desta máquina quando a Platform responder"));
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("aprovações locais de pacotes"));
         assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("histórico das execuções e as automações desta máquina são mantidos"));
-        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("revogar o Agent na Platform (Workers)"));
+        assertTrue(PlatformText.UNLINK_CONSEQUENCES.contains("Cancelar não muda nada."));
         String p = PlatformText.unlinkPending(2, 15);
         assertTrue(p.startsWith("2 execuções ainda não foram entregues à Platform (15 eventos)."));
         assertTrue(p.contains("“Aguardar envios”") && p.contains("“Desvincular mesmo assim”") && p.contains("não entregues"));
