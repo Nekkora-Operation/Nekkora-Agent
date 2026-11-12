@@ -1,5 +1,7 @@
 # PLATFORM-AGENT-V2-002 · T06 — Desvincular a máquina no Agent
 
+> **Atualização (PLATFORM-AGENT-V2-004, T13, 12/11/2026):** o desvínculo passou a ser pedido também à Platform, por decisão da titular. Ver `docs/platform-agent-v2-004/t13-desvinculo-remoto.md`. O que este documento diz sobre o desvínculo ser só local vale para Agents anteriores e para Platforms sem a rota nova.
+
 ## O que muda no card "Platform"
 
 Três intenções, cada uma com o próprio botão e o próprio tipo de código:

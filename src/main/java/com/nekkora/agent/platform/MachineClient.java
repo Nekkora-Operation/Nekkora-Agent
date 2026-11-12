@@ -105,6 +105,29 @@ final class MachineClient {
         });
     }
 
+    /** PLATFORM-AGENT-V2-004 T13: a Platform encerrou o vínculo por ESTA operação (inclusive numa repetição). */
+    record Unlinked(UUID operationId, UUID agentId, UUID workerId, Instant unlinkedAt) {}
+
+    /**
+     * Desvínculo pela máquina ({@code POST /agent/api/v1/link/unlink}). Só um {@code 200} com o mesmo {@code operationId} e o
+     * mesmo Agent conclui; um {@code 409} com motivo conhecido diz que o vínculo já terminou de outro modo; um {@code 401}
+     * isolado NÃO prova nada; um {@code 404} é uma Platform sem a rota (versão anterior).
+     */
+    Result<Unlinked> unlink(Destination d, String token, UUID operationId, UUID agentId, List<UUID> launchedRunRequests) {
+        List<String> launched = new ArrayList<>();
+        for (UUID u : launchedRunRequests) launched.add("\"" + u + "\"");
+        String body = Json.obj().str("operationId", operationId.toString()).str("agentId", agentId.toString())
+                .raw("launchedRunRequests", "[" + String.join(",", launched) + "]").toString();
+        return call(d, "POST", "/agent/api/v1/link/unlink", token, body, j -> {
+            if (!"UNLINKED".equals(Json.text(j, "outcome"))) return null;
+            UUID op = Json.uuid(j, "operationId");
+            UUID agent = Json.uuid(j, "agentId");
+            Instant at = Json.instant(j, "unlinkedAt");
+            if (!operationId.equals(op) || !agentId.equals(agent) || at == null) return null;
+            return new Unlinked(op, agent, Json.uuid(j, "workerId"), at);
+        });
+    }
+
     Result<Authorizations> authorizations(Destination d, String token) {
         return call(d, "GET", "/agent/api/v1/authorizations", token, null, j -> {
             List<?> items = Json.list(j, "items");

@@ -137,7 +137,11 @@ final class RunRequestCoordinator implements AutoCloseable {
         }
         ExecutionController.Request req = new ExecutionController.Request(e.get().dir(), v.fingerprint(), e.get().python(), null, e.get().outputRoot(),
                 ExecutionController.DEFAULT_TIMEOUT, id, ExecutionRecord.Origin.PLATFORM_REQUEST,
-                (runDir, x) -> LocalGate.writeLinkRequest(runDir, link.get(), AtomicWriter.DEFAULT));
+                (runDir, x) -> {
+                    // T13: dentro do start (com a trava do executor): um desvínculo confirmado depois da decisão impede o início
+                    if (platform.unlinkPending()) throw new java.io.IOException("desvinculo pendente");
+                    LocalGate.writeLinkRequest(runDir, link.get(), AtomicWriter.DEFAULT);
+                });
         try {
             controller.start(req);
             platform.runRequestLaunched(v.runRequestId());

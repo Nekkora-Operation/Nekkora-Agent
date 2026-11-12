@@ -100,6 +100,14 @@ public enum ErrorCode {
     PLT_UNLINK_RUNNING("AGT-PLT-029", "Há uma execução em andamento nesta máquina: o desvínculo só pode ser concluído depois que ela terminar."),
     PLT_UNLINK_PENDING("AGT-PLT-030", "Há envios pendentes deste vínculo: aguarde os envios ou confirme o desvínculo mesmo assim."),
     PLT_UNDELIVERED_UNLINKED("AGT-PLT-031", "Registro guardado nesta máquina e não entregue: o vínculo foi removido antes do envio."),
+    // PLATFORM-AGENT-V2-004 T13: desvínculo também na Platform
+    PLT_UNLINK_REMOTE_PENDING("AGT-PLT-032", "O desvínculo foi confirmado nesta máquina e ainda não foi confirmado pela Platform. O Agent tenta de novo "
+            + "enquanto estiver aberto; até lá a Platform pode mostrar a máquina como vinculada e offline, e a administração pode revogar o vínculo "
+            + "em Workers."),
+    PLT_UNLINK_IN_PROGRESS("AGT-PLT-033", "Há um desvínculo desta máquina aguardando a confirmação da Platform: um novo pareamento só pode ser feito "
+            + "depois dela."),
+    PLT_UNLINK_UNSUPPORTED("AGT-PLT-034", "Esta Platform ainda não aceita o desvínculo pela máquina: a máquina foi desvinculada só aqui. Peça a "
+            + "revogação do vínculo em Workers para liberar o Worker."),
     // AGENT-PYTHON-001: Python externo (monitorado pelo lançador ou pacote externo). Código 0 não é sucesso de negócio.
     EXT_EXIT_ZERO_NO_SIGNAL("AGT-EXT-001", "O processo terminou com código 0, sem erro sinalizado; o sucesso de negócio não foi sinalizado pelo script."),
     EXT_EXIT_NONZERO("AGT-EXT-002", "O processo terminou com código de saída diferente de zero."),

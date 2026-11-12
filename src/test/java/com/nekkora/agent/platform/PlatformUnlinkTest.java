@@ -31,6 +31,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * PLATFORM-AGENT-V2-002 T06: intenção do código (pareamento × renovação) e "Desvincular esta máquina", contra o TRANSPORTE
  * SIMULADO ({@link FakeGateway}, espelho do contrato da API); as quedas são falhas INJETADAS. Nenhuma pausa.
+ * PLATFORM-AGENT-V2-004 T13: o desvínculo agora também encerra o vínculo na Platform (U8, U10, U13 e U14 atualizados; o
+ * protocolo completo está em {@link PlatformRemoteUnlinkTest}).
  */
 class PlatformUnlinkTest {
     @TempDir
@@ -212,7 +214,7 @@ class PlatformUnlinkTest {
     }
 
     @Test
-    @DisplayName("U8: desvínculo com a Platform aceitando a credencial: tudo do vínculo sai desta máquina; no servidor nada muda")
+    @DisplayName("U8: desvínculo com a Platform aceitando a credencial: a Platform confirma (Worker livre lá) e tudo do vínculo sai desta máquina")
     void unlinkOnline() throws Exception {
         Lab lab = ready();
         UUID agent = agentOf(lab);
@@ -222,16 +224,20 @@ class PlatformUnlinkTest {
         PlatformService.UnlinkResult r = u.confirm(plan, false);
         assertTrue(r.done());
         assertNull(r.problem());
+        assertEquals(PlatformStatus.RemoteOutcome.CONFIRMED, r.remote());
         assertEquals(LinkState.NOT_PAIRED, lab.svc.status().link());
         assertFalse(Files.exists(plataforma(lab).resolve(CredentialVault.FILE)));
         assertFalse(Files.exists(plataforma(lab).resolve(AuthorizationCache.FILE)));
         assertNull(lab.secrets.text(CredentialVault.CREDENTIAL));
         assertNull(lab.secrets.text(CredentialVault.REDEEM));
         assertTrue(lab.svc.authorizationsFor("sha256:" + PlatformFixtures.FP).isEmpty());
-        // a Platform continua com o Agent ativo (só uma pessoa revoga lá); a máquina não tem poder de administração
-        assertTrue(lab.gw.agents.get(agent).active && lab.gw.agents.get(agent).assigned);
+        // T13: a Platform encerrou o vínculo desta credencial (Worker livre lá), por UMA operação desta máquina
+        assertFalse(lab.gw.agents.get(agent).active || lab.gw.agents.get(agent).assigned);
+        assertEquals(1, lab.gw.count("POST", "/link/unlink"));
+        assertTrue(lab.gw.unlinkOps.containsKey(agent));
         String ledger = Files.readString(plataforma(lab).resolve(UnlinkLedger.DIR).resolve(agent + ".json"));
-        assertTrue(ledger.contains("\"server\":\"ACCEPTED\"") && ledger.contains("\"undeliveredRuns\":0"));
+        assertTrue(ledger.contains("\"server\":\"CONFIRMED\"") && ledger.contains("\"undeliveredRuns\":0"));
+        assertFalse(Files.exists(plataforma(lab).resolve(UnlinkRequestStore.FILE)), "o pedido sai só na conclusão");
         int calls = lab.gw.requests.size();
         lab.settle();
         assertEquals(calls, lab.gw.requests.size(), "nenhuma chamada pela identidade anterior depois do desvínculo");
@@ -257,7 +263,7 @@ class PlatformUnlinkTest {
     }
 
     @Test
-    @DisplayName("U10: depois da revogação na Platform (401): a consulta mostra a recusa e o desvínculo conclui sem insistir")
+    @DisplayName("U10: depois da revogação na Platform (401): a consulta mostra a recusa; o desvínculo pergunta UMA vez e conclui com 'já revogado'")
     void unlinkAfterServerRevocation() {
         Lab lab = ready();
         lab.gw.revokeAgent(agentOf(lab));
@@ -268,7 +274,10 @@ class PlatformUnlinkTest {
         int calls = lab.gw.requests.size();
         assertEquals(ServerView.REFUSED, u.plan().preview().server(), "já recusada: nenhuma chamada nova");
         assertEquals(calls, lab.gw.requests.size());
-        assertTrue(u.confirm(plan, false).done());
+        PlatformService.UnlinkResult r = u.confirm(plan, false);
+        assertTrue(r.done());
+        assertEquals(PlatformStatus.RemoteOutcome.ENDED_BY_ADMINISTRATION, r.remote());
+        assertEquals(calls + 1, lab.gw.requests.size(), "uma pergunta (a rota de desvínculo), nenhuma outra chamada");
         assertEquals(LinkState.NOT_PAIRED, lab.svc.status().link());
     }
 
@@ -352,7 +361,13 @@ class PlatformUnlinkTest {
         // intenção pré-início gravada (a execução ainda não existe)
         assertTrue(lab.svc.prepare(auth, "sha256:" + PlatformFixtures.FP).accepted());
         assertTrue(Files.exists(plataforma(lab).resolve(DeliveryStore.DIR).resolve(DeliveryStore.INTENT)));
-        // desvincula mesmo assim e pareia em outra organização (sem apagar a pasta)
+        // T13: um início sendo preparado (intenção gravada) bloqueia o desvínculo, sem mudar nada
+        assertEquals(ErrorCode.PLT_UNLINK_RUNNING, lab.svc.unlink(true, ServerView.NOT_CONSULTED).problem());
+        assertFalse(Files.exists(plataforma(lab).resolve(UnlinkRequestStore.FILE)));
+        assertNotNull(lab.secrets.text(CredentialVault.CREDENTIAL));
+        // o início não aconteceu (a tela descarta a intenção quando o início é recusado): desvincula mesmo assim e pareia em
+        // outra organização (sem apagar a pasta)
+        lab.svc.discardIntent();
         assertTrue(lab.svc.unlink(true, ServerView.NOT_CONSULTED).done());
         assertFalse(Files.exists(plataforma(lab).resolve(DeliveryStore.DIR).resolve(DeliveryStore.INTENT)), "intenção descartada");
         assertTrue(Files.readString(plataforma(lab).resolve(RunRequestStore.DIR).resolve(req + ".json")).contains("\"stage\":\"CLOSED\""));
@@ -383,7 +398,7 @@ class PlatformUnlinkTest {
     }
 
     @Test
-    @DisplayName("U14: renovação em andamento: a consulta não é feita e o desvínculo abandona a tentativa (material apagado)")
+    @DisplayName("U14: renovação em andamento: a consulta não é feita; a renovação termina antes e o desvínculo sai com a credencial nova")
     void unlinkDuringRotation() {
         Lab lab = ready();
         assertTrue(lab.svc.rotate(lab.gw.rotationCode(agentOf(lab)).toCharArray()).accepted());
@@ -394,11 +409,15 @@ class PlatformUnlinkTest {
         assertTrue(plan.preview().rotationPending());
         assertEquals(ServerView.NOT_CONSULTED, plan.preview().server());
         assertEquals(calls, lab.gw.requests.size());
-        assertTrue(u.confirm(plan, false).done());
+        PlatformService.UnlinkResult r = u.confirm(plan, false);
+        assertTrue(r.pending(), "pendente: a renovação termina primeiro");
+        assertEquals(calls, lab.gw.requests.size(), "nada enviado ainda");
+        lab.settle();
         assertNull(lab.secrets.text(CredentialVault.REDEEM));
         assertNull(lab.secrets.text(CredentialVault.CREDENTIAL));
-        lab.settle();
-        assertEquals(calls, lab.gw.requests.size(), "a renovação abandonada não é repetida");
+        assertEquals(1, lab.gw.count("POST", "/enrollments/redeem") - 1, "a renovação foi resgatada uma vez");
+        assertEquals(1, lab.gw.count("POST", "/link/unlink"), "um desvínculo, com a credencial que valia");
+        assertEquals(PlatformStatus.RemoteOutcome.CONFIRMED, lab.svc.status().unlink().concluded());
         assertEquals(LinkState.NOT_PAIRED, lab.svc.status().link());
     }
 

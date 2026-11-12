@@ -21,7 +21,13 @@ public final class FaultPoints {
          * Pedido da Platform: a resposta da decisão chegou com sucesso, mas ainda não foi aplicada localmente. Devolver
          * {@code true} faz o Agent tratá-la como perdida.
          */
-        DECISION_RESPONSE_RECEIVED
+        DECISION_RESPONSE_RECEIVED,
+        /**
+         * PLATFORM-AGENT-V2-004 T13: a Platform respondeu ao desvínculo (o commit já aconteceu lá), mas a resposta ainda não
+         * foi aplicada aqui. Devolver {@code true} faz o Agent tratá-la como perdida (sem resposta): a reconciliação repete a
+         * mesma operação.
+         */
+        UNLINK_RESPONSE_RECEIVED
     }
 
     /** Implementação de teste, descoberta por {@link ServiceLoader} (só existe no JAR de laboratório). */

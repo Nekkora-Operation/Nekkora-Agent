@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>{@code quedaAposStarting}: em {@link FaultPoints.Point#STARTING_SAVED_BEFORE_PROCESS}, grava o registro e derruba a JVM
  *       ({@code halt(86)}): STARTING gravado, processo Python ainda NÃO criado;</li>
  *   <li>{@code perderConfirmacaoDecisao}: em {@link FaultPoints.Point#DECISION_RESPONSE_RECEIVED}, descarta UMA vez a resposta
- *       de uma decisão que a Platform já gravou.</li>
+ *       de uma decisão que a Platform já gravou;</li>
+ *   <li>{@code perderRespostaDesvinculo} (T13): em {@link FaultPoints.Point#UNLINK_RESPONSE_RECEIVED}, descarta UMA vez a resposta
+ *       de um desvínculo que a Platform já concluiu.</li>
  * </ul>
  * O registro ({@code nekkora.agent.lab.registro}, uma linha por falha) diz qual ponto foi atingido e quando.
  */
@@ -33,6 +35,11 @@ public final class LabFaults implements FaultPoints.Hook {
         }
         if ("perderConfirmacaoDecisao".equals(fault) && point == FaultPoints.Point.DECISION_RESPONSE_RECEIVED && lostOnce.compareAndSet(false, true)) {
             record(point, "resposta descartada");
+            return true;
+        }
+        // PLATFORM-AGENT-V2-004 T13: a Platform concluiu o desvinculo (commit) e a resposta se perde UMA vez antes de chegar
+        if ("perderRespostaDesvinculo".equals(fault) && point == FaultPoints.Point.UNLINK_RESPONSE_RECEIVED && lostOnce.compareAndSet(false, true)) {
+            record(point, "resposta do desvinculo descartada");
             return true;
         }
         return false;

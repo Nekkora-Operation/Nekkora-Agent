@@ -101,6 +101,25 @@ class ExternalLaunchTest {
         assertTrue(Files.exists(runs.dir(rec.id()).resolve(ExternalLaunch.LAUNCHER_FILE)));
     }
 
+    /**
+     * PLATFORM-AGENT-V2-004 T13: um desvínculo confirmado ENTRE a primeira conferência da trava e a marca do lançador é visto
+     * na segunda conferência (depois de lancador.json): nada é iniciado, sem estado.json (a pasta nunca é adotada).
+     */
+    @Test
+    void desvinculoConfirmadoDuranteOLancamentoImpedeOInicio() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        ExternalLaunch l = new ExternalLaunch(runs, bindings, a -> calls.incrementAndGet() == 1 ? Optional.of(authorization) : Optional.empty(), (dir, id, z) -> {
+            Files.writeString(dir.resolve("plataforma.json"), "{\"authorizationId\": \"" + z + "\"}\n");
+            linkRequests.add(dir);
+        }, Clock.systemUTC());
+        ExternalLaunch.Result r = l.run("relatorio", python, script, List.of(), work, new PrintStream(new ByteArrayOutputStream()));
+        assertEquals(ErrorCode.EXT_NOT_AUTHORIZED, r.code());
+        assertEquals(2, calls.get(), "a trava foi conferida de novo depois da marca do lançador");
+        assertEquals(0, effects(), "o processo do cliente nunca foi criado");
+        assertEquals(1, linkRequests.size());
+        assertFalse(Files.exists(linkRequests.get(0).resolve("estado.json")), "sem registro: a pasta nunca vira execução adotada");
+    }
+
     @Test
     void erroComEfeitoPreservaOCodigoDeSaida() throws Exception {
         ExternalLaunch.Result r = launch(List.of("--codigo", "7"));
