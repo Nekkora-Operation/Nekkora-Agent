@@ -11,6 +11,9 @@ import com.nekkora.agent.platform.CredentialVault.Link;
 import com.nekkora.agent.platform.CredentialVault.Pending;
 import com.nekkora.agent.platform.DeliveryStore.Delivery;
 import com.nekkora.agent.platform.DeliveryStore.Range;
+import com.nekkora.agent.core.FaultPoints;
+import com.nekkora.agent.platform.MachineClient.Malformed;
+import com.nekkora.agent.platform.MachineClient.NoResponse;
 import com.nekkora.agent.platform.MachineClient.Ok;
 import com.nekkora.agent.platform.MachineClient.Refused;
 import com.nekkora.agent.platform.MachineClient.Result;
@@ -80,7 +83,17 @@ public final class PlatformService implements AutoCloseable {
 
         default void credentialRefused() {}
 
-        default void linkRemoved() {}
+        /** T06: vínculo removido desta máquina; quantas execuções ficaram sem entrega e o que a Platform respondeu antes. */
+        default void linkRemoved(int undeliveredRuns, ServerView server) {}
+
+        /** T13: desvínculo confirmado pela pessoa e gravado (pedido à Platform a seguir). */
+        default void unlinkRequested(int undeliveredRuns, ServerView server) {}
+
+        /** T13: uma tentativa NÃO conclusiva (código curto: SEM_RESPOSTA, CREDENCIAL_RECUSADA, LIMITE…). */
+        default void unlinkAttempt(String result, int attempts) {}
+
+        /** T13: desfecho conclusivo; o vínculo antigo saiu desta máquina. */
+        default void unlinkConcluded(PlatformStatus.RemoteOutcome outcome, int undeliveredRuns, int attempts) {}
 
         default void connected() {}
 
@@ -138,6 +151,19 @@ public final class PlatformService implements AutoCloseable {
     private final AuthorizationCache authorizations;
     private final DeliveryStore deliveries;
     private final RunRequestStore requests;
+    private final UnlinkLedger unlinks;
+    /** T13: o pedido de desvínculo confirmado e ainda não concluído na Platform ({@code null}: nenhum). */
+    private final UnlinkRequestStore unlinkRequests;
+    private volatile UnlinkRequestStore.Request unlinking;
+    /** T13: há um arquivo de pedido que não se lê: na dúvida o vínculo antigo continua bloqueado e nada é enviado. */
+    private volatile boolean unlinkUnreadable;
+    private volatile PlatformStatus.RemoteOutcome unlinkConcluded;
+    private volatile Instant unlinkConcludedAt;
+    private final Backoff unlinkBackoff;
+    /** Chamado (na linha do transporte) quando o vínculo antigo termina de fato: o app apaga o que era dele fora do canal. */
+    private volatile Runnable onLinkEnded = () -> {};
+    /** T06: execuções registradas como não entregues num desvínculo (lidas na abertura e mantidas a cada desvínculo). */
+    private volatile Set<ExecutionId> unlinkedUndelivered = Set.of();
     private Instant nextRunRequests = Instant.MIN;
     private final MachineClient client;
     private final Backoff net;
@@ -181,9 +207,12 @@ public final class PlatformService implements AutoCloseable {
         this.authorizations = new AuthorizationCache(dir, writer);
         this.deliveries = new DeliveryStore(dir, writer);
         this.requests = new RunRequestStore(dir, writer);
+        this.unlinks = new UnlinkLedger(dir, writer);
+        this.unlinkRequests = new UnlinkRequestStore(dir, writer);
         this.client = new MachineClient(http, agentVersion);
         this.net = new Backoff(random);
         this.redeemBackoff = new Backoff(random);
+        this.unlinkBackoff = new Backoff(random);
     }
 
     /** Transporte de produção: HTTPS do JDK e DPAPI no Windows. */
@@ -202,6 +231,19 @@ public final class PlatformService implements AutoCloseable {
         listeners.add(l);
     }
 
+    /** T13: o que o app faz quando o vínculo antigo termina (ex.: apagar as aprovações locais de pacote). */
+    public void onLinkEnded(Runnable r) {
+        this.onLinkEnded = r == null ? () -> {} : r;
+    }
+
+    /**
+     * T13: há um desvínculo confirmado e não concluído (ou um pedido ilegível): nada novo começa pelo vínculo antigo e um
+     * novo pareamento é recusado.
+     */
+    public boolean unlinkPending() {
+        return unlinking != null || unlinkUnreadable;
+    }
+
     // ------------------------------------------------------------------------------------------- ciclo de vida
 
     /** Lê o estado local (vínculo, autorizações guardadas, entregas) sem rede. Chamado na inicialização, fora da EDT. */
@@ -215,6 +257,10 @@ public final class PlatformService implements AutoCloseable {
         vault.link().ifPresent(l -> authorizations.load(l.agentId()));
         known.clear();
         for (Delivery d : deliveries.list().deliveries()) known.put(d.executionId(), d);
+        unlinkedUndelivered = UnlinkLedger.undelivered(unlinks.all());
+        unlinking = unlinkRequests.load().orElse(null);
+        unlinkUnreadable = unlinking == null && UnlinkRequestStore.present(dir);
+        if (unlinkUnreadable) problem = ErrorCode.PLT_STORAGE_FAILED;
         resolveIntent(clock.instant());
         refreshProtection();
         publish();
@@ -223,7 +269,7 @@ public final class PlatformService implements AutoCloseable {
     public synchronized void start() {
         if (exec != null || closed) return;
         exec = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "nekkora-agent-plataforma");
+            Thread t = new Thread(r, THREAD);
             t.setDaemon(true);
             t.setPriority(Thread.NORM_PRIORITY - 1);
             return t;
@@ -269,6 +315,8 @@ public final class PlatformService implements AutoCloseable {
      */
     public Action pair(String platformUrl, char[] code) {
         try {
+            // T13: a operação antiga nunca usa uma credencial nova, nem a nova sobrescreve o material da antiga
+            if (unlinkPending()) return Action.refused(ErrorCode.PLT_UNLINK_IN_PROGRESS);
             Optional<Destination> d = Destination.parse(platformUrl);
             if (d.isEmpty()) return Action.refused(ErrorCode.PLT_DESTINATION_INVALID);
             String c = code == null ? null : new String(code).strip();
@@ -294,6 +342,7 @@ public final class PlatformService implements AutoCloseable {
     /** Rotação com o código gerado pela pessoa na Platform (sec. 4.3). A credencial atual só sai depois da confirmação. */
     public Action rotate(char[] code) {
         try {
+            if (unlinkPending()) return Action.refused(ErrorCode.PLT_UNLINK_IN_PROGRESS);
             String c = code == null ? null : new String(code).strip();
             try {
                 vault.beginRotation(c, clock.instant());
@@ -313,26 +362,383 @@ public final class PlatformService implements AutoCloseable {
         }
     }
 
+    // ------------------------------------------------------------------------------------------- desvínculo (T06)
+
     /**
-     * Remove o vínculo LOCAL (decisão da pessoa, tipicamente depois de uma recusa): credencial, material e autorizações
-     * guardadas. Entregas pendentes do vínculo removido ficam guardadas e marcadas como de outro vínculo (não são
-     * reenviadas por um vínculo novo). No servidor nada muda.
+     * O que a Platform respondeu à credencial desta máquina, consultada ANTES do desvínculo. Nunca diz que o Worker está
+     * livre na Platform: só uma pessoa com permissão revoga o Agent lá (a máquina não tem rota para isso).
      */
+    public enum ServerView {
+        /** A credencial ainda é aceita: o vínculo continua na Platform até uma pessoa autorizada revogar o Agent. */
+        ACCEPTED,
+        /** A Platform recusou a credencial ({@code 401}: revogada ou vencida). */
+        REFUSED,
+        /** Sem resposta, indisponível ou resposta fora do contrato: a Platform não pôde ser consultada. */
+        UNREACHABLE,
+        /** Não consultada (endereço alterado, versão recusada, resgate em andamento ou consulta não pedida). */
+        NOT_CONSULTED
+    }
+
+    /** Retrato para a confirmação do desvínculo (identificadores completos: o contrato não traz nomes). */
+    public record UnlinkPreview(boolean linked, LinkState state, String host, String organizationId, String agentId, String workerId, int pendingRuns,
+                                long pendingEvents, boolean rotationPending, ServerView server) {}
+
+    /**
+     * Resultado do desvínculo. {@code done}: o vínculo saiu desta máquina (concluído; {@code remote} diz como a Platform
+     * respondeu). {@code pending}: confirmado e gravado, aguardando a Platform (nada novo começa pelo vínculo antigo).
+     * {@code queued}: o pedido ficou na linha do transporte (ocupada) e será aplicado em seguida. Senão, {@code problem} diz
+     * por que nada mudou.
+     */
+    public record UnlinkResult(boolean done, boolean queued, ErrorCode problem, int undeliveredRuns, long undeliveredEvents, boolean pending,
+                               PlatformStatus.RemoteOutcome remote) {
+        public UnlinkResult(boolean done, boolean queued, ErrorCode problem, int undeliveredRuns, long undeliveredEvents) {
+            this(done, queued, problem, undeliveredRuns, undeliveredEvents, false, null);
+        }
+
+        static UnlinkResult refused(ErrorCode why, int runs, long events) {
+            return new UnlinkResult(false, false, why, runs, events);
+        }
+    }
+
+    /** Espera máxima pela linha do transporte (uma rodada em andamento pode estar numa chamada de até 30 s). */
+    static final Duration TRANSPORT_WAIT = Duration.ofSeconds(45);
+
+    /**
+     * Antes de confirmar o desvínculo: os envios pendentes do vínculo atual e, se {@code consult} e o vínculo está em uso,
+     * uma consulta da credencial à Platform (presença). Um {@code 401} aqui marca a credencial como recusada (como em
+     * qualquer chamada). Roda na linha do transporte; chamar fora da EDT.
+     */
+    public UnlinkPreview previewUnlink(boolean consult) {
+        return onTransport(() -> previewNow(consult), () -> preview(ServerView.UNREACHABLE));
+    }
+
+    /**
+     * Desvincula esta máquina (decisão da pessoa, já confirmada). PLATFORM-AGENT-V2-004 T13 (protocolo:
+     * docs/platform-agent-v2-004/t13-desvinculo-remoto.md na API):
+     * <ol>
+     *   <li>grava o PEDIDO ({@link UnlinkRequestStore}: operação, vínculo original) antes de qualquer envio; a partir daí nada
+     *       novo começa pelo vínculo antigo (tela, pedidos da Platform, lançadores externos) e o pareamento é recusado;</li>
+     *   <li>confere de novo, DEPOIS de gravar, que nenhuma execução começou ({@code stillIdle} e a intenção pré-início): se
+     *       começou, o pedido sai e nada muda (a corrida com um início fica fechada dos dois lados);</li>
+     *   <li>grava o registro do desvínculo (entregas não terminadas = NÃO entregues; nunca enviadas por outro vínculo), apaga as
+     *       autorizações guardadas e fecha os pedidos de execução locais;</li>
+     *   <li>pede o encerramento à Platform (a credencial e o {@code vinculo.json} ficam até a conclusão). Concluído: o vínculo
+     *       sai desta máquina. Sem conclusão: fica PENDENTE e o transporte repete a MESMA operação, espaçado, enquanto o Agent
+     *       estiver aberto (inclusive depois de reiniciar).</li>
+     * </ol>
+     * O histórico das execuções e os arquivos de entrega ficam. Roda na linha do transporte (nunca no meio de uma rodada).
+     */
+    public UnlinkResult unlink(boolean evenWithPending, ServerView observed, java.util.function.BooleanSupplier stillIdle) {
+        return onTransport(() -> unlinkNow(evenWithPending, observed == null ? ServerView.NOT_CONSULTED : observed, stillIdle),
+                () -> new UnlinkResult(false, true, null, 0, 0));
+    }
+
+    /** Sem conferência de execução (testes do canal; o app confere pelo coordenador do desvínculo). */
+    public UnlinkResult unlink(boolean evenWithPending, ServerView observed) {
+        return unlink(evenWithPending, observed, () -> true);
+    }
+
+    /** Remoção do vínculo mesmo com envios pendentes (registrados como não entregues). */
     public Action removeLocalLink() {
+        UnlinkResult r = unlink(true, ServerView.NOT_CONSULTED);
+        return r.done() || r.queued() || r.pending() ? Action.ok() : Action.refused(r.problem());
+    }
+
+    private UnlinkPreview previewNow(boolean consult) {
+        Optional<Link> l = vault.link();
+        Optional<Pending> p = vault.pending();
+        ServerView server = ServerView.NOT_CONSULTED;
+        LinkState state = build().link();
+        if (l.isPresent()) {
+            if (state == LinkState.REFUSED) server = ServerView.REFUSED; // já recusada: nenhuma chamada nova (D-AP-9)
+            else if (consult && state == LinkState.PAIRED && p.isEmpty()) server = probe(l.get());
+        }
+        return preview(server);
+    }
+
+    private UnlinkPreview preview(ServerView server) {
+        Optional<Link> l = vault.link();
+        Optional<Pending> p = vault.pending();
+        PlatformStatus st = build();
+        return new UnlinkPreview(l.isPresent(), st.link(), st.host(), st.organizationId(), st.agentId(), st.workerId(), st.pendingRuns(), st.pendingEvents(),
+                p.isPresent() && p.get().kind() == CredentialVault.Kind.ROTATION, server);
+    }
+
+    /** Uma chamada autenticada (presença) só para saber se a credencial ainda vale. */
+    private ServerView probe(Link l) {
+        Optional<String> token = vault.token();
+        if (token.isEmpty()) return ServerView.NOT_CONSULTED;
+        Instant now = clock.instant();
+        Result<MachineClient.Presence> r = client.heartbeat(l.destination(), token.get());
+        if (r instanceof Ok<MachineClient.Presence> ok) {
+            contact(now);
+            authorizations.observe(ok.value().serverTime());
+            nextHeartbeat = now.plus(HEARTBEAT);
+            publish();
+            return ServerView.ACCEPTED;
+        }
+        if (r instanceof Refused<MachineClient.Presence> ref && ref.status() == 401) {
+            contact(now);
+            credentialRefused(now);
+            publish();
+            return ServerView.REFUSED;
+        }
+        return ServerView.UNREACHABLE;
+    }
+
+    private UnlinkResult unlinkNow(boolean evenWithPending, ServerView observed, java.util.function.BooleanSupplier stillIdle) {
+        if (unlinkUnreadable) return UnlinkResult.refused(ErrorCode.PLT_STORAGE_FAILED, 0, 0);
+        if (unlinking != null) return attemptUnlink(clock.instant()); // já confirmado: só a MESMA operação, de novo
+        Optional<Link> ol = vault.link();
+        if (ol.isEmpty()) return UnlinkResult.refused(ErrorCode.PLT_NOT_PAIRED, 0, 0);
+        Link l = ol.get();
+        Instant now = clock.instant();
+        List<UnlinkLedger.Undelivered> left = new ArrayList<>();
+        for (Delivery d : ordered()) {
+            if (d.complete() || !d.agentId().equals(l.agentId())) continue;
+            long events = Math.max(0, lastSequence.getOrDefault(d.executionId(), d.settledThrough()) - d.settledThrough());
+            left.add(new UnlinkLedger.Undelivered(d.executionId(), d.settledThrough(), events));
+        }
+        long leftEvents = left.stream().mapToLong(UnlinkLedger.Undelivered::pendingEvents).sum();
+        // nada é descartado em silêncio: com envio pendente, só a escolha explícita "Desvincular mesmo assim" segue
+        if (!left.isEmpty() && !evenWithPending) return UnlinkResult.refused(ErrorCode.PLT_UNLINK_PENDING, left.size(), leftEvents);
+        // uma execução sendo iniciada pela tela (intenção pré-início gravada) conta como em andamento
+        if (deliveries.intent().isPresent()) return UnlinkResult.refused(ErrorCode.PLT_UNLINK_RUNNING, left.size(), leftEvents);
+        List<RunRequestStore.Request> open = new ArrayList<>();
+        List<RunRequestStore.Request> launchedReqs = new ArrayList<>();
+        for (RunRequestStore.Request r : requests.all()) {
+            if (!r.agentId().equals(l.agentId())) continue;
+            if (r.stage() == RunRequestStore.Stage.LAUNCHED) launchedReqs.add(r);
+            else if (r.stage() != RunRequestStore.Stage.CLOSED) open.add(r);
+        }
+        // pedidos aceitos e INICIADOS cujo registro pode não ter chegado: a Platform não os marca como "não iniciados"
+        List<UUID> launched = launchedReqs.stream().sorted(java.util.Comparator.comparing(RunRequestStore.Request::updatedAt).reversed())
+                .limit(UnlinkRequestStore.MAX_LAUNCHED).map(RunRequestStore.Request::runRequestId).toList();
+        UnlinkRequestStore.Request req = new UnlinkRequestStore.Request(UUID.randomUUID(), l.destination().origin(), l.organizationId(), l.agentId(),
+                l.workerId(), l.credentialId(), now, launched, 0, null, null);
+        // 1. o PEDIDO, antes de qualquer envio e de qualquer remoção (uma queda aqui: no reinício, o pedido é retomado)
         try {
-            vault.remove();
+            unlinkRequests.save(req);
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            return UnlinkResult.refused(ErrorCode.PLT_STORAGE_FAILED, left.size(), leftEvents);
+        }
+        unlinking = req;
+        // 2. conferência DEPOIS de gravar: um início que passou pela trava antes do pedido aparece aqui; nesse caso nada muda
+        if (!stillIdle.getAsBoolean() || deliveries.intent().isPresent()) {
+            withdraw();
+            return UnlinkResult.refused(ErrorCode.PLT_UNLINK_RUNNING, left.size(), leftEvents);
+        }
+        // 3. o registro do desvínculo (os não entregues ficam marcados como tal) e o fim do que era deste vínculo aqui
+        UnlinkLedger.Entry entry = new UnlinkLedger.Entry(l.agentId(), l.organizationId(), l.workerId(), l.destination().origin(), now, PENDING_SERVER, left,
+                open.size(), false);
+        try {
+            unlinks.save(entry);
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            withdraw();
+            return UnlinkResult.refused(ErrorCode.PLT_STORAGE_FAILED, left.size(), leftEvents);
+        }
+        Set<ExecutionId> marked = new java.util.HashSet<>(unlinkedUndelivered);
+        for (UnlinkLedger.Undelivered u : left) marked.add(u.executionId());
+        unlinkedUndelivered = Set.copyOf(marked);
+        ErrorCode partial = null;
+        try {
+            authorizations.clear();
+        } catch (IOException e) {
+            // o arquivo ficou, mas o pedido gravado já bloqueia o lançador (LocalGate) e a tela
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            partial = ErrorCode.PLT_STORAGE_FAILED;
+        }
+        for (RunRequestStore.Request r : open) {
+            try {
+                requests.save(r.with(RunRequestStore.Stage.CLOSED, r.decision(), r.reason(), r.executionId(), "UNLINKED", now));
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED); // o pedido gravado já impede decidir ou lançar
+            }
+        }
+        abandonRequests.clear();
+        unlinkBackoff.succeeded();
+        problem = partial;
+        diagnostics.unlinkRequested(left.size(), observed);
+        publish();
+        // 4. o pedido à Platform, já (a mesma operação é repetida até uma resposta conclusiva). Com uma renovação de credencial
+        //    em voo, primeiro ela termina (próximas rodadas): o desvínculo sai com a credencial que valer
+        Optional<Pending> rp = vault.pending();
+        if (rp.isPresent() && rp.get().kind() == CredentialVault.Kind.ROTATION) {
+            wake();
+            return new UnlinkResult(false, false, null, left.size(), leftEvents, true, null);
+        }
+        return attemptUnlink(now);
+    }
+
+    /** Valor de {@code server} no registro enquanto a Platform não confirmou o desvínculo. */
+    static final String PENDING_SERVER = "PENDING";
+
+    /** O pedido sai (nada mudou além dele): uma execução começou entre a confirmação e a gravação, ou o registro falhou. */
+    private void withdraw() {
+        unlinking = null;
+        try {
+            unlinkRequests.delete();
+        } catch (IOException e) {
+            // o arquivo ficou: na dúvida, o vínculo antigo continua bloqueado (sem envio) até a pessoa resolver
+            unlinkUnreadable = true;
+            problem = ErrorCode.PLT_STORAGE_FAILED;
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+        }
+        publish();
+    }
+
+    /**
+     * Uma tentativa da operação pendente. Conclusivo: {@code 200} desta operação (inclusive na repetição depois de uma
+     * resposta perdida), {@code 409} "já encerrado" (pela administração ou por outra operação desta máquina) e {@code 404}
+     * (Platform sem a rota). Todo o resto, inclusive um {@code 401} isolado, NÃO prova o desvínculo: fica pendente e o
+     * transporte repete a mesma operação, espaçado (2 s dobrando até 5 min, com o {@code Retry-After}).
+     */
+    private UnlinkResult attemptUnlink(Instant now) {
+        UnlinkRequestStore.Request u = unlinking;
+        if (u == null) return UnlinkResult.refused(ErrorCode.PLT_NOT_PAIRED, 0, 0);
+        UnlinkLedger.Entry ledger = unlinks.all().get(u.agentId());
+        int runs = ledger == null ? 0 : ledger.undelivered().size();
+        long events = ledger == null ? 0 : ledger.undeliveredEvents();
+        Optional<Link> ol = vault.link();
+        Optional<String> token = vault.tokenForUnlink();
+        PlatformStatus.RemoteOutcome done = null;
+        String why;
+        if (ol.isEmpty() || token.isEmpty() || !ol.get().agentId().equals(u.agentId())) {
+            // o material da credencial não está legível agora: sem prova para enviar (nunca outra credencial)
+            why = "SEM_CREDENCIAL";
+            unlinkBackoff.failed(now, Optional.empty());
+        } else {
+            Result<MachineClient.Unlinked> r = client.unlink(ol.get().destination(), token.get(), u.operationId(), u.agentId(), u.launchedRunRequests());
+            if (r instanceof Ok<MachineClient.Unlinked> && FaultPoints.reached(FaultPoints.Point.UNLINK_RESPONSE_RECEIVED)) r = new NoResponse<>();
+            if (r instanceof Ok<MachineClient.Unlinked>) {
+                contact(now);
+                done = PlatformStatus.RemoteOutcome.CONFIRMED;
+                why = null;
+            } else if (r instanceof Refused<MachineClient.Unlinked> ref) {
+                contact(now);
+                if (ref.status() == 409 && "link_ended_by_administration".equals(ref.reason())) done = PlatformStatus.RemoteOutcome.ENDED_BY_ADMINISTRATION;
+                else if (ref.status() == 409 && "link_ended_by_machine".equals(ref.reason())) done = PlatformStatus.RemoteOutcome.ENDED_BY_MACHINE;
+                else if (ref.status() == 404) done = PlatformStatus.RemoteOutcome.UNSUPPORTED;
+                why = switch (ref.status()) {
+                    case 401 -> "CREDENCIAL_RECUSADA";
+                    case 429 -> "LIMITE";
+                    default -> ref.status() >= 500 ? "INDISPONIVEL" : "RECUSA_" + ref.status();
+                };
+                if (done == null) unlinkBackoff.failed(now, ref.retryAfterSeconds());
+            } else if (r instanceof Malformed<MachineClient.Unlinked>) {
+                contact(now);
+                why = "RESPOSTA_INVALIDA";
+                unlinkBackoff.failed(now, Optional.empty());
+            } else {
+                connectivity = Connectivity.DISCONNECTED;
+                why = "SEM_RESPOSTA";
+                unlinkBackoff.failed(now, Optional.empty());
+            }
+        }
+        if (done != null) return conclude(u, done, now, runs, events);
+        UnlinkRequestStore.Request next = u.attempted(now, why);
+        unlinking = next;
+        try {
+            unlinkRequests.save(next);
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED); // só a contagem de tentativas: a operação é a mesma
+        }
+        diagnostics.unlinkAttempt(why, next.attempts());
+        publish();
+        return new UnlinkResult(false, false, null, runs, events, true, null);
+    }
+
+    /** A Platform respondeu de forma conclusiva: o vínculo antigo sai desta máquina (e só então o pedido). */
+    private UnlinkResult conclude(UnlinkRequestStore.Request u, PlatformStatus.RemoteOutcome outcome, Instant now, int runs, long events) {
+        UnlinkLedger.Entry prev = unlinks.all().get(u.agentId());
+        UnlinkLedger.Entry entry = new UnlinkLedger.Entry(u.agentId(), u.organizationId(), u.workerId(), u.origin(), prev == null ? u.confirmedAt() : prev.unlinkedAt(),
+                outcome.name(), prev == null ? List.of() : prev.undelivered(), prev == null ? 0 : prev.runRequestsClosed(), prev != null && prev.intentDiscarded());
+        ErrorCode partial = null;
+        try {
+            unlinks.save(entry);
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            partial = ErrorCode.PLT_STORAGE_FAILED;
+        }
+        Optional<Link> l = vault.link();
+        if (l.isPresent() && l.get().agentId().equals(u.agentId())) {
+            try {
+                vault.remove();
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+                partial = ErrorCode.PLT_STORAGE_FAILED;
+            }
+        }
+        try {
             authorizations.clear();
         } catch (IOException e) {
             diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
-            return Action.refused(ErrorCode.PLT_STORAGE_FAILED);
+            partial = ErrorCode.PLT_STORAGE_FAILED;
         }
-        problem = null;
+        try {
+            unlinkRequests.delete();
+        } catch (IOException e) {
+            // ficou: no reinício a MESMA operação é repetida e a Platform responde igual (sem efeito novo)
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            partial = ErrorCode.PLT_STORAGE_FAILED;
+        }
+        unlinking = null;
+        unlinkConcluded = outcome;
+        unlinkConcludedAt = now;
+        // memória da identidade anterior
+        withoutLinkRequest.clear();
+        abandonRequests.clear();
+        authorizationsDue = true;
+        nextHeartbeat = Instant.MIN;
+        nextAuthorizations = Instant.MIN;
+        nextRunRequests = Instant.MIN;
+        net.succeeded();
+        redeemBackoff.succeeded();
+        unlinkBackoff.succeeded();
+        connectivity = Connectivity.UNKNOWN;
+        lastContact = null;
+        lastSync = null;
+        problem = partial;
         contractRefused = false;
         refreshProtection();
-        diagnostics.linkRemoved();
+        try {
+            onLinkEnded.run();
+        } catch (RuntimeException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+        }
+        diagnostics.unlinkConcluded(outcome, runs, u.attempts() + 1);
         publish();
-        return Action.ok();
+        return new UnlinkResult(true, false, partial, runs, events, false, outcome);
     }
+
+    /** Executa na linha do transporte (serializado com as rodadas); sem linha (testes) ou já nela: aqui mesmo. */
+    private <T> T onTransport(java.util.concurrent.Callable<T> work, Supplier<T> onTimeout) {
+        ScheduledExecutorService e;
+        synchronized (this) {
+            e = exec;
+        }
+        try {
+            if (e == null || Thread.currentThread().getName().equals(THREAD)) return work.call();
+            return e.submit(work).get(TRANSPORT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException x) {
+            return onTimeout.get();
+        } catch (java.util.concurrent.RejectedExecutionException x) {
+            throw new IllegalStateException("transporte encerrado", x);
+        } catch (InterruptedException x) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrompido", x);
+        } catch (java.util.concurrent.ExecutionException x) {
+            throw x.getCause() instanceof RuntimeException r ? r : new IllegalStateException(x.getCause());
+        } catch (RuntimeException x) {
+            throw x;
+        } catch (Exception x) {
+            throw new IllegalStateException(x);
+        }
+    }
+
+    private static final String THREAD = "nekkora-agent-plataforma";
 
     /** Pede nova leitura das autorizações (e tentativa já, se houver espera por falha). */
     public void refreshNow() {
@@ -390,6 +796,7 @@ public final class PlatformService implements AutoCloseable {
         Optional<String> fp = PackageFingerprint.wire(agentFingerprint);
         Optional<Link> l = vault.link();
         if (l.isEmpty()) return Action.refused(ErrorCode.PLT_NOT_PAIRED);
+        if (unlinkPending()) return Action.refused(ErrorCode.PLT_UNLINK_REMOTE_PENDING); // T13: nada novo pelo vínculo antigo
         // credencial recusada: nada novo é registrado por este vínculo (a execução pode seguir só local)
         if (l.get().refused()) return Action.refused(ErrorCode.PLT_CREDENTIAL_REFUSED);
         Optional<Authorization> z = authorizations.find(authorizationId);
@@ -402,6 +809,11 @@ public final class PlatformService implements AutoCloseable {
         } catch (IOException e) {
             diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
             return Action.refused(ErrorCode.PLT_STORAGE_FAILED);
+        }
+        // T13: confere DEPOIS de gravar a intenção (o desvínculo grava o pedido e confere a intenção): um dos dois desiste
+        if (unlinkPending()) {
+            discardIntent();
+            return Action.refused(ErrorCode.PLT_UNLINK_REMOTE_PENDING);
         }
         return Action.ok();
     }
@@ -560,7 +972,7 @@ public final class PlatformService implements AutoCloseable {
     /** A autorização guardada serve a este pacote agora (vínculo atual, mesma impressão e regra, no prazo com o piso do relógio)? */
     public boolean authorizationUsable(UUID authorizationId, String fingerprintHex, String rule) {
         Optional<Link> l = vault.link();
-        if (l.isEmpty() || l.get().refused()) return false;
+        if (l.isEmpty() || l.get().refused() || unlinkPending()) return false;
         Optional<Authorization> z = authorizations.find(authorizationId);
         return z.isPresent() && fingerprintHex.equals(z.get().fingerprint()) && rule.equals(z.get().rule()) && PackageFingerprint.known(rule)
                 && authorizations.effective(clock.instant()).isBefore(z.get().validUntil());
@@ -570,7 +982,7 @@ public final class PlatformService implements AutoCloseable {
     public Optional<LocalGate.LinkRequest> linkRequestFor(UUID runRequestId) {
         Optional<Link> l = vault.link();
         Optional<RunRequestStore.Request> r = requests.get(runRequestId);
-        if (l.isEmpty() || r.isEmpty() || !r.get().agentId().equals(l.get().agentId())) return Optional.empty();
+        if (unlinkPending() || l.isEmpty() || r.isEmpty() || !r.get().agentId().equals(l.get().agentId())) return Optional.empty();
         return Optional.of(new LocalGate.LinkRequest(l.get().agentId(), r.get().authorizationId(), r.get().sourceKind(), r.get().fingerprint(), runRequestId,
                 clock.instant()));
     }
@@ -665,7 +1077,9 @@ public final class PlatformService implements AutoCloseable {
         Delivery d = o.get();
         Optional<Link> l = vault.link();
         DeliveryView.State st;
-        if (l.isEmpty() || !l.get().agentId().equals(d.agentId())) st = DeliveryView.State.OTHER_LINK;
+        if (l.isEmpty() || !l.get().agentId().equals(d.agentId())) {
+            st = unlinkedUndelivered.contains(id) ? DeliveryView.State.UNLINKED_UNDELIVERED : DeliveryView.State.OTHER_LINK;
+        }
         else if (d.complete()) st = DeliveryView.State.DELIVERED;
         else if (d.blocked()) st = DeliveryView.State.BLOCKED;
         else if (d.runId() == null) st = DeliveryView.State.WAITING_REGISTRATION;
@@ -688,6 +1102,19 @@ public final class PlatformService implements AutoCloseable {
             Instant now = clock.instant();
             applyAbandons(now);
             housekeeping(now);
+            // T13: com desvínculo pendente, só a operação de desvínculo sai (nada de presença, pedidos ou entregas do vínculo)
+            if (unlinkUnreadable) return;
+            if (unlinking != null) {
+                // uma renovação de credencial em voo termina (ou é abandonada) antes: a credencial antiga pode já ter sido
+                // trocada na Platform, e o desvínculo usa a que valer
+                Optional<Pending> rp = vault.pending();
+                if (rp.isPresent() && rp.get().kind() == CredentialVault.Kind.ROTATION) {
+                    if (redeemBackoff.ready(now)) redeem(rp.get(), now);
+                    return;
+                }
+                if (unlinkBackoff.ready(now)) attemptUnlink(now);
+                return;
+            }
             Optional<Pending> p = vault.pending();
             if (p.isPresent()) {
                 if (redeemBackoff.ready(now)) redeem(p.get(), now);
@@ -745,7 +1172,9 @@ public final class PlatformService implements AutoCloseable {
             return;
         }
         Optional<String> current = p.kind() == CredentialVault.Kind.ROTATION ? vault.token() : Optional.empty();
-        Result<CredentialVault.Redeemed> r = client.redeem(p.destination(), m.get(), current);
+        // T06: a intenção vai declarada; um código do tipo errado é recusado pela Platform SEM ser consumido
+        MachineClient.Intent intent = p.kind() == CredentialVault.Kind.ROTATION ? MachineClient.Intent.ROTATE : MachineClient.Intent.PAIR;
+        Result<CredentialVault.Redeemed> r = client.redeem(p.destination(), m.get(), current, intent);
         if (r instanceof Ok<CredentialVault.Redeemed> ok) {
             contact(now);
             boolean applied;
@@ -779,7 +1208,13 @@ public final class PlatformService implements AutoCloseable {
             }
             if (ref.status() == 409) {
                 contact(now);
-                abandonPending(p, ErrorCode.PLT_WORKER_UNAVAILABLE);
+                // código do tipo errado: só a tentativa sai; o vínculo existente (se houver) fica intacto
+                ErrorCode why = switch (ref.reason() == null ? "" : ref.reason()) {
+                    case "pairing_code_for_rotation" -> ErrorCode.PLT_PAIRING_CODE_FOR_ROTATION;
+                    case "rotation_code_for_pairing" -> ErrorCode.PLT_ROTATION_CODE_FOR_PAIRING;
+                    default -> ErrorCode.PLT_WORKER_UNAVAILABLE;
+                };
+                abandonPending(p, why);
                 return;
             }
             if (ref.status() == 400) {
@@ -1154,7 +1589,9 @@ public final class PlatformService implements AutoCloseable {
         Optional<Link> l = vault.link();
         Optional<Pending> p = vault.pending();
         LinkState state;
-        if (p.isPresent() && p.get().kind() == CredentialVault.Kind.PAIRING) state = LinkState.PAIRING;
+        UnlinkRequestStore.Request u = unlinking;
+        if (u != null || unlinkUnreadable) state = LinkState.UNLINKING;
+        else if (p.isPresent() && p.get().kind() == CredentialVault.Kind.PAIRING) state = LinkState.PAIRING;
         else if (l.isEmpty()) state = LinkState.NOT_PAIRED;
         else if (l.get().refused()) state = LinkState.REFUSED;
         else if (contractRefused) state = LinkState.CONTRACT_REFUSED;
@@ -1181,9 +1618,12 @@ public final class PlatformService implements AutoCloseable {
         if (state == LinkState.REFUSED) pr = ErrorCode.PLT_CREDENTIAL_REFUSED;
         if (state == LinkState.NOT_PAIRED && pr == null && vault.lastRefusal() != null) pr = code(vault.lastRefusal());
         String host = l.map(x -> x.destination().host()).orElse(p.map(x -> x.destination().host()).orElse(null));
-        return new PlatformStatus(state, c, host, l.map(x -> x.agentId().toString()).orElse(null),
+        return new PlatformStatus(state, c, host, l.map(x -> x.organizationId().toString()).orElse(null), l.map(x -> x.agentId().toString()).orElse(null),
                 l.map(x -> x.workerId() == null ? null : x.workerId().toString()).orElse(null), lc, lastSync, l.map(Link::credentialExpiresAt).orElse(null),
-                pendingRuns, pendingEvents, blocked, incomplete, authorizations.all().size(), authorizations.downloadedAt().orElse(null), pr, secrets.available());
+                pendingRuns, pendingEvents, blocked, incomplete, authorizations.all().size(), authorizations.downloadedAt().orElse(null), pr, secrets.available(),
+                u == null && !unlinkUnreadable ? new PlatformStatus.Unlink(false, null, 0, null, null, unlinkConcluded, unlinkConcludedAt)
+                        : new PlatformStatus.Unlink(true, u == null ? null : u.confirmedAt(), u == null ? 0 : u.attempts(), u == null ? null : u.lastAttemptAt(),
+                                u == null ? "PEDIDO_ILEGIVEL" : u.lastResult(), null, null));
     }
 
     private static ErrorCode code(String c) {

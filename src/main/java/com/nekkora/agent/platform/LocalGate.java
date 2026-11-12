@@ -45,8 +45,12 @@ public final class LocalGate {
                 .map(z -> new LinkRequest(agent.get(), z.authorizationId(), AuthorizationCache.EXTERNAL_MONITORED, null, null, now));
     }
 
-    /** O Agent do vínculo confirmado e não recusado ({@code vinculo.json}); nunca lê a guarda de segredos. */
+    /**
+     * O Agent do vínculo confirmado e não recusado ({@code vinculo.json}); nunca lê a guarda de segredos. T13: com um
+     * desvínculo confirmado e não concluído ({@link UnlinkRequestStore}), nenhum (o vínculo antigo não inicia nada).
+     */
     static Optional<UUID> pairedAgent(Path platformDir) {
+        if (UnlinkRequestStore.present(platformDir)) return Optional.empty();
         try {
             Map<String, Object> m = StrictJson.parseObject(Files.readString(platformDir.resolve(CredentialVault.FILE), StandardCharsets.UTF_8));
             if (!CredentialVault.SCHEMA.equals(m.get("schema")) || !CredentialVault.VERSION.equals(m.get("version"))) return Optional.empty();

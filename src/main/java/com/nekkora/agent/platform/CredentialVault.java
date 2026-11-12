@@ -158,6 +158,20 @@ final class CredentialVault {
         return l == null || l.refused() ? Optional.empty() : Optional.ofNullable(t);
     }
 
+    /**
+     * PLATFORM-AGENT-V2-004 T13: a credencial guardada MESMO marcada como recusada. Só para a operação de desvínculo: um
+     * {@code 401} anterior não prova que o vínculo terminou, e só a rota de desvínculo responde de forma conclusiva (com o
+     * segredo desta credencial). Nenhuma outra chamada usa este acesso.
+     */
+    Optional<String> tokenForUnlink() {
+        String t = token;
+        Link l;
+        synchronized (this) {
+            l = link;
+        }
+        return l == null ? Optional.empty() : Optional.ofNullable(t);
+    }
+
     /** Material de resgate pendente (lido da guarda protegida). */
     synchronized Optional<Material> material() throws IOException {
         if (pending == null) return Optional.empty();
@@ -245,13 +259,15 @@ final class CredentialVault {
      * vínculo. No servidor nada muda — a revogação é ato da Platform (sec. 4.3).
      */
     synchronized void remove() throws IOException {
-        secrets.delete(CREDENTIAL);
-        secrets.delete(REDEEM);
-        Files.deleteIfExists(dir.resolve(FILE));
+        // a memória sai primeiro: mesmo que um arquivo não possa ser apagado agora, nada mais é usado por este processo (e,
+        // sem a credencial na guarda, um vínculo que sobrar no disco nunca autentica nada depois do reinício)
         link = null;
         pending = null;
         token = null;
         lastRefusal = null;
+        secrets.delete(CREDENTIAL);
+        secrets.delete(REDEEM);
+        Files.deleteIfExists(dir.resolve(FILE));
     }
 
     static String newSecret() {

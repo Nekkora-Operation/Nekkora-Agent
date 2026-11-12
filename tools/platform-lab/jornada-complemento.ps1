@@ -285,7 +285,7 @@ try {
     Note '[REAL]' 'C7 a pessoa gerou um código de rotação na Platform'
     Focus $script:w.Handle
     [System.Windows.Forms.SendKeys]::SendWait('%n')
-    $rd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Nova credencial da máquina'; if (Test-WindowShown $h) { $h } } 20 'diálogo de rotação (Alt+N)'
+    $rd = Wait-Until { $h = Get-AgentWindow $script:jvm 'Renovar credencial'; if (Test-WindowShown $h) { $h } } 20 'diálogo de rotação (Alt+N)'
     Focus $rd
     Start-Sleep -Milliseconds 500
     Send-Text $rotCode

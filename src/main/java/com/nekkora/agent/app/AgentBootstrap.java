@@ -175,6 +175,14 @@ public final class AgentBootstrap {
         PlatformService platform = e.platform().create(dir.root().resolve("plataforma"), () -> config.current().platformUrl(), runs,
                 activity::durableThrough, e.windows(), e.writer(), e.clock(), agentVersion(build));
         platform.diagnostics(new PlatformLog(log));
+        // PLATFORM-AGENT-V2-004 T13: o vínculo antigo terminou: as aprovações locais de pacote saem (um novo pareamento não as herda)
+        platform.onLinkEnded(() -> {
+            try {
+                execution.approvals().clearAll();
+            } catch (com.nekkora.agent.exec.ExecRefused x) {
+                throw new IllegalStateException("aprovações locais não apagadas", x);
+            }
+        });
         runs.retention(platform::retains);
         activity.retention(platform::retains);
         platform.load();
