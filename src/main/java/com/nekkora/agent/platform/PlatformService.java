@@ -740,6 +740,198 @@ public final class PlatformService implements AutoCloseable {
 
     private static final String THREAD = "nekkora-agent-plataforma";
 
+    // ------------------------------------------------------------------------------------------- AGENT-PACOTES-001: vínculo confirmado online
+
+    /**
+     * Identidade do vínculo (a "geração"): origem da Platform, organização, Agent (novo a cada pareamento) e Worker. Nenhum
+     * segredo. O assistente de importação se prende a ela: outro vínculo — mesmo na mesma organização — é outro começo.
+     */
+    public record LinkRef(String origin, UUID organizationId, UUID agentId, UUID workerId) {}
+
+    /** Resultado da confirmação. Cada falha é distinta: falta de permissão não é falta de conexão nem revogação. */
+    public enum LinkCheckOutcome {
+        /** A Platform aceitou a credencial agora. */
+        CONFIRMED,
+        NOT_PAIRED,
+        /** Pareamento pedido, resposta da Platform ainda não confirmada. */
+        PAIRING_PENDING,
+        /** Desvínculo confirmado pela pessoa e não concluído: nada novo começa. */
+        UNLINK_PENDING,
+        /** 401: credencial recusada (vínculo revogado ou encerrado na Platform). */
+        CREDENTIAL_REFUSED,
+        /** 403: a Platform negou a consulta a esta credencial. */
+        FORBIDDEN,
+        /** 429: limite de requisições. */
+        RATE_LIMITED,
+        /** 5xx. */
+        SERVER_ERROR,
+        /** Sem resposta (rede, TLS, tempo esgotado). */
+        UNREACHABLE,
+        CONTRACT_REFUSED,
+        /** O endereço configurado não é o do vínculo: nada é enviado. */
+        DESTINATION_CHANGED,
+        /** Resposta fora do contrato. */
+        INVALID_RESPONSE,
+        /** A credencial guardada não pôde ser lida nesta máquina. */
+        LOCAL_FAILURE,
+        /** A linha de comunicação ficou ocupada além da espera. */
+        BUSY
+    }
+
+    /** Versão autorizada a ESTA máquina (o único "catálogo" que a credencial da máquina alcança; sem nomes nem números). */
+    public record AuthorizedVersion(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String fingerprint, String rule,
+                                    Instant validUntil) {}
+
+    /**
+     * Catálogo PARCIAL lido agora: só as versões com autorização local ativa para o Worker desta máquina. {@code available}
+     * falso = a consulta falhou ({@code problem}); nunca é "nenhum projeto".
+     */
+    public record Catalog(boolean available, LinkCheckOutcome problem, List<AuthorizedVersion> items) {
+        public Catalog {
+            items = List.copyOf(items);
+        }
+
+        static Catalog unavailable(LinkCheckOutcome why) {
+            return new Catalog(false, why, List.of());
+        }
+    }
+
+    /**
+     * Confirmação do vínculo. {@code serverTime}: a hora da Platform na confirmação (uma revogação feita depois só é vista na
+     * próxima consulta). {@code link}: o vínculo consultado (também nas falhas, se houver um).
+     */
+    public record LinkCheck(LinkCheckOutcome outcome, LinkRef link, Instant serverTime, Optional<Long> retryAfterSeconds, Catalog catalog) {
+        public boolean confirmed() {
+            return outcome == LinkCheckOutcome.CONFIRMED;
+        }
+    }
+
+    /** O vínculo atual, sem rede (para conferir, a cada passo, que ele não mudou). Vazio se não há vínculo utilizável. */
+    public Optional<LinkRef> currentLink() {
+        if (unlinkPending()) return Optional.empty();
+        Optional<Link> l = vault.link();
+        if (l.isEmpty() || l.get().refused()) return Optional.empty();
+        return Optional.of(ref(l.get()));
+    }
+
+    private static LinkRef ref(Link l) {
+        return new LinkRef(l.destination().origin(), l.organizationId(), l.agentId(), l.workerId());
+    }
+
+    /**
+     * Confirma o vínculo ONLINE (presença) e lê o catálogo parcial (autorizações desta máquina), na linha do transporte.
+     * Chamar fora da EDT. Uma recusa {@code 401} marca a credencial como recusada, como em qualquer chamada; nada é criado
+     * na Platform (as duas rotas só leem e registram presença).
+     */
+    public LinkCheck confirmLink() {
+        return onTransport(this::confirmNow, () -> new LinkCheck(LinkCheckOutcome.BUSY, currentLink().orElse(null), null, Optional.empty(),
+                Catalog.unavailable(LinkCheckOutcome.BUSY)));
+    }
+
+    private LinkCheck confirmNow() {
+        try {
+            return confirmChecked();
+        } finally {
+            publish();
+        }
+    }
+
+    private LinkCheck confirmChecked() {
+        if (unlinkPending()) return failed(LinkCheckOutcome.UNLINK_PENDING, null, Optional.empty());
+        Optional<Pending> pending = vault.pending();
+        Optional<Link> ol = vault.link();
+        if (ol.isEmpty()) {
+            return failed(pending.isPresent() && pending.get().kind() == CredentialVault.Kind.PAIRING ? LinkCheckOutcome.PAIRING_PENDING
+                    : LinkCheckOutcome.NOT_PAIRED, null, Optional.empty());
+        }
+        Link l = ol.get();
+        LinkRef ref = ref(l);
+        if (l.refused()) return failed(LinkCheckOutcome.CREDENTIAL_REFUSED, ref, Optional.empty()); // já recusada: nenhuma chamada nova
+        if (contractRefused) return failed(LinkCheckOutcome.CONTRACT_REFUSED, ref, Optional.empty());
+        Optional<Destination> cfg = Destination.parse(configuredUrl.get());
+        if (cfg.isEmpty() || !cfg.get().equals(l.destination())) return failed(LinkCheckOutcome.DESTINATION_CHANGED, ref, Optional.empty());
+        Optional<String> token = vault.token();
+        if (token.isEmpty()) return failed(LinkCheckOutcome.LOCAL_FAILURE, ref, Optional.empty());
+        Instant now = clock.instant();
+        Result<MachineClient.Presence> r = client.heartbeat(l.destination(), token.get());
+        if (!(r instanceof Ok<MachineClient.Presence> ok)) {
+            LinkCheckOutcome why = classify(r, now);
+            return failed(why, ref, r instanceof Refused<?> x ? x.retryAfterSeconds() : Optional.empty());
+        }
+        contact(now);
+        authorizations.observe(ok.value().serverTime());
+        nextHeartbeat = now.plus(HEARTBEAT);
+        try {
+            vault.expiresAt(ok.value().credentialExpiresAt());
+        } catch (IOException e) {
+            diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+        }
+        Catalog catalog;
+        Result<MachineClient.Authorizations> a = client.authorizations(l.destination(), token.get());
+        if (a instanceof Ok<MachineClient.Authorizations> az) {
+            contact(now);
+            try {
+                authorizations.replace(l.agentId(), az.value().items(), now);
+            } catch (IOException e) {
+                diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
+            }
+            authorizationsDue = false;
+            nextAuthorizations = now.plus(AUTHORIZATIONS);
+            List<AuthorizedVersion> items = new ArrayList<>();
+            for (Authorization z : az.value().items()) {
+                // monitoramento não tem versão nem impressão; regra desconhecida não serve para comparar
+                if (z.automationVersionId() == null || z.fingerprint() == null || !PackageFingerprint.known(z.rule())) continue;
+                items.add(new AuthorizedVersion(z.authorizationId(), z.workspaceId(), z.automationId(), z.automationVersionId(), "sha256:" + z.fingerprint(), z.rule(),
+                        z.validUntil()));
+            }
+            catalog = new Catalog(true, null, items);
+        } else {
+            LinkCheckOutcome why = classify(a, now);
+            // a credencial pode ter sido recusada entre as duas chamadas: então NÃO está confirmada
+            if (why == LinkCheckOutcome.CREDENTIAL_REFUSED) return failed(why, ref, Optional.empty());
+            catalog = Catalog.unavailable(why);
+        }
+        return new LinkCheck(LinkCheckOutcome.CONFIRMED, ref, ok.value().serverTime(), Optional.empty(), catalog);
+    }
+
+    private static LinkCheck failed(LinkCheckOutcome why, LinkRef ref, Optional<Long> retry) {
+        return new LinkCheck(why, ref, null, retry, Catalog.unavailable(why));
+    }
+
+    /** Classifica uma falha e aplica o efeito de sempre no canal (credencial recusada, espera por falha). */
+    private LinkCheckOutcome classify(Result<?> r, Instant now) {
+        if (r instanceof Refused<?> ref) {
+            if (ref.status() == 401) {
+                contact(now);
+                credentialRefused(now);
+                return LinkCheckOutcome.CREDENTIAL_REFUSED;
+            }
+            if (ref.status() == 403) {
+                contact(now);
+                return LinkCheckOutcome.FORBIDDEN;
+            }
+            if (ref.status() == 400 && "unsupported_contract".equals(ref.error())) {
+                contact(now);
+                contractRefused = true;
+                problem = ErrorCode.PLT_CONTRACT_REFUSED;
+                return LinkCheckOutcome.CONTRACT_REFUSED;
+            }
+            if (ref.status() == 429 || ref.status() >= 500) {
+                failure(ref.status() == 429 ? ErrorCode.PLT_RATE_LIMITED : ErrorCode.PLT_SERVER_UNAVAILABLE, now);
+                net.failed(now, ref.retryAfterSeconds());
+                return ref.status() == 429 ? LinkCheckOutcome.RATE_LIMITED : LinkCheckOutcome.SERVER_ERROR;
+            }
+            contact(now);
+            return LinkCheckOutcome.INVALID_RESPONSE;
+        }
+        if (r instanceof MachineClient.Malformed<?>) {
+            contact(now);
+            return LinkCheckOutcome.INVALID_RESPONSE;
+        }
+        failure(ErrorCode.PLT_UNREACHABLE, now);
+        return LinkCheckOutcome.UNREACHABLE;
+    }
+
     /** Pede nova leitura das autorizações (e tentativa já, se houver espera por falha). */
     public void refreshNow() {
         authorizationsDue = true;

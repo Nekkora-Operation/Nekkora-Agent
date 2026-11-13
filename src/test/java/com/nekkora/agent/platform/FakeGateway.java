@@ -45,7 +45,7 @@ final class FakeGateway implements HttpTransport {
             "error_code", "counts", "correlation");
 
     /** Falha injetada (sempre identificada como tal nas evidências). */
-    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT }
+    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT, FORBIDDEN }
 
     static final class Enrollment {
         UUID org, id, worker, agentForRotation;
@@ -240,6 +240,7 @@ final class FakeGateway implements HttpTransport {
         if (f == Fault.RATE_LIMITED) return err(429, "rate_limited", 30L);
         if (f == Fault.MALFORMED) return new Response(200, Optional.empty(), "{\"oops\":true}".getBytes(StandardCharsets.UTF_8));
         if (f == Fault.REDIRECT) return new Response(302, Optional.empty(), new byte[0]);
+        if (f == Fault.FORBIDDEN) return err(403, "forbidden", null); // AGENT-PACOTES-001: permissão negada (não é rede nem revogação)
         String contract = r.headers().get("Nekkora-Agent-Contract");
         if (contract == null || !contract.matches("1\\.[0-9]{1,3}")) return err(400, "unsupported_contract", null);
         Response res;
