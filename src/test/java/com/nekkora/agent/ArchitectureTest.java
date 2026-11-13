@@ -44,6 +44,9 @@ class ArchitectureTest {
         // AGENT-PLATFORM-001: o transporte é domínio sem tela, sem SO e sem diagnóstico (este é ligado de fora, pelo app)
         check("platform", List.of("java.awt", "javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui",
                 "com.nekkora.agent.app", "com.nekkora.agent.os", "com.nekkora.agent.diagnostics"), violations);
+        // AGENT-PACOTES-001: importação e empacotamento são domínio sem tela, sem rede (transporte), sem processo e sem coleta
+        check("pack", List.of("java.awt", "javax.swing", "com.nekkora.ui", "com.nekkora.tokens", "com.formdev", "com.nekkora.agent.ui",
+                "com.nekkora.agent.app", "com.nekkora.agent.os", "com.nekkora.agent.obs", "com.nekkora.agent.platform", "com.nekkora.agent.diagnostics"), violations);
         assertTrue(violations.isEmpty(), String.join("\n", violations));
     }
 
