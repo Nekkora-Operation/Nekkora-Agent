@@ -79,6 +79,17 @@ public final class AgentApp {
         t.setDaemon(true);
         return t;
     });
+    // AGENT-PACOTES-001: leitura do ZIP e empacotamento em linha própria (nunca na EDT nem na linha das ações de execução)
+    private final ExecutorService importIo = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "nekkora-agent-importacao");
+        t.setDaemon(true);
+        return t;
+    });
+    private com.nekkora.agent.app.ImportFlow importFlow;
+    private ImportDialog importDialog;
+    private com.nekkora.agent.app.ImportFlow.Stage loggedImportStage;
+    /** T03: ZIP que a pessoa pediu para preparar a partir do assistente (abre a execução local depois que ele fecha). */
+    private java.nio.file.Path pendingPrepare;
     private final AtomicBoolean exiting = new AtomicBoolean();
     private MainWindow window;
     private TrayController tray;
@@ -114,7 +125,11 @@ public final class AgentApp {
             if (execDialog != null && execDialog.isDisplayable()) execDialog.activityPanel().changed(id);
         }));
         renderExecution();
-        ctx.platform().addListener(() -> SwingUtilities.invokeLater(this::renderPlatform));
+        ctx.platform().addListener(() -> SwingUtilities.invokeLater(() -> {
+            renderPlatform();
+            // AGENT-PACOTES-001: vínculo mudou (desvínculo, recusa, novo pareamento): o assistente aberto descarta o que tinha
+            if (importFlow != null) importFlow.platformChanged();
+        }));
         renderPlatform();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
@@ -166,6 +181,11 @@ public final class AgentApp {
             @Override
             public void execution() {
                 openExecution();
+            }
+
+            @Override
+            public void importProject() {
+                openImport();
             }
 
             @Override
@@ -525,14 +545,168 @@ public final class AgentApp {
         });
     }
 
+    // ----- importação de projeto (AGENT-PACOTES-001) -----
+
+    /** Assistente "Importar projeto (.zip)": vínculo confirmado online, ZIP lido numa pasta privada, pacote gerado. Na EDT. */
+    void openImport() {
+        if (exiting.get() || bringActiveDialogToFront()) return;
+        java.nio.file.Path data = ctx.dataDir().root();
+        importDialog = new ImportDialog(window, importActions());
+        loggedImportStage = null;
+        importFlow = new com.nekkora.agent.app.ImportFlow(new com.nekkora.agent.app.ImportFlow.Link() {
+            @Override
+            public com.nekkora.agent.platform.PlatformService.LinkCheck confirm() {
+                com.nekkora.agent.platform.PlatformService.LinkCheck c = ctx.platform().confirmLink();
+                // só códigos e contagem: nunca nome de organização ou de projeto
+                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("outcome", c.outcome()), Field.of("catalog", c.catalog().state()),
+                        Field.of("projects", c.catalog().projects().size()), Field.of("problem", c.catalog().problem() == null ? "-" : c.catalog().problem()));
+                return c;
+            }
+
+            @Override
+            public java.util.Optional<com.nekkora.agent.platform.PlatformService.LinkRef> current() {
+                return ctx.platform().currentLink();
+            }
+
+            @Override
+            public com.nekkora.agent.platform.PlatformService.SelectionCheck selection(java.util.UUID automationId) {
+                com.nekkora.agent.platform.PlatformService.SelectionCheck sc = ctx.platform().checkSelection(automationId);
+                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("selection", sc.outcome()), Field.of("problem", sc.problem() == null ? "-" : sc.problem()));
+                return sc;
+            }
+        }, new com.nekkora.agent.pack.ProjectImporter(com.nekkora.agent.pack.ProjectImporter.defaultRoot(data), com.nekkora.agent.pack.ZipLimits.DEFAULT),
+                new com.nekkora.agent.pack.PackageHistory(com.nekkora.agent.pack.PackageHistory.defaultFile(data), AtomicWriter.DEFAULT), ctx.clock(), importIo,
+                SwingUtilities::invokeLater, v -> {
+                    logImport(v);
+                    if (importDialog != null && importDialog.isDisplayable()) importDialog.render(v);
+                });
+        activeDialog = importDialog;
+        importFlow.start();
+        importDialog.showDialog();
+        activeDialog = null;
+        // fechar descarta a pasta da operação (o pacote gerado fica onde a pessoa escolheu); nada remoto é desfeito ou criado
+        importFlow.cancel();
+        importFlow = null;
+        importDialog = null;
+        java.nio.file.Path prepare = pendingPrepare;
+        pendingPrepare = null;
+        if (prepare != null && !exiting.get()) openExecution(prepare);
+    }
+
+    /** Só códigos no log: estado, formato, motivo. Nunca nome de arquivo, projeto, organização ou caminho. */
+    private void logImport(com.nekkora.agent.app.ImportFlow.View v) {
+        if (v.stage() == loggedImportStage && v.problem() == null) return;
+        loggedImportStage = v.stage();
+        switch (v.stage()) {
+            case CONFIGURE -> {
+                if (v.problem() != null) ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", v.problem().code().code()));
+                else if (v.project() != null) ctx.log().info(LogEvent.IMPORT_ZIP_READ, Field.of("kind", v.project().kind()), Field.of("files", v.project().files().size()));
+            }
+            case READY -> {
+                if (v.problem() != null) ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", v.problem().code().code()));
+            }
+            case DONE -> ctx.log().info(LogEvent.IMPORT_PACKAGE_BUILT, Field.of("files", v.built() == null ? 0 : v.built().files()));
+            case INVALIDATED -> ctx.log().warn(LogEvent.IMPORT_INVALIDATED);
+            default -> {
+                // demais estágios não vão ao log
+            }
+        }
+    }
+
+    private ImportDialog.Actions importActions() {
+        return new ImportDialog.Actions() {
+            @Override
+            public void retry() {
+                if (importFlow != null) importFlow.start();
+            }
+
+            @Override
+            public void chooseZip() {
+                if (importFlow == null) return;
+                NekkoraFileDialogs.openFile(importDialog, ImportText.TITLE, "Projeto compactado (ZIP)", "zip").ifPresent(importFlow::chooseZip);
+            }
+
+            @Override
+            public void generate(com.nekkora.agent.pack.PackagePlan plan, com.nekkora.agent.app.ImportFlow.ProjectMode mode, java.util.UUID automationId) {
+                if (importFlow == null || importFlow.view().project() == null) return;
+                try {
+                    com.nekkora.agent.pack.Packager.preview(importFlow.view().project(), plan); // erros de escolha antes de pedir a pasta
+                } catch (com.nekkora.agent.pack.ImportProblem e) {
+                    NekkoraToast.show(importDialog, Severity.ERROR, "Pacote não gerado", e.message());
+                    return;
+                }
+                java.nio.file.Path out = NekkoraFileDialogs.selectFolder(importDialog, "Pasta onde o pacote será gravado").orElse(null);
+                if (out == null) return;
+                boolean overwrite = false;
+                if (com.nekkora.agent.pack.Packager.exists(out, plan)) {
+                    if (!NekkoraConfirmationDialog.confirmDanger(importDialog, "Substituir o arquivo existente?", "Já existe "
+                            + com.nekkora.agent.pack.Packager.fileName(plan) + " nesta pasta. Substituir troca o arquivo inteiro pelo pacote novo. O ZIP de "
+                            + "origem nunca é alterado.", "Substituir")) {
+                        return;
+                    }
+                    overwrite = true;
+                }
+                importFlow.build(plan, mode, automationId, out, overwrite);
+            }
+
+            @Override
+            public void openFolder(java.nio.file.Path zip) {
+                try {
+                    java.awt.Desktop.getDesktop().open(zip.getParent().toFile());
+                } catch (Exception e) {
+                    NekkoraToast.show(importDialog, Severity.WARNING, "Não foi possível abrir a pasta", "Abra a pasta pelo Explorador de Arquivos.");
+                }
+            }
+
+            @Override
+            public com.nekkora.agent.app.ImportFlow.Suggestion suggest(com.nekkora.agent.app.ImportFlow.ProjectMode mode, String name, java.util.UUID automationId,
+                                                                        com.nekkora.agent.pack.PackagePlan draft) {
+                return importFlow == null ? new com.nekkora.agent.app.ImportFlow.Suggestion(java.util.Optional.empty(), "", java.util.Optional.empty(),
+                        java.util.Optional.empty(), com.nekkora.agent.app.ImportFlow.Comparison.UNAVAILABLE, java.util.List.of())
+                        : importFlow.suggest(mode, name, automationId, draft);
+            }
+
+            @Override
+            public java.util.List<com.nekkora.agent.platform.RemoteCatalog.Project> catalog() {
+                return importFlow == null ? java.util.List.of() : importFlow.catalog();
+            }
+
+            @Override
+            public void refreshCatalog() {
+                if (importFlow != null) importFlow.refreshCatalog();
+            }
+
+            @Override
+            public void prepare(java.nio.file.Path zip) {
+                // a janela de execução abre quando o assistente fecha (uma janela de cada vez); nada é aprovado nem iniciado aqui
+                pendingPrepare = zip;
+                if (importDialog != null) importDialog.dispose();
+            }
+        };
+    }
+
+    ImportDialog importDialog() {
+        return importDialog;
+    }
+
+    com.nekkora.agent.app.ImportFlow importFlow() {
+        return importFlow;
+    }
+
     // ----- execução local (DESKTOP-001) -----
 
     void openExecution() {
+        openExecution(null);
+    }
+
+    /** T03: {@code zip} não nulo = o pacote em ZIP já vem escolhido (vindo do assistente); a aprovação continua com a pessoa. */
+    void openExecution(java.nio.file.Path zip) {
         if (exiting.get() || bringActiveDialogToFront()) return;
         execDialog = new ExecutionDialog(window, executionActions(), activityData());
         activeDialog = execDialog;
         refreshSession();
         renderExecution();
+        if (zip != null) selectPackageZip(zip);
         execDialog.showDialog();
         activeDialog = null;
         execDialog = null;
@@ -628,6 +802,11 @@ public final class AgentApp {
             }
 
             @Override
+            public void choosePackageZip() {
+                NekkoraFileDialogs.openFile(execDialog, "Pacote da automação (.zip)", "Pacote compactado (ZIP)", "zip").ifPresent(AgentApp.this::selectPackageZip);
+            }
+
+            @Override
             public void approve() {
                 ExecutionPackage pk = setup.pkg();
                 if (pk == null) return;
@@ -709,16 +888,56 @@ public final class AgentApp {
     void selectPackage(Path dir) {
         busy(() -> {
             try {
-                ExecutionPackage pk = ExecutionPackage.inspect(dir);
-                ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
-                // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
-                chosenAuthorization = PlatformService.preselected(ctx.platform().authorizationsFor(pk.fingerprint())).orElse(null);
-                return setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
+                return packageChosen(ExecutionPackage.inspect(dir));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
                 return setup.withPackage(null, e.code(), false);
             }
         });
+    }
+
+    /**
+     * AGENT-PACOTES-001 T03: pacote em ZIP. O Agent lê o ZIP com o leitor seguro, confere pelo validador real e o prepara em
+     * {@code <dados>/pacotes-zip/<impressão>} (nada é executado; não entra na estante dos pedidos da Platform). Daí em diante é
+     * igual à pasta: aprovação pela impressão, Python, saída e início explícito.
+     */
+    void selectPackageZip(Path zip) {
+        busy(() -> {
+            try {
+                com.nekkora.agent.pack.ZipStager stager = new com.nekkora.agent.pack.ZipStager(com.nekkora.agent.pack.ZipStager.defaultRoot(ctx.dataDir().root()));
+                return packageChosen(stager.stage(zip, com.nekkora.agent.pack.SafeZip.Cancel.NEVER));
+            } catch (ExecRefused e) {
+                ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
+                return setup.withPackage(null, e.code(), false);
+            } catch (com.nekkora.agent.pack.ImportProblem e) {
+                ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", e.code().code()));
+                SwingUtilities.invokeLater(() -> toast(Severity.ERROR, "Pacote não aceito", e.message()));
+                return setup.withPackage(null, ErrorCode.EXEC_PACKAGE_UNSAFE, false);
+            }
+        });
+    }
+
+    private ExecutionSetup packageChosen(ExecutionPackage pk) {
+        ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
+        // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
+        chosenAuthorization = PlatformService.preselected(ctx.platform().authorizationsFor(pk.fingerprint())).orElse(null);
+        ExecutionSetup next = setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
+        return withDependencies(next);
+    }
+
+    /**
+     * T03: pacote Python externo com Python já escolhido: confere as dependências declaradas ANTES do início (só lê os metadados
+     * instalados; nada do projeto roda), para o diagnóstico aparecer na preparação e nada começar.
+     */
+    private ExecutionSetup withDependencies(ExecutionSetup s) {
+        if (s.pkg() == null || s.python() == null || s.pythonProblem() != null || s.pkg().kind() != ExecutionPackage.Kind.EXTERNAL_PYTHON) return s;
+        try {
+            PythonRuntime.requireDependencies(s.python().python(), s.pkg());
+            return s;
+        } catch (ExecRefused e) {
+            ctx.log().warn(LogEvent.EXEC_PYTHON_CHECKED, e.code());
+            return s.withEnvironmentProblem(e.code());
+        }
     }
 
     /** Aprovação já confirmada pela pessoa (o diálogo de confirmação fica em {@code approve}). */
@@ -742,7 +961,7 @@ public final class AgentApp {
             try {
                 PythonRuntime.Probe probe = PythonRuntime.probe(py, ctx.dataDir().root().resolve("execucao").resolve("sonda"));
                 ctx.log().info(LogEvent.EXEC_PYTHON_CHECKED, Field.of("python", probe.pythonVersion()), Field.of("framework", probe.framework().orElse("none")));
-                return setup.withPython(probe, null);
+                return withDependencies(setup.withPython(probe, null));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PYTHON_CHECKED, e.code());
                 return setup.withPython(null, e.code());
@@ -833,6 +1052,7 @@ public final class AgentApp {
         for (Window w : Window.getWindows()) w.dispose();
         io.shutdownNow();
         obsIo.shutdownNow();
+        importIo.shutdownNow();
         try {
             io.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
