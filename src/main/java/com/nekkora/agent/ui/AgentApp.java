@@ -79,6 +79,15 @@ public final class AgentApp {
         t.setDaemon(true);
         return t;
     });
+    // AGENT-PACOTES-001: leitura do ZIP e empacotamento em linha própria (nunca na EDT nem na linha das ações de execução)
+    private final ExecutorService importIo = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "nekkora-agent-importacao");
+        t.setDaemon(true);
+        return t;
+    });
+    private com.nekkora.agent.app.ImportFlow importFlow;
+    private ImportDialog importDialog;
+    private com.nekkora.agent.app.ImportFlow.Stage loggedImportStage;
     private final AtomicBoolean exiting = new AtomicBoolean();
     private MainWindow window;
     private TrayController tray;
@@ -114,7 +123,11 @@ public final class AgentApp {
             if (execDialog != null && execDialog.isDisplayable()) execDialog.activityPanel().changed(id);
         }));
         renderExecution();
-        ctx.platform().addListener(() -> SwingUtilities.invokeLater(this::renderPlatform));
+        ctx.platform().addListener(() -> SwingUtilities.invokeLater(() -> {
+            renderPlatform();
+            // AGENT-PACOTES-001: vínculo mudou (desvínculo, recusa, novo pareamento): o assistente aberto descarta o que tinha
+            if (importFlow != null) importFlow.platformChanged();
+        }));
         renderPlatform();
         tray = TrayController.install(trayPort, ctx.options().trayDisabled(), NekkoraLogo::appIcon, trayActions());
         ctx.setTray(tray.state());
@@ -166,6 +179,11 @@ public final class AgentApp {
             @Override
             public void execution() {
                 openExecution();
+            }
+
+            @Override
+            public void importProject() {
+                openImport();
             }
 
             @Override
@@ -525,6 +543,130 @@ public final class AgentApp {
         });
     }
 
+    // ----- importação de projeto (AGENT-PACOTES-001) -----
+
+    /** Assistente "Importar projeto (.zip)": vínculo confirmado online, ZIP lido numa pasta privada, pacote gerado. Na EDT. */
+    void openImport() {
+        if (exiting.get() || bringActiveDialogToFront()) return;
+        java.nio.file.Path data = ctx.dataDir().root();
+        importDialog = new ImportDialog(window, importActions());
+        loggedImportStage = null;
+        importFlow = new com.nekkora.agent.app.ImportFlow(new com.nekkora.agent.app.ImportFlow.Link() {
+            @Override
+            public com.nekkora.agent.platform.PlatformService.LinkCheck confirm() {
+                com.nekkora.agent.platform.PlatformService.LinkCheck c = ctx.platform().confirmLink();
+                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("outcome", c.outcome()),
+                        Field.of("catalog", c.catalog().available() ? String.valueOf(c.catalog().items().size()) : "indisponivel"));
+                return c;
+            }
+
+            @Override
+            public java.util.Optional<com.nekkora.agent.platform.PlatformService.LinkRef> current() {
+                return ctx.platform().currentLink();
+            }
+        }, new com.nekkora.agent.pack.ProjectImporter(com.nekkora.agent.pack.ProjectImporter.defaultRoot(data), com.nekkora.agent.pack.ZipLimits.DEFAULT),
+                new com.nekkora.agent.pack.PackageHistory(com.nekkora.agent.pack.PackageHistory.defaultFile(data), AtomicWriter.DEFAULT), ctx.clock(), importIo,
+                SwingUtilities::invokeLater, v -> {
+                    logImport(v);
+                    if (importDialog != null && importDialog.isDisplayable()) importDialog.render(v);
+                });
+        activeDialog = importDialog;
+        importFlow.start();
+        importDialog.showDialog();
+        activeDialog = null;
+        // fechar descarta a pasta da operação (o pacote gerado fica onde a pessoa escolheu); nada remoto é desfeito ou criado
+        importFlow.cancel();
+        importFlow = null;
+        importDialog = null;
+    }
+
+    /** Só códigos no log: estado, formato, motivo. Nunca nome de arquivo, projeto, organização ou caminho. */
+    private void logImport(com.nekkora.agent.app.ImportFlow.View v) {
+        if (v.stage() == loggedImportStage && v.problem() == null) return;
+        loggedImportStage = v.stage();
+        switch (v.stage()) {
+            case CONFIGURE -> {
+                if (v.problem() != null) ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", v.problem().code().code()));
+                else if (v.project() != null) ctx.log().info(LogEvent.IMPORT_ZIP_READ, Field.of("kind", v.project().kind()), Field.of("files", v.project().files().size()));
+            }
+            case READY -> {
+                if (v.problem() != null) ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", v.problem().code().code()));
+            }
+            case DONE -> ctx.log().info(LogEvent.IMPORT_PACKAGE_BUILT, Field.of("files", v.built() == null ? 0 : v.built().files()));
+            case INVALIDATED -> ctx.log().warn(LogEvent.IMPORT_INVALIDATED);
+            default -> {
+                // demais estágios não vão ao log
+            }
+        }
+    }
+
+    private ImportDialog.Actions importActions() {
+        return new ImportDialog.Actions() {
+            @Override
+            public void retry() {
+                if (importFlow != null) importFlow.start();
+            }
+
+            @Override
+            public void chooseZip() {
+                if (importFlow == null) return;
+                NekkoraFileDialogs.openFile(importDialog, ImportText.TITLE, "Projeto compactado (ZIP)", "zip").ifPresent(importFlow::chooseZip);
+            }
+
+            @Override
+            public void generate(com.nekkora.agent.pack.PackagePlan plan, com.nekkora.agent.app.ImportFlow.ProjectMode mode, java.util.UUID automationId) {
+                if (importFlow == null || importFlow.view().project() == null) return;
+                try {
+                    com.nekkora.agent.pack.Packager.preview(importFlow.view().project(), plan); // erros de escolha antes de pedir a pasta
+                } catch (com.nekkora.agent.pack.ImportProblem e) {
+                    NekkoraToast.show(importDialog, Severity.ERROR, "Pacote não gerado", e.message());
+                    return;
+                }
+                java.nio.file.Path out = NekkoraFileDialogs.selectFolder(importDialog, "Pasta onde o pacote será gravado").orElse(null);
+                if (out == null) return;
+                boolean overwrite = false;
+                if (com.nekkora.agent.pack.Packager.exists(out, plan)) {
+                    if (!NekkoraConfirmationDialog.confirmDanger(importDialog, "Substituir o arquivo existente?", "Já existe "
+                            + com.nekkora.agent.pack.Packager.fileName(plan) + " nesta pasta. Substituir troca o arquivo inteiro pelo pacote novo. O ZIP de "
+                            + "origem nunca é alterado.", "Substituir")) {
+                        return;
+                    }
+                    overwrite = true;
+                }
+                importFlow.build(plan, mode, automationId, out, overwrite);
+            }
+
+            @Override
+            public void openFolder(java.nio.file.Path zip) {
+                try {
+                    java.awt.Desktop.getDesktop().open(zip.getParent().toFile());
+                } catch (Exception e) {
+                    NekkoraToast.show(importDialog, Severity.WARNING, "Não foi possível abrir a pasta", "Abra a pasta pelo Explorador de Arquivos.");
+                }
+            }
+
+            @Override
+            public com.nekkora.agent.app.ImportFlow.Suggestion suggest(com.nekkora.agent.app.ImportFlow.ProjectMode mode, String name, java.util.UUID automationId,
+                                                                        com.nekkora.agent.pack.PackagePlan draft) {
+                return importFlow == null ? new com.nekkora.agent.app.ImportFlow.Suggestion(java.util.Optional.empty(), "", java.util.Optional.empty(),
+                        java.util.Optional.empty()) : importFlow.suggest(mode, name, automationId, draft);
+            }
+
+            @Override
+            public java.util.List<com.nekkora.agent.app.ImportFlow.CatalogProject> catalog() {
+                return importFlow == null ? java.util.List.of() : importFlow.catalog();
+            }
+        };
+    }
+
+    ImportDialog importDialog() {
+        return importDialog;
+    }
+
+    com.nekkora.agent.app.ImportFlow importFlow() {
+        return importFlow;
+    }
+
     // ----- execução local (DESKTOP-001) -----
 
     void openExecution() {
@@ -833,6 +975,7 @@ public final class AgentApp {
         for (Window w : Window.getWindows()) w.dispose();
         io.shutdownNow();
         obsIo.shutdownNow();
+        importIo.shutdownNow();
         try {
             io.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {

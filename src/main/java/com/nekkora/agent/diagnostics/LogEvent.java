@@ -67,5 +67,11 @@ public enum LogEvent {
     PLATFORM_ACK,
     PLATFORM_RESPONSE_REJECTED,
     PLATFORM_STORAGE_FAILED,
+    /** AGENT-PACOTES-001: só códigos (resultado, formato, motivo); nunca nome de arquivo, projeto ou caminho. */
+    IMPORT_LINK_CHECKED,
+    IMPORT_ZIP_READ,
+    IMPORT_PACKAGE_BUILT,
+    IMPORT_REFUSED,
+    IMPORT_INVALIDATED,
     LOG_EVENTS_DROPPED
 }

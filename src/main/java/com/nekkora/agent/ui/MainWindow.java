@@ -55,6 +55,9 @@ final class MainWindow extends NekkoraFrame {
 
         void execution();
 
+        /** AGENT-PACOTES-001: assistente "Importar projeto (.zip)". */
+        default void importProject() {}
+
         void exit();
 
         /** AGENT-PLATFORM-001: controles mínimos do canal com a Platform. */
@@ -97,6 +100,8 @@ final class MainWindow extends NekkoraFrame {
     }
     private final NekkoraParagraph executionLine = new NekkoraParagraph("Nenhuma nesta sessão", TextTone.SECONDARY);
     private final NekkoraButton execution = NekkoraButton.secondary("Execução local…");
+    static final String IMPORT_LABEL = "Importar projeto (.zip)…";
+    private final NekkoraButton importProject = NekkoraButton.secondary(IMPORT_LABEL);
     private final NekkoraParagraph closeHint = new NekkoraParagraph("", TextTone.MUTED);
     private final NekkoraButton studio = NekkoraButton.secondary("Abrir Studio");
     private final NekkoraButton platform = NekkoraButton.secondary("Abrir Platform");
@@ -130,6 +135,9 @@ final class MainWindow extends NekkoraFrame {
         execution.addActionListener(e -> listener.execution());
         execution.setMnemonic(KeyEvent.VK_E);
         execution.getAccessibleContext().setAccessibleDescription("Escolher, aprovar, iniciar e acompanhar uma automação local");
+        importProject.addActionListener(e -> listener.importProject());
+        importProject.setMnemonic(KeyEvent.VK_I);
+        importProject.getAccessibleContext().setAccessibleDescription("Selecione um arquivo ZIP contendo o código e os arquivos necessários à automação");
         exit.addActionListener(e -> listener.exit());
         pair.addActionListener(e -> listener.pair());
         rotate.addActionListener(e -> listener.rotate());
@@ -156,8 +164,11 @@ final class MainWindow extends NekkoraFrame {
         NekkoraStack header = NekkoraStack.horizontal(Spacing.SPACE_5).align(NekkoraStack.Align.CENTER);
         header.addAll(logo, titles);
 
+        // AGENT-PACOTES-001: o trabalho com automações (importar, executar) numa linha; configuração e saída em outra
+        NekkoraStack work = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
+        work.addAll(importProject, execution);
         NekkoraStack actions = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-        actions.addAll(execution, settings, diagnostics);
+        actions.addAll(settings, diagnostics);
         actions.addGlue();
         actions.add(exit);
 
@@ -169,7 +180,7 @@ final class MainWindow extends NekkoraFrame {
         platformContent.addAll(platformRows, platformNotice, platformButtons);
         platformCard.setContent(platformContent);
         platformCard.setVisible(false);
-        body.addAll(header, notices, statusCard, platformCard, shortcutsCard, actions, closeHint);
+        body.addAll(header, notices, statusCard, platformCard, shortcutsCard, work, actions, closeHint);
         scroll = NekkoraScrollPane.verticalOnly(body);
         scroll.setBorder(null);
         getContentPane().add(scroll, BorderLayout.CENTER);
@@ -333,6 +344,10 @@ final class MainWindow extends NekkoraFrame {
 
     String executionText() {
         return executionLine.getText();
+    }
+
+    NekkoraButton importButton() {
+        return importProject;
     }
 
     NekkoraButton executionButton() {
