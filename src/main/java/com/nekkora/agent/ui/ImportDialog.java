@@ -66,6 +66,9 @@ final class ImportDialog extends FittedDialog {
         ImportFlow.Suggestion suggest(ProjectMode mode, String name, UUID automationId, PackagePlan draft);
 
         List<ImportFlow.CatalogProject> catalog();
+
+        /** T03: abrir a "Execução local" com este ZIP já escolhido (a aprovação e o início continuam com a pessoa). */
+        default void prepare(Path zip) {}
     }
 
     /** Item do catálogo parcial, pelo identificador estável. */
@@ -96,6 +99,8 @@ final class ImportDialog extends FittedDialog {
     final NekkoraCheckBox dependenciesConfirmed = new NekkoraCheckBox("Conferi: a lista acima tem todas as dependências do projeto (vazia = nenhuma)");
     final NekkoraButton rebuild = NekkoraButton.secondary("Preparar de novo (mudar entrada ou requisitos)…");
     final NekkoraButton openFolder = NekkoraButton.secondary("Abrir pasta");
+    final NekkoraButton prepareRun = NekkoraButton.primary("Preparar execução…");
+    final NekkoraButton prepareReady = NekkoraButton.primary("Preparar execução…");
     private final NekkoraButton generate;
     private final NekkoraParagraph suggestionText = new NekkoraParagraph("", TextTone.SECONDARY);
     private final NekkoraFormField pythonField;
@@ -142,6 +147,16 @@ final class ImportDialog extends FittedDialog {
         retry.addActionListener(e -> actions.retry());
         openFolder.addActionListener(e -> {
             if (view != null && view.built() != null) actions.openFolder(view.built().zip());
+        });
+        prepareRun.setMnemonic(KeyEvent.VK_P);
+        prepareReady.setMnemonic(KeyEvent.VK_P);
+        prepareRun.getAccessibleContext().setAccessibleDescription("Abre a Execução local com este pacote; aprovar e iniciar continuam com você");
+        prepareReady.getAccessibleContext().setAccessibleDescription("Abre a Execução local com este ZIP; aprovar e iniciar continuam com você");
+        prepareRun.addActionListener(e -> {
+            if (view != null && view.built() != null) actions.prepare(view.built().zip());
+        });
+        prepareReady.addActionListener(e -> {
+            if (view != null && view.project() != null) actions.prepare(view.project().source());
         });
         rebuild.addActionListener(e -> {
             rebuildMode = true;
@@ -262,11 +277,14 @@ final class ImportDialog extends FittedDialog {
             if (p.kind() == Kind.EXTERNAL_PACKAGE && !rebuildMode) {
                 s.add(new NekkoraParagraph("Este ZIP já é um pacote Python externo válido: ele é usado como está, sem regravar o manifesto. Para mudar "
                         + "a entrada ou os requisitos, prepare de novo (um pacote NOVO, com nova integridade e nova aprovação).", TextTone.SECONDARY));
-                s.add(rebuild);
+                NekkoraStack b = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
+                b.addAll(prepareReady, rebuild);
+                s.add(b);
             }
             if (p.kind() == Kind.STUDIO_PACKAGE || p.kind() == Kind.LAB_PACKAGE) {
                 s.add(new NekkoraParagraph("Pacote reconhecido: ele segue pelo fluxo de execução já suportado, sem conversão para pacote Python externo.",
                         TextTone.SECONDARY));
+                s.add(prepareReady);
             }
         }
         fileCard.setContent(s);
@@ -446,7 +464,7 @@ final class ImportDialog extends FittedDialog {
                     + "local desta máquina (o manifesto não tem esse campo). Gerar o pacote não executou nenhum código.", TextTone.SECONDARY));
             if (v.note() != null) s.add(new NekkoraInlineAlert(Severity.WARNING, "Atenção", v.note()));
             NekkoraStack buttons = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-            buttons.addAll(openFolder);
+            buttons.addAll(prepareRun, openFolder);
             s.add(buttons);
             NekkoraTextArea tech = new NekkoraTextArea("", 7);
             tech.setText("Impressão (" + ExecutionPackage.EXTERNAL_RULE + "):\n  " + b.fingerprint().substring("sha256:".length())
@@ -509,6 +527,9 @@ final class ImportDialog extends FittedDialog {
         Stage st = v == null ? Stage.CHECKING : v.stage();
         boolean linkOk = v != null && v.check() != null && v.check().confirmed() && st != Stage.INVALIDATED;
         importButton.setEnabled(linkOk && (st == Stage.READY || st == Stage.CONFIGURE || st == Stage.DONE));
+        // preparar a execução também exige o vínculo confirmado no assistente (a execução em si segue as regras de sempre)
+        prepareRun.setEnabled(linkOk && st == Stage.DONE);
+        prepareReady.setEnabled(linkOk && (st == Stage.CONFIGURE || st == Stage.READY));
         retry.setEnabled(st == Stage.BLOCKED || st == Stage.INVALIDATED);
         boolean configure = st == Stage.CONFIGURE && projectCard.isVisible();
         generate.setEnabled(configure && linkOk && entry.getSelectedValue() != null && entry.getSelectedValue().usable() && !name.getText().isBlank()

@@ -120,6 +120,11 @@ class ImportDesktopTest {
         }
 
         @Override
+        public void prepare(Path zip) {
+            calls.add("prepare " + zip.getFileName());
+        }
+
+        @Override
         public ImportFlow.Suggestion suggest(ProjectMode mode, String name, UUID automationId, PackagePlan draft) {
             return flow.suggest(mode, name, automationId, draft);
         }
@@ -250,6 +255,12 @@ class ImportDesktopTest {
             return null;
         });
         assertTrue(rec.calls.contains("openFolder"));
+        assertTrue(DesktopHarness.onEdt(lone.prepareRun::isEnabled), "Preparar execução disponível no resultado");
+        DesktopHarness.onEdt(() -> {
+            lone.prepareRun.doClick();
+            return null;
+        });
+        assertTrue(rec.calls.contains("prepare relatorio-1.0.0.zip"), "prepara o ZIP gerado; aprovar e iniciar continuam na Execução local: " + rec.calls);
     }
 
     /** Alt+tecla entregue ao componente (o Swing procura o atalho na janela dele). */

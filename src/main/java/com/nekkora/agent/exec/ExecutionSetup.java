@@ -32,6 +32,11 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
         return new ExecutionSetup(pkg, packageProblem, approved, probe, pythonProblem(pkg, probe, problem), input, output, session);
     }
 
+    /** AGENT-PACOTES-001 T03: o ambiente escolhido não atende ao pacote (ex.: dependência ausente), conferido antes do início. */
+    public ExecutionSetup withEnvironmentProblem(ErrorCode problem) {
+        return new ExecutionSetup(pkg, packageProblem, approved, python, problem, input, output, session);
+    }
+
     public ExecutionSetup withInput(Path in) {
         return new ExecutionSetup(pkg, packageProblem, approved, python, pythonProblem, in, output, session);
     }
@@ -190,6 +195,13 @@ public record ExecutionSetup(ExecutionPackage pkg, ErrorCode packageProblem, boo
 
     /** A02: de onde veio o desfecho quando o fim do processo não foi observado. */
     public static final String RECOVERED_LABEL = "Lido do resultado publicado pela automação depois do reinício do Agent (fim do processo não observado)";
+
+    /**
+     * AGENT-PACOTES-001 T03: onde um pacote Python externo grava, como o Agent faz de fato: uma subpasta por execução dentro da
+     * pasta de saída, informada ao script em {@code NEKKORA_SAIDA}; a pasta de trabalho é a cópia conferida do pacote.
+     */
+    public static final String EXTERNAL_OUTPUT_LABEL = "Uma subpasta por execução, informada ao script em NEKKORA_SAIDA. A pasta de trabalho é a cópia "
+            + "do pacote: um script que grava por caminho relativo grava nessa cópia, não na pasta de saída.";
 
     /** "1 min 05 s" (sem horário: só a duração). */
     public static String duration(long millis) {
