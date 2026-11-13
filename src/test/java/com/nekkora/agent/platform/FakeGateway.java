@@ -45,7 +45,7 @@ final class FakeGateway implements HttpTransport {
             "error_code", "counts", "correlation");
 
     /** Falha injetada (sempre identificada como tal nas evidências). */
-    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT, FORBIDDEN }
+    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT, FORBIDDEN, TLS, TIMEOUT }
 
     static final class Enrollment {
         UUID org, id, worker, agentForRotation;
@@ -104,6 +104,25 @@ final class FakeGateway implements HttpTransport {
     final Map<UUID, Req> runRequests = new LinkedHashMap<>();
     final Map<String, Deque<Fault>> faults = new LinkedHashMap<>();
     final List<Request> requests = new CopyOnWriteArrayList<>();
+    /** PLATFORM-AGENT-CATALOGO-001: {@code false} simula uma Platform anterior, sem as rotas do catálogo (404). */
+    boolean catalogSupported = true;
+    /** Teto de itens por página do catálogo simulado (para provar a paginação com poucos projetos). */
+    int catalogPageCap = 100;
+    /** Injeção: adulteração das respostas do catálogo (por exemplo, outro vínculo na resposta). */
+    java.util.function.UnaryOperator<String> catalogTamper;
+    /** Injeção: o vínculo é revogado na Platform no instante da leitura do catálogo (entre a presença e o catálogo). */
+    boolean revokeOnCatalog;
+    final Map<UUID, String> orgNames = new LinkedHashMap<>();
+    /** Metadados do catálogo por versão (número da Platform, versão declarada, nomes). */
+    final Map<UUID, CatVersion> versionMeta = new LinkedHashMap<>();
+
+    static final class CatVersion {
+        UUID automation, workspace;
+        String workspaceName = "WS", automationName = "Automacao", packageName, packageVersion, sourceKind = "EXTERNAL_PACKAGE";
+        int number = 1;
+        Instant publishedAt = Instant.parse("2026-11-01T12:00:00Z");
+    }
+
     /** T13: {@code false} simula uma Platform anterior, sem a rota de desvínculo (404). */
     boolean unlinkSupported = true;
     /** T13: a operação de desvínculo de cada Agent encerrado pela própria máquina (uma por Agent). */
@@ -165,6 +184,37 @@ final class FakeGateway implements HttpTransport {
         z.rule = rule;
         z.validUntil = until;
         authorizations.put(z.id, z);
+        return z.id;
+    }
+
+    /**
+     * PLATFORM-AGENT-CATALOGO-001: versão PUBLICADA com autorização de pacote para o Worker, com os metadados do catálogo.
+     * Devolve a autorização. {@code packageVersion} nulo = sem versão declarada (pacote do Studio ou sem artefato).
+     */
+    UUID publish(UUID org, UUID worker, UUID workspace, String workspaceName, UUID automation, String automationName, int number, String packageVersion,
+                 String fingerprint, String rule, Instant until) {
+        Authz z = new Authz();
+        z.org = org;
+        z.id = UUID.randomUUID();
+        z.worker = worker;
+        z.workspace = workspace;
+        z.automation = automation;
+        z.version = UUID.randomUUID();
+        z.fingerprint = fingerprint;
+        z.rule = rule;
+        z.sourceKind = PackageFingerprint.EXTERNAL_RULE.equals(rule) ? "EXTERNAL_PACKAGE" : "STUDIO_PACKAGE";
+        z.validUntil = until;
+        authorizations.put(z.id, z);
+        CatVersion v = new CatVersion();
+        v.automation = automation;
+        v.workspace = workspace;
+        v.workspaceName = workspaceName;
+        v.automationName = automationName;
+        v.number = number;
+        v.packageVersion = packageVersion;
+        v.packageName = packageVersion == null ? null : automationName;
+        v.sourceKind = z.sourceKind;
+        versionMeta.put(z.version, v);
         return z.id;
     }
 
@@ -241,6 +291,8 @@ final class FakeGateway implements HttpTransport {
         if (f == Fault.MALFORMED) return new Response(200, Optional.empty(), "{\"oops\":true}".getBytes(StandardCharsets.UTF_8));
         if (f == Fault.REDIRECT) return new Response(302, Optional.empty(), new byte[0]);
         if (f == Fault.FORBIDDEN) return err(403, "forbidden", null); // AGENT-PACOTES-001: permissão negada (não é rede nem revogação)
+        if (f == Fault.TLS) throw new javax.net.ssl.SSLHandshakeException("certificado recusado (falha injetada)");
+        if (f == Fault.TIMEOUT) throw new java.net.http.HttpTimeoutException("tempo esgotado (falha injetada)");
         String contract = r.headers().get("Nekkora-Agent-Contract");
         if (contract == null || !contract.matches("1\\.[0-9]{1,3}")) return err(400, "unsupported_contract", null);
         Response res;
@@ -286,6 +338,22 @@ final class FakeGateway implements HttpTransport {
                         .str("packageFingerprintRule", z.rule).str("validUntil", z.validUntil.toString()).str("sourceKind", z.sourceKind).toString());
             }
             return ok("{\"items\":" + Json.list(items) + "}");
+        }
+        if (path.startsWith("/agent/api/v1/catalog") && revokeOnCatalog) {
+            revokeAgent(m.id);
+            unauthenticated++;
+            return err(401, "unauthenticated", null);
+        }
+        if (path.equals("/agent/api/v1/catalog") && r.method().equals("GET")) {
+            if (!catalogSupported) return err(404, "not_found", null); // Platform anterior: a rota não existe
+            return catalogPage(m, r.uri().getQuery());
+        }
+        Matcher cat = Pattern.compile("/agent/api/v1/catalog/automations/(" + UUID_RE + ")").matcher(path);
+        if (cat.matches() && r.method().equals("GET")) {
+            if (!catalogSupported) return err(404, "not_found", null);
+            String item = catalogItems(m).get(UUID.fromString(cat.group(1)));
+            if (item == null) return err(404, "not_found", null);
+            return catalogOk(catalogHead(m) + ",\"item\":" + item + "}");
         }
         if (path.equals("/agent/api/v1/runs")) return register(m, j);
         if (path.equals("/agent/api/v1/run-requests") && r.method().equals("GET")) return listRequests(m);
@@ -427,6 +495,71 @@ final class FakeGateway implements HttpTransport {
     }
 
     /** sec. 4.4 (e a rotação aceita a credencial vencida, nunca a revogada). */
+    // ------------------------------------------------------------------------------------------- catálogo (espelho da 036)
+
+    /** O subconjunto visível ao Worker: automações com autorização vigente; versões com autorização de pacote. Ordem (workspace, automação). */
+    private java.util.SortedMap<UUID, String> catalogItems(Agent m) {
+        Map<UUID, List<Authz>> by = new LinkedHashMap<>();
+        for (Authz z : authorizations.values()) {
+            if (!z.org.equals(m.org) || !z.worker.equals(m.worker) || z.revoked || !clock.instant().isBefore(z.validUntil)) continue;
+            by.computeIfAbsent(z.automation, k -> new ArrayList<>()).add(z);
+        }
+        java.util.SortedMap<UUID, String> out = new java.util.TreeMap<>(java.util.Comparator.comparing(UUID::toString));
+        for (Map.Entry<UUID, List<Authz>> e : by.entrySet()) {
+            List<Authz> zs = e.getValue();
+            CatVersion any = zs.stream().filter(z -> z.version != null && versionMeta.containsKey(z.version)).map(z -> versionMeta.get(z.version)).findFirst()
+                    .orElse(null);
+            List<Authz> pkgs = new ArrayList<>(zs.stream().filter(z -> z.version != null && z.fingerprint != null).toList());
+            pkgs.sort(java.util.Comparator.comparingInt((Authz z) -> versionMeta.containsKey(z.version) ? versionMeta.get(z.version).number : 1).reversed());
+            List<String> vs = new ArrayList<>();
+            for (Authz z : pkgs) {
+                CatVersion v = versionMeta.getOrDefault(z.version, new CatVersion());
+                vs.add(Json.obj().str("automationVersionId", z.version.toString()).num("versionNumber", v.number).str("publishedAt", v.publishedAt.toString())
+                        .str("sourceKind", "EXTERNAL_MONITORED".equals(z.sourceKind) ? "STUDIO_PACKAGE" : z.sourceKind).str("packageFingerprintRule", z.rule)
+                        .str("packageFingerprint", z.fingerprint).str("packageName", v.packageName).str("packageVersion", v.packageVersion).toString());
+            }
+            UUID ws = zs.get(0).workspace;
+            out.put(e.getKey(), Json.obj().str("workspaceId", ws.toString()).str("workspaceName", any == null ? "WS" : any.workspaceName)
+                    .str("automationId", e.getKey().toString()).str("automationName", any == null ? "Automacao" : any.automationName)
+                    .raw("versions", Json.list(vs)).bool("versionsTruncated", false).toString());
+        }
+        return out;
+    }
+
+    private String catalogHead(Agent m) {
+        return "{\"catalogVersion\":\"1.0\",\"observedAt\":\"" + clock.instant() + "\",\"coverage\":\"WORKER_AUTHORIZED_SUBSET\",\"organization\":"
+                + Json.obj().str("organizationId", m.org.toString()).str("displayName", orgNames.getOrDefault(m.org, "Org Lab")).toString() + ",\"machine\":"
+                + Json.obj().str("agentId", m.id.toString()).str("workerId", m.worker.toString()).toString();
+    }
+
+    private Response catalogOk(String json) {
+        return ok(catalogTamper == null ? json : catalogTamper.apply(json));
+    }
+
+    private Response catalogPage(Agent m, String query) {
+        int limit = 50;
+        int offset = 0;
+        if (query != null) {
+            for (String kv : query.split("&")) {
+                String[] p = kv.split("=", 2);
+                if (p.length != 2) return err(400, "invalid_request", null);
+                if (p[0].equals("limit")) {
+                    if (!p[1].matches("[0-9]{1,3}")) return err(400, "invalid_request", null);
+                    limit = Integer.parseInt(p[1]);
+                } else if (p[0].equals("cursor")) {
+                    if (!p[1].matches("p[0-9]{1,6}")) return err(400, "invalid_request", null);
+                    offset = Integer.parseInt(p[1].substring(1));
+                }
+            }
+        }
+        if (limit < 1 || limit > 100) return err(400, "invalid_request", null);
+        int size = Math.min(limit, catalogPageCap);
+        List<String> all = new ArrayList<>(catalogItems(m).values());
+        List<String> page = all.subList(Math.min(offset, all.size()), Math.min(offset + size, all.size()));
+        String next = offset + size < all.size() ? "\"p" + (offset + size) + "\"" : "null";
+        return catalogOk(catalogHead(m) + ",\"items\":" + Json.list(page) + ",\"nextCursor\":" + next + "}");
+    }
+
     private Agent authenticate(String token, boolean rotation) {
         Credential c = credentialOf(token);
         if (c == null || c.revoked || !rotation && !clock.instant().isBefore(c.expires)) return null;

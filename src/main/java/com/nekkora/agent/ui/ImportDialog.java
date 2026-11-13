@@ -15,6 +15,7 @@ import com.nekkora.agent.pack.Packager;
 import com.nekkora.agent.pack.ZipNames;
 import com.nekkora.agent.platform.PlatformService.LinkCheck;
 import com.nekkora.agent.platform.PlatformService.LinkRef;
+import com.nekkora.agent.platform.RemoteCatalog;
 import com.nekkora.tokens.Spacing;
 import com.nekkora.ui.button.NekkoraButton;
 import com.nekkora.ui.container.NekkoraCard;
@@ -65,13 +66,16 @@ final class ImportDialog extends FittedDialog {
 
         ImportFlow.Suggestion suggest(ProjectMode mode, String name, UUID automationId, PackagePlan draft);
 
-        List<ImportFlow.CatalogProject> catalog();
+        List<RemoteCatalog.Project> catalog();
+
+        /** PLATFORM-AGENT-CATALOGO-001: consultar a Platform de novo sem descartar o ZIP (uma consulta por vez). */
+        default void refreshCatalog() {}
 
         /** T03: abrir a "Execução local" com este ZIP já escolhido (a aprovação e o início continuam com a pessoa). */
         default void prepare(Path zip) {}
     }
 
-    /** Item do catálogo parcial, pelo identificador estável. */
+    /** Item do catálogo, pelo identificador estável, com contexto legível. */
     record CatalogItem(UUID automationId, String label) {}
 
     /** Item da lista de entrada. */
@@ -87,8 +91,9 @@ final class ImportDialog extends FittedDialog {
 
     final NekkoraButton importButton = NekkoraButton.primary(ImportText.BUTTON + "…");
     final NekkoraButton retry = NekkoraButton.secondary("Tentar de novo");
-    final NekkoraRadioButton newProject = new NekkoraRadioButton("Projeto novo (preparação local)", true);
-    final NekkoraRadioButton existingProject = new NekkoraRadioButton("Automação existente na Platform");
+    final NekkoraButton refresh = NekkoraButton.secondary("Consultar a Platform de novo");
+    final NekkoraRadioButton existingProject = new NekkoraRadioButton("Usar projeto existente");
+    final NekkoraRadioButton newProject = new NekkoraRadioButton("Preparar novo projeto", true);
     final NekkoraTextField name = new NekkoraTextField("ex.: relatorio-vendas", 24);
     final NekkoraComboBox<CatalogItem> automation = new NekkoraComboBox<>();
     final NekkoraTextField version = new NekkoraTextField("x.y.z", 10);
@@ -103,6 +108,8 @@ final class ImportDialog extends FittedDialog {
     final NekkoraButton prepareReady = NekkoraButton.primary("Preparar execução…");
     private final NekkoraButton generate;
     private final NekkoraParagraph suggestionText = new NekkoraParagraph("", TextTone.SECONDARY);
+    private final NekkoraParagraph versionsText = new NekkoraParagraph("", TextTone.SECONDARY);
+    private final NekkoraStack warningsBox = NekkoraStack.vertical(Spacing.SPACE_2).align(NekkoraStack.Align.STRETCH);
     private final NekkoraFormField pythonField;
     private final NekkoraFormField dependenciesField;
     private final NekkoraFormField nameField;
@@ -111,6 +118,7 @@ final class ImportDialog extends FittedDialog {
     private final Set<String> exclude = new LinkedHashSet<>();
 
     private ImportFlow.View view;
+    private LinkCheck lastCheck;
     private ImportedProject formFor;
     private boolean rebuildMode;
     private boolean updating;
@@ -125,12 +133,15 @@ final class ImportDialog extends FittedDialog {
         importButton.setMnemonic(KeyEvent.VK_I);
         importButton.getAccessibleContext().setAccessibleDescription(ImportText.HELP);
         retry.setMnemonic(KeyEvent.VK_T);
+        refresh.setMnemonic(KeyEvent.VK_C);
+        refresh.getAccessibleContext().setAccessibleDescription("Consulta o vínculo e a lista de projetos de novo; o ZIP lido continua");
         newProject.setMnemonic(KeyEvent.VK_N);
         existingProject.setMnemonic(KeyEvent.VK_X);
         useSuggestion.setMnemonic(KeyEvent.VK_U);
         openFolder.setMnemonic(KeyEvent.VK_A);
         automation.setLabelProvider(CatalogItem::label);
-        automation.getAccessibleContext().setAccessibleName("Automação existente, pelo identificador");
+        automation.setPlaceholder("Escolha o projeto");
+        automation.getAccessibleContext().setAccessibleName("Projeto existente na Platform");
         entry.setLabelProvider(EntryItem::label);
         entry.setPlaceholder("Escolha o arquivo .py de entrada");
         entry.getAccessibleContext().setAccessibleName("Arquivo de entrada");
@@ -139,12 +150,16 @@ final class ImportDialog extends FittedDialog {
         python.getAccessibleContext().setAccessibleName("Versão de Python exigida");
         dependencies.getAccessibleContext().setAccessibleName("Dependências com versão exata");
         nameField = new NekkoraFormField("Nome do pacote", name).required().helper("Letras sem acento, números, ponto, hífen ou sublinhado.");
-        automationField = new NekkoraFormField("Automação", automation).required();
+        automationField = new NekkoraFormField("Projeto existente", automation).required().helper("Escolhido por você na lista; o Agent não escolhe pelo nome.");
         pythonField = new NekkoraFormField("Versão de Python", python).required();
         dependenciesField = new NekkoraFormField("Dependências", dependencies.scrollable()).required();
 
         importButton.addActionListener(e -> actions.chooseZip());
         retry.addActionListener(e -> actions.retry());
+        refresh.addActionListener(e -> {
+            refresh.setEnabled(false); // uma consulta por vez; volta com a próxima tela
+            actions.refreshCatalog();
+        });
         openFolder.addActionListener(e -> {
             if (view != null && view.built() != null) actions.openFolder(view.built().zip());
         });
@@ -216,7 +231,12 @@ final class ImportDialog extends FittedDialog {
             if (v.project() == null || v.project().kind() != Kind.EXTERNAL_PACKAGE) rebuildMode = false;
             if (configure) initForm(v.project());
             formFor = configure ? v.project() : null;
+        } else if (configure && v.check() != lastCheck && lastCheck != null) {
+            // nova consulta à Platform (Consultar de novo): a lista muda; a escolha só fica se o mesmo projeto continua visível
+            fillCatalog(automationId());
+            renderProject(v.project());
         }
+        lastCheck = v.check();
         projectCard.setVisible(configure);
         filesCard.setVisible(configure);
         if (configure) renderFiles(v.project());
@@ -243,10 +263,13 @@ final class ImportDialog extends FittedDialog {
             NekkoraStatusBadge b = new NekkoraStatusBadge(Status.SUCCESS, "Confirmado agora");
             b.getAccessibleContext().setAccessibleName("Vínculo confirmado pela Platform");
             kv.add("Vínculo", b);
-            kv.add("Organização", ImportText.organization(c.link()));
+            kv.add("Organização", ImportText.organization(c));
             s.add(kv);
-            s.add(new NekkoraParagraph(ImportText.ORGANIZATION_NOTE, TextTone.SECONDARY));
             s.add(new NekkoraParagraph(ImportText.confirmed(c), TextTone.SECONDARY));
+            RemoteCatalog cat = c.catalog();
+            Severity sev = cat.complete() ? Severity.INFO : cat.state() == RemoteCatalog.State.UNSUPPORTED ? Severity.ERROR : Severity.WARNING;
+            s.add(new NekkoraInlineAlert(sev, cat.complete() ? "Projetos da Platform" : "Lista de projetos incompleta", ImportText.catalogNote(c)));
+            s.add(refresh);
         }
         linkCard.setContent(s);
     }
@@ -304,12 +327,7 @@ final class ImportDialog extends FittedDialog {
             dependencies.setText(String.join("\n", deps));
             dependenciesConfirmed.setSelected(false);
             newProject.setSelected(true);
-            automation.removeAllItems();
-            for (ImportFlow.CatalogProject c : actions.catalog()) {
-                automation.addItem(new CatalogItem(c.automationId(), "Automação " + ImportText.shortId(c.automationId()) + " · workspace "
-                        + ImportText.shortId(c.workspaceId()) + " · " + c.versions().size() + " versão(ões) autorizada(s) a esta máquina"));
-            }
-            automation.setSelectedItem(null);
+            fillCatalog(null);
             entry.removeAllItems();
             for (String py : p.pythonFiles()) {
                 boolean ok = ZipNames.contractSafe(py);
@@ -325,6 +343,24 @@ final class ImportDialog extends FittedDialog {
         renderProject(p);
     }
 
+    /** A lista de projetos do catálogo; mantém a escolha só se o mesmo identificador continua na lista. */
+    private void fillCatalog(UUID keep) {
+        boolean was = updating;
+        updating = true;
+        try {
+            automation.removeAllItems();
+            CatalogItem selected = null;
+            for (RemoteCatalog.Project c : actions.catalog()) {
+                CatalogItem it = new CatalogItem(c.automationId(), ImportText.project(c));
+                automation.addItem(it);
+                if (c.automationId().equals(keep)) selected = it;
+            }
+            automation.setSelectedItem(selected);
+        } finally {
+            updating = was;
+        }
+    }
+
     private EntryItem findEntry(String path) {
         for (int i = 0; i < entry.getItemCount(); i++) if (entry.getItemAt(i).path().equals(path)) return entry.getItemAt(i);
         return null;
@@ -333,15 +369,16 @@ final class ImportDialog extends FittedDialog {
     private void renderProject(ImportedProject p) {
         NekkoraStack s = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
         NekkoraStack modes = NekkoraStack.vertical(Spacing.SPACE_2).align(NekkoraStack.Align.STRETCH);
-        modes.addAll(newProject, existingProject);
+        modes.addAll(existingProject, newProject);
         s.add(modes);
         boolean existing = existingProject.isSelected();
         if (existing) {
             s.add(automationField);
+            s.add(versionsText);
             s.add(new NekkoraParagraph(ImportText.catalogNote(view.check()), TextTone.SECONDARY));
-            existingProject.setEnabled(true);
         } else {
-            s.add(new NekkoraParagraph("“Projeto novo” prepara o pacote nesta máquina; não cria automação, rascunho nem versão na Platform.", TextTone.SECONDARY));
+            s.add(new NekkoraParagraph("“Preparar novo projeto” associa o pacote a esta organização só nesta máquina; não cria projeto, rascunho nem versão na "
+                    + "Platform.", TextTone.SECONDARY));
         }
         automation.setEnabled(automation.getItemCount() > 0);
         s.add(nameField);
@@ -349,6 +386,7 @@ final class ImportDialog extends FittedDialog {
         v.addAll(version, useSuggestion);
         s.add(new NekkoraFormField("Versão declarada no pacote", v).required().helper("packageVersion do manifesto; não é o número da versão na Platform."));
         s.add(suggestionText);
+        s.add(warningsBox);
         s.add(new NekkoraFormField("Arquivo de entrada", entry).required().helper("O .py que o Agent executa; o código não é executado para descobrir."));
         Declarations d = p.declarations();
         boolean pyDeclared = d.python().isPresent() || p.kind() == Kind.EXTERNAL_PACKAGE;
@@ -445,6 +483,10 @@ final class ImportDialog extends FittedDialog {
         } else if (v.stage() == Stage.CONFIGURE && v.problem() != null) {
             resultCard.setTitle("Pacote não gerado", null);
             s.add(new NekkoraInlineAlert(Severity.ERROR, "Pacote não gerado", v.problem().message()));
+        } else if (v.stage() == Stage.CONFIGURE && v.note() != null) {
+            resultCard.setTitle("Pacote não gerado", null);
+            s.add(new NekkoraInlineAlert(Severity.WARNING, "Pacote não gerado", v.note()));
+            resultCard.setVisible(true);
         } else if (v.stage() == Stage.CONFIGURE && v.check() != null && !v.check().confirmed()) {
             resultCard.setTitle("Pacote não gerado", null);
             s.add(new NekkoraInlineAlert(Severity.WARNING, "Vínculo não confirmado na conclusão", ImportText.blocked(v.check())));
@@ -456,7 +498,8 @@ final class ImportDialog extends FittedDialog {
             kv.add("Nome", b.name());
             kv.add("Versão declarada", b.version());
             kv.add("Entrada", b.entry());
-            kv.add("Organização associada", ImportText.organization(link));
+            kv.add("Organização associada", ImportText.organization(v.check()));
+            if (projectChoice != null) kv.add("Projeto", projectChoice);
             kv.add("Pacote", ZipNames.display(String.valueOf(b.zip().getFileName())));
             kv.add("Pasta", ZipNames.display(String.valueOf(b.zip().getParent().getFileName())));
             s.add(kv);
@@ -512,12 +555,18 @@ final class ImportDialog extends FittedDialog {
 
     private void refreshSuggestion() {
         if (view == null || view.project() == null) return;
-        ImportFlow.Suggestion s = actions.suggest(mode(), name.getText().strip(), automationId(), plan());
+        UUID id = automationId();
+        versionsText.setText(id == null ? "" : actions.catalog().stream().filter(p -> p.automationId().equals(id)).findFirst()
+                .map(p -> p.versions().isEmpty() ? "Nenhuma versão publicada deste projeto está autorizada a esta máquina."
+                        : "Versões na Platform visíveis a esta máquina: " + String.join("; ", p.versions().stream().map(ImportText::version).toList())
+                        + (p.versionsTruncated() ? " (só as mais recentes)." : "."))
+                .orElse(""));
+        ImportFlow.Suggestion s = actions.suggest(mode(), name.getText().strip(), id, plan());
         suggested = s.version();
-        String extra = s.authorized().map(a -> " Com esta versão declarada, o pacote seria idêntico à versão autorizada " + ImportText.shortId(a.automationVersionId())
-                + " (mesma impressão): não é preciso gerar outra.").orElse("");
-        String reuse = s.reuse().map(r -> " Pacote existente: " + ZipNames.display(String.valueOf(r.zip().getFileName())) + ".").orElse("");
-        suggestionText.setText(s.text() + reuse + extra);
+        suggestionText.setText(s.text());
+        warningsBox.removeAll();
+        for (String w : s.warnings()) warningsBox.add(new NekkoraInlineAlert(Severity.WARNING, "Confira", w));
+        warningsBox.revalidate();
         useSuggestion.setVisible(s.version().isPresent());
         useSuggestion.setText(s.version().map(x -> "Usar " + x).orElse("Usar sugestão"));
     }
@@ -531,16 +580,24 @@ final class ImportDialog extends FittedDialog {
         prepareRun.setEnabled(linkOk && st == Stage.DONE);
         prepareReady.setEnabled(linkOk && (st == Stage.CONFIGURE || st == Stage.READY));
         retry.setEnabled(st == Stage.BLOCKED || st == Stage.INVALIDATED);
+        refresh.setEnabled(linkOk && (st == Stage.READY || st == Stage.CONFIGURE || st == Stage.DONE));
+        RemoteCatalog cat = v == null || v.check() == null ? null : v.check().catalog();
+        boolean catalogOk = cat != null && cat.state() != RemoteCatalog.State.UNSUPPORTED
+                && (existingProject.isSelected() ? automationId() != null : cat.complete());
         boolean configure = st == Stage.CONFIGURE && projectCard.isVisible();
-        generate.setEnabled(configure && linkOk && entry.getSelectedValue() != null && entry.getSelectedValue().usable() && !name.getText().isBlank()
-                && !version.getText().isBlank());
+        generate.setEnabled(configure && linkOk && catalogOk && entry.getSelectedValue() != null && entry.getSelectedValue().usable()
+                && !name.getText().isBlank() && !version.getText().isBlank());
         generate.getAccessibleContext().setAccessibleDescription(generate.isEnabled() ? "Escolhe a pasta e grava o pacote" : "Indisponível: faltam escolhas");
     }
 
     private void requestGenerate() {
         if (!generate.isEnabled()) return;
+        CatalogItem c = existingProject.isSelected() ? automation.getSelectedValue() : null;
+        projectChoice = c == null ? "Novo (preparado nesta máquina; não cadastrado na Platform)" : c.label();
         actions.generate(plan(), mode(), automationId());
     }
+
+    private String projectChoice;
 
     // acesso para testes de desktop
     NekkoraButton generateButton() {
