@@ -557,14 +557,22 @@ public final class AgentApp {
             @Override
             public com.nekkora.agent.platform.PlatformService.LinkCheck confirm() {
                 com.nekkora.agent.platform.PlatformService.LinkCheck c = ctx.platform().confirmLink();
-                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("outcome", c.outcome()),
-                        Field.of("catalog", c.catalog().available() ? String.valueOf(c.catalog().items().size()) : "indisponivel"));
+                // só códigos e contagem: nunca nome de organização ou de projeto
+                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("outcome", c.outcome()), Field.of("catalog", c.catalog().state()),
+                        Field.of("projects", c.catalog().projects().size()), Field.of("problem", c.catalog().problem() == null ? "-" : c.catalog().problem()));
                 return c;
             }
 
             @Override
             public java.util.Optional<com.nekkora.agent.platform.PlatformService.LinkRef> current() {
                 return ctx.platform().currentLink();
+            }
+
+            @Override
+            public com.nekkora.agent.platform.PlatformService.SelectionCheck selection(java.util.UUID automationId) {
+                com.nekkora.agent.platform.PlatformService.SelectionCheck sc = ctx.platform().checkSelection(automationId);
+                ctx.log().info(LogEvent.IMPORT_LINK_CHECKED, Field.of("selection", sc.outcome()), Field.of("problem", sc.problem() == null ? "-" : sc.problem()));
+                return sc;
             }
         }, new com.nekkora.agent.pack.ProjectImporter(com.nekkora.agent.pack.ProjectImporter.defaultRoot(data), com.nekkora.agent.pack.ZipLimits.DEFAULT),
                 new com.nekkora.agent.pack.PackageHistory(com.nekkora.agent.pack.PackageHistory.defaultFile(data), AtomicWriter.DEFAULT), ctx.clock(), importIo,
@@ -654,12 +662,18 @@ public final class AgentApp {
             public com.nekkora.agent.app.ImportFlow.Suggestion suggest(com.nekkora.agent.app.ImportFlow.ProjectMode mode, String name, java.util.UUID automationId,
                                                                         com.nekkora.agent.pack.PackagePlan draft) {
                 return importFlow == null ? new com.nekkora.agent.app.ImportFlow.Suggestion(java.util.Optional.empty(), "", java.util.Optional.empty(),
-                        java.util.Optional.empty()) : importFlow.suggest(mode, name, automationId, draft);
+                        java.util.Optional.empty(), com.nekkora.agent.app.ImportFlow.Comparison.UNAVAILABLE, java.util.List.of())
+                        : importFlow.suggest(mode, name, automationId, draft);
             }
 
             @Override
-            public java.util.List<com.nekkora.agent.app.ImportFlow.CatalogProject> catalog() {
+            public java.util.List<com.nekkora.agent.platform.RemoteCatalog.Project> catalog() {
                 return importFlow == null ? java.util.List.of() : importFlow.catalog();
+            }
+
+            @Override
+            public void refreshCatalog() {
+                if (importFlow != null) importFlow.refreshCatalog();
             }
 
             @Override

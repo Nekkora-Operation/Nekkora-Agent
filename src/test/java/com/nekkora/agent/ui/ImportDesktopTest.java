@@ -16,7 +16,9 @@ import com.nekkora.agent.pack.Packager;
 import com.nekkora.agent.pack.ProjectImporter;
 import com.nekkora.agent.pack.SafeZip;
 import com.nekkora.agent.pack.ZipLimits;
-import com.nekkora.agent.platform.PlatformService.Catalog;
+import com.nekkora.agent.platform.PlatformService.SelectionCheck;
+import com.nekkora.agent.platform.PlatformService.SelectionOutcome;
+import com.nekkora.agent.platform.RemoteCatalog;
 import com.nekkora.agent.platform.PlatformService.LinkCheck;
 import com.nekkora.agent.platform.PlatformService.LinkCheckOutcome;
 import com.nekkora.agent.platform.PlatformService.LinkRef;
@@ -130,12 +132,38 @@ class ImportDesktopTest {
         }
 
         @Override
-        public List<ImportFlow.CatalogProject> catalog() {
+        public List<RemoteCatalog.Project> catalog() {
             return flow.catalog();
+        }
+
+        @Override
+        public void refreshCatalog() {
+            calls.add("refreshCatalog");
         }
     }
 
+    static final UUID ORG = UUID.fromString("85388156-0000-4000-8000-000000000001");
+    static final UUID AUTOMATION = UUID.fromString("a1b2c3d4-0000-4000-8000-000000000002");
+
+    /** Catálogo do laboratório simulado: dois projetos com o mesmo nome em workspaces diferentes. */
+    static RemoteCatalog catalog(RemoteCatalog.State state) {
+        Instant t = Instant.parse("2026-11-13T12:00:00Z");
+        String ext = com.nekkora.agent.exec.ExecutionPackage.EXTERNAL_RULE;
+        List<RemoteCatalog.Project> ps = List.of(
+                new RemoteCatalog.Project(UUID.randomUUID(), "Financeiro", AUTOMATION, "relatorio", List.of(
+                        new RemoteCatalog.Version(UUID.randomUUID(), 2, t, "EXTERNAL_PACKAGE", ext, "sha256:" + "b".repeat(64), "relatorio", "1.10.0"),
+                        new RemoteCatalog.Version(UUID.randomUUID(), 1, t.minusSeconds(86400), "EXTERNAL_PACKAGE", ext, "sha256:" + "a".repeat(64), "relatorio", "1.9.0")),
+                        false),
+                new RemoteCatalog.Project(UUID.randomUUID(), "Compras", UUID.randomUUID(), "relatorio", List.of(), false));
+        return new RemoteCatalog(state, state == RemoteCatalog.State.COMPLETE ? null : LinkCheckOutcome.SERVER_ERROR, Optional.empty(),
+                new RemoteCatalog.Organization(ORG, "Nekkora Lab Pacotes"), ps, t);
+    }
+
     private ImportFlow.View configured(Recorder rec) throws Exception {
+        return configured(rec, catalog(RemoteCatalog.State.COMPLETE));
+    }
+
+    private ImportFlow.View configured(Recorder rec, RemoteCatalog cat) throws Exception {
         Path zip = tmp.resolve("projeto.zip");
         try (OutputStream o = Files.newOutputStream(zip); ZipOutputStream z = new ZipOutputStream(o)) {
             for (String[] f : new String[][] {{"relatorio/main.py", "print('ok')\n"}, {"relatorio/util/calc.py", "X = 1\n"},
@@ -145,8 +173,8 @@ class ImportDesktopTest {
                 z.closeEntry();
             }
         }
-        LinkRef link = new LinkRef("https://platform.exemplo.test", UUID.fromString("85388156-0000-4000-8000-000000000001"), UUID.randomUUID(), UUID.randomUUID());
-        LinkCheck ok = new LinkCheck(LinkCheckOutcome.CONFIRMED, link, Instant.now(), Optional.empty(), new Catalog(true, null, List.of()));
+        LinkRef link = new LinkRef("https://platform.exemplo.test", ORG, UUID.randomUUID(), UUID.randomUUID());
+        LinkCheck ok = new LinkCheck(LinkCheckOutcome.CONFIRMED, link, Instant.now(), Optional.empty(), cat);
         ProjectImporter importer = new ProjectImporter(tmp.resolve("imp"), ZipLimits.DEFAULT);
         rec.flow = new ImportFlow(new ImportFlow.Link() {
             @Override
@@ -157,6 +185,11 @@ class ImportDesktopTest {
             @Override
             public Optional<LinkRef> current() {
                 return Optional.of(link);
+            }
+
+            @Override
+            public SelectionCheck selection(UUID automationId) {
+                return new SelectionCheck(SelectionOutcome.VISIBLE, link, null, Instant.now(), null, Optional.empty());
             }
         }, importer, new com.nekkora.agent.pack.PackageHistory(tmp.resolve("imp").resolve("historico.json"), com.nekkora.agent.storage.AtomicWriter.DEFAULT),
                 java.time.Clock.systemUTC(), Runnable::run, Runnable::run, v -> {});
@@ -180,8 +213,9 @@ class ImportDesktopTest {
         new DesktopHarnessWait().until(() -> lone.isShowing(), "assistente visível");
         String all = String.join("\n", DesktopHarness.onEdt(() -> DesktopHarness.texts(lone.getContentPane())));
         assertTrue(all.contains("Pasta “relatorio” (pasta externa única do ZIP)"), "a raiz reconhecida aparece antes de empacotar");
-        assertTrue(all.contains("Organização 85388156…"), "organização pela identificação disponível");
-        assertTrue(all.contains("A Platform não informa o nome da organização"), all);
+        assertTrue(all.contains("Nekkora Lab Pacotes"), "organização pelo nome informado pela Platform: " + all);
+        assertTrue(all.contains("2 projeto(s)"), all);
+        assertTrue(all.contains("um projeto que não aparece pode existir"), all);
         assertNull(DesktopHarness.onEdt(() -> lone.entry.getSelectedValue()), "a entrada não é escolhida sozinha, nem a sugerida");
         assertTrue(DesktopHarness.onEdt(() -> {
             for (int i = 0; i < lone.entry.getItemCount(); i++) if (lone.entry.getItemAt(i).label().equals("main.py  (sugerido pelo nome; confira)")) return true;
@@ -215,7 +249,9 @@ class ImportDesktopTest {
             return null;
         });
         assertTrue(DesktopHarness.onEdt(() -> lone.generateButton().isEnabled()), "com nome, versão e entrada: Gerar habilitado");
-        assertTrue(DesktopHarness.onEdt(lone::suggestionShown).contains("Sugestão local 1.0.0"), "1.0.0 rotulada como sugestão local");
+        assertTrue(DesktopHarness.onEdt(lone::suggestionShown).contains(ImportFlow.INITIAL), "1.0.0 rotulada como pacote inicial, sem afirmar nome livre");
+        String warned = String.join("\n", DesktopHarness.onEdt(() -> DesktopHarness.texts(lone.getContentPane())));
+        assertTrue(warned.contains("Usar projeto existente"), "homônimo no catálogo é avisado, nunca escolhido: " + warned);
         assertEquals("main.py", DesktopHarness.onEdt(() -> lone.plan().entry()));
         assertTrue(DesktopHarness.onEdt(() -> lone.plan().includeData().isEmpty()), "dados ficam fora até a pessoa incluir");
         capture(lone, "PAC-T02-configurar-pronto");
@@ -226,6 +262,75 @@ class ImportDesktopTest {
             return null;
         });
         capture(lone, "PAC-T02-configurar-estreito");
+    }
+
+    @Test
+    void existingProjectShowsRemoteVersionsAndSuggestion() throws Exception {
+        Recorder rec = new Recorder();
+        ImportFlow.View v = configured(rec);
+        lone = DesktopHarness.onEdt(() -> {
+            ImportDialog d = new ImportDialog(null, rec);
+            d.render(v);
+            return d;
+        });
+        javax.swing.SwingUtilities.invokeLater(() -> lone.showDialog());
+        new DesktopHarnessWait().until(() -> lone.isShowing(), "assistente visível");
+        DesktopHarness.onEdt(() -> {
+            lone.existingProject.setSelected(true);
+            lone.existingProject.getActionListeners()[0].actionPerformed(null);
+            return null;
+        });
+        assertNull(DesktopHarness.onEdt(() -> lone.automation.getSelectedValue()), "nenhum projeto escolhido sozinho, nem pelo nome do ZIP");
+        assertEquals(2, (int) DesktopHarness.onEdt(() -> lone.automation.getItemCount()));
+        DesktopHarness.onEdt(() -> {
+            for (int i = 0; i < lone.automation.getItemCount(); i++) if (lone.automation.getItemAt(i).automationId().equals(AUTOMATION)) lone.automation.setSelectedIndex(i);
+            return null;
+        });
+        String all = String.join("\n", DesktopHarness.onEdt(() -> DesktopHarness.texts(lone.getContentPane())));
+        List<String> labels = DesktopHarness.onEdt(() -> {
+            List<String> out = new ArrayList<>();
+            for (int i = 0; i < lone.automation.getItemCount(); i++) out.add(lone.automation.getItemAt(i).label());
+            return out;
+        });
+        assertTrue(labels.stream().anyMatch(l -> l.startsWith("relatorio — workspace Financeiro") && l.contains("id a1b2c3d4…")), labels.toString());
+        assertTrue(labels.stream().anyMatch(l -> l.startsWith("relatorio — workspace Compras") && l.contains("sem versão elegível")),
+                "o homônimo aparece com o workspace e o id: " + labels);
+        assertTrue(all.contains("nº 2 · versão declarada 1.10.0"), all);
+        assertTrue(DesktopHarness.onEdt(lone::suggestionShown).contains("Sugestão 1.10.1, sem reserva"), DesktopHarness.onEdt(lone::suggestionShown));
+        capture(lone, "CAT-T02-projeto-existente");
+        DesktopHarness.onEdt(() -> {
+            lone.refresh.doClick();
+            return null;
+        });
+        assertTrue(rec.calls.contains("refreshCatalog"));
+        assertFalse(DesktopHarness.onEdt(lone.refresh::isEnabled), "uma consulta por vez");
+    }
+
+    @Test
+    void partialCatalogBlocksNewProject() throws Exception {
+        Recorder rec = new Recorder();
+        ImportFlow.View v = configured(rec, catalog(RemoteCatalog.State.PARTIAL));
+        lone = DesktopHarness.onEdt(() -> {
+            ImportDialog d = new ImportDialog(null, rec);
+            d.render(v);
+            return d;
+        });
+        javax.swing.SwingUtilities.invokeLater(() -> lone.showDialog());
+        new DesktopHarnessWait().until(() -> lone.isShowing(), "assistente visível");
+        DesktopHarness.onEdt(() -> {
+            lone.name.setText("novo");
+            lone.version.setText("1.0.0");
+            lone.python.setText(">=3.10,<3.14");
+            lone.dependenciesConfirmed.setSelected(true);
+            lone.dependenciesConfirmed.getActionListeners()[0].actionPerformed(null);
+            lone.entry.setSelectedIndex(0);
+            return null;
+        });
+        String all = String.join("\n", DesktopHarness.onEdt(() -> DesktopHarness.texts(lone.getContentPane())));
+        assertTrue(all.contains("Lista INCOMPLETA"), all);
+        assertTrue(DesktopHarness.onEdt(lone::suggestionShown).contains("não indicam que o projeto é novo"), DesktopHarness.onEdt(lone::suggestionShown));
+        assertFalse(DesktopHarness.onEdt(() -> lone.generateButton().isEnabled()), "lista parcial: um projeto novo não é concluído");
+        capture(lone, "CAT-T02-lista-parcial");
     }
 
     @Test
@@ -247,6 +352,7 @@ class ImportDesktopTest {
         String all = String.join("\n", DesktopHarness.onEdt(() -> DesktopHarness.texts(lone.getContentPane())));
         assertTrue(all.contains("relatorio-1.0.0.zip"), all);
         assertTrue(all.contains("Organização associada"), all);
+        assertTrue(all.contains("Nekkora Lab Pacotes"), all);
         assertTrue(all.contains("não foi publicada nem reservada"), all);
         assertFalse(all.contains(out.toString()), "o caminho completo não aparece (a tela pode ser capturada)");
         capture(lone, "PAC-T02-resultado");

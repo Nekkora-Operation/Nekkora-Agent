@@ -3,6 +3,7 @@ package com.nekkora.agent.ui;
 import com.nekkora.agent.platform.PlatformService.LinkCheck;
 import com.nekkora.agent.platform.PlatformService.LinkCheckOutcome;
 import com.nekkora.agent.platform.PlatformService.LinkRef;
+import com.nekkora.agent.platform.RemoteCatalog;
 import java.net.URI;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -29,6 +30,9 @@ final class ImportText {
             case PAIRING_PENDING -> "O pareamento desta máquina ainda está sendo confirmado pela Platform. Aguarde a confirmação e tente de novo.";
             case UNLINK_PENDING -> "Há um desvínculo desta máquina em andamento. Nenhuma importação nova começa até ele terminar.";
             case UNREACHABLE, BUSY -> OFFLINE;
+            case TLS_FAILED -> "A conexão segura com a Platform foi recusada (certificado ou protocolo). Não é falta de rede: confira o endereço da Platform e o "
+                    + "certificado confiável desta máquina.";
+            case TIMED_OUT -> "A Platform não respondeu a tempo. Tente de novo em instantes; o vínculo desta máquina não mudou.";
             case CREDENTIAL_REFUSED -> "A Platform recusou a credencial desta máquina: o vínculo foi revogado ou encerrado. Vincule a máquina de novo para importar.";
             case FORBIDDEN -> "A Platform negou esta consulta à credencial da máquina (sem permissão). Não é falta de conexão nem revogação: peça a quem "
                     + "administra a organização para conferir o Worker desta máquina.";
@@ -42,12 +46,21 @@ final class ImportText {
         };
     }
 
-    /** A organização com a identificação honesta disponível: o contrato da máquina não traz o nome. */
+    /** A organização: o nome informado pela Platform no catálogo; sem catálogo, o identificador (e o porquê). */
+    static String organization(LinkCheck c) {
+        LinkRef r = c == null ? null : c.link();
+        if (r == null) return "—";
+        RemoteCatalog cat = c.catalog();
+        if (cat != null && cat.organization() != null && cat.organization().id().equals(r.organizationId())) {
+            return cat.organization().displayName() + " · " + host(r.origin());
+        }
+        return "Organização " + shortId(r.organizationId()) + " · " + host(r.origin()) + " (nome não consultado)";
+    }
+
+    /** Só o identificador (resultado gravado, sem o catálogo). */
     static String organization(LinkRef r) {
         return r == null ? "—" : "Organização " + shortId(r.organizationId()) + " · " + host(r.origin());
     }
-
-    static final String ORGANIZATION_NOTE = "A Platform não informa o nome da organização à máquina; o identificador completo está nos detalhes técnicos.";
 
     static String confirmed(LinkCheck c) {
         String at = c.serverTime() == null ? "" : " às " + DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(c.serverTime());
@@ -55,12 +68,35 @@ final class ImportText {
                 + "de novo antes de gravar, e a Platform confere cada autorização quando uma execução é registrada.";
     }
 
+    /** O estado da lista de projetos, sempre como observação da Platform num instante, nunca como "não existe". */
     static String catalogNote(LinkCheck c) {
-        if (c == null || !c.catalog().available()) {
-            return "A lista de automações não pôde ser consultada agora. Isso não significa que o projeto seja novo.";
-        }
-        return "Só aparecem as automações com versão autorizada a ESTA máquina, pelo identificador: a credencial da máquina não lista os projetos da "
-                + "organização nem traz nomes.";
+        RemoteCatalog cat = c == null ? null : c.catalog();
+        if (cat == null) return "A lista de projetos não foi consultada.";
+        String subset = " É só o que está autorizado a ESTA máquina: um projeto que não aparece pode existir na Platform.";
+        return switch (cat.state()) {
+            case COMPLETE -> "Lista consultada " + at(cat.observedAt()) + ": " + cat.projects().size() + " projeto(s)." + subset;
+            case PARTIAL -> "Lista INCOMPLETA" + com.nekkora.agent.app.ImportFlow.whyText(cat) + ": " + cat.projects().size() + " projeto(s) lidos "
+                    + at(cat.observedAt()) + "." + subset + " Consulte de novo antes de tratar um projeto como novo.";
+            case UNAVAILABLE -> "A lista de projetos não pôde ser consultada agora" + com.nekkora.agent.app.ImportFlow.whyText(cat)
+                    + ". Isso não significa que o projeto seja novo.";
+            case UNSUPPORTED -> com.nekkora.agent.app.ImportFlow.UNSUPPORTED;
+        };
+    }
+
+    static String at(Instant t) {
+        return t == null ? "sem hora" : "às " + DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(t);
+    }
+
+    /** Uma versão visível, legível: número da Platform, versão declarada e publicação. */
+    static String version(RemoteCatalog.Version v) {
+        return "nº " + v.versionNumber() + " · " + (v.packageVersion() == null ? "sem versão declarada" : "versão declarada " + v.packageVersion())
+                + " · publicada " + time(v.publishedAt()) + ("STUDIO_PACKAGE".equals(v.sourceKind()) ? " · pacote do Studio" : "");
+    }
+
+    /** Item da lista de projetos: nome, workspace e o identificador curto (nomes podem repetir). */
+    static String project(RemoteCatalog.Project p) {
+        String n = p.versions().isEmpty() ? "sem versão elegível para esta máquina" : p.versions().size() + " versão(ões) visível(is)";
+        return p.automationName() + " — workspace " + p.workspaceName() + " · " + n + " · id " + shortId(p.automationId());
     }
 
     static String shortId(UUID id) {

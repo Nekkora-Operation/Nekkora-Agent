@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * AGENT-PACOTES-001 T02: confirmação ONLINE do vínculo para o assistente de importação, contra o transporte simulado (espelho do
  * contrato da API). Cada falha é distinta (403 não é rede nem revogação; 429 não é offline) e nada é criado na Platform: só
- * presença e leitura das autorizações saem. As falhas são INJETADAS.
+ * presença e leituras (autorizações e catálogo) saem. As falhas são INJETADAS.
  */
 class PlatformLinkCheckTest {
     @TempDir
@@ -44,10 +44,10 @@ class PlatformLinkCheckTest {
     }
 
     @Test
-    void confirmedReadsPartialCatalogAndCreatesNothing() {
+    void confirmedReadsCatalogAndCreatesNothing() {
         Lab lab = ready();
-        UUID studio = lab.gw.authorize(lab.org, lab.worker, PlatformFixtures.FP, PlatformFixtures.T0.plus(Duration.ofDays(3)));
-        UUID external = lab.gw.authorize(lab.org, lab.worker, "a".repeat(64), PackageFingerprint.EXTERNAL_RULE, PlatformFixtures.T0.plus(Duration.ofDays(3)));
+        lab.gw.authorize(lab.org, lab.worker, PlatformFixtures.FP, PlatformFixtures.T0.plus(Duration.ofDays(3)));
+        lab.gw.authorize(lab.org, lab.worker, "a".repeat(64), PackageFingerprint.EXTERNAL_RULE, PlatformFixtures.T0.plus(Duration.ofDays(3)));
         lab.gw.authorizeMonitored(lab.org, lab.worker, UUID.randomUUID(), PlatformFixtures.T0.plus(Duration.ofDays(3)));
         int before = lab.gw.requests.size();
         LinkCheck c = lab.svc.confirmLink();
@@ -56,15 +56,14 @@ class PlatformLinkCheckTest {
         assertEquals(FakeGateway.ORIGIN, c.link().origin());
         assertEquals(UUID.fromString(lab.svc.status().agentId()), c.link().agentId(), "a geração do vínculo é o Agent");
         assertNotNull(c.serverTime());
-        assertTrue(c.catalog().available());
-        assertEquals(2, c.catalog().items().size(), "monitoramento (sem versão) fica fora do catálogo");
-        assertTrue(c.catalog().items().stream().anyMatch(a -> a.authorizationId().equals(studio)));
-        assertTrue(c.catalog().items().stream().anyMatch(a -> a.authorizationId().equals(external) && a.fingerprint().equals("sha256:" + "a".repeat(64))));
-        // só presença e leitura de autorizações
+        assertEquals(RemoteCatalog.State.COMPLETE, c.catalog().state());
+        assertEquals(3, c.catalog().projects().size(), "monitoramento aparece sem versão elegível");
+        assertEquals(1, c.catalog().projects().stream().filter(p -> p.versions().isEmpty()).count());
+        // só presença e leituras (autorizações e catálogo)
         var sent = lab.gw.requests.subList(before, lab.gw.requests.size());
-        assertEquals(2, sent.size());
+        assertEquals(3, sent.size());
         assertTrue(sent.stream().allMatch(r -> r.uri().getPath().equals("/agent/api/v1/heartbeat") && r.method().equals("POST")
-                || r.uri().getPath().equals("/agent/api/v1/authorizations") && r.method().equals("GET")));
+                || r.method().equals("GET") && (r.uri().getPath().equals("/agent/api/v1/authorizations") || r.uri().getPath().equals("/agent/api/v1/catalog"))));
         assertEquals(Optional.of(c.link()), lab.svc.currentLink());
     }
 
@@ -82,6 +81,10 @@ class PlatformLinkCheckTest {
         lab.gw.fault("/heartbeat", Fault.FORBIDDEN);
         assertEquals(LinkCheckOutcome.FORBIDDEN, lab.svc.confirmLink().outcome(), "403 não é revogação nem rede");
         assertEquals(LinkState.PAIRED, lab.svc.status().link(), "403 não marca a credencial como recusada");
+        lab.gw.fault("/heartbeat", Fault.TLS);
+        assertEquals(LinkCheckOutcome.TLS_FAILED, lab.svc.confirmLink().outcome(), "TLS recusado não é \"offline\"");
+        lab.gw.fault("/heartbeat", Fault.TIMEOUT);
+        assertEquals(LinkCheckOutcome.TIMED_OUT, lab.svc.confirmLink().outcome(), "tempo esgotado tem texto próprio");
         lab.gw.fault("/heartbeat", Fault.MALFORMED);
         assertEquals(LinkCheckOutcome.INVALID_RESPONSE, lab.svc.confirmLink().outcome());
         // nenhuma dessas falhas desfaz o vínculo local
@@ -92,10 +95,10 @@ class PlatformLinkCheckTest {
     @Test
     void catalogFailureIsUnavailableNotEmpty() {
         Lab lab = ready();
-        lab.gw.fault("/authorizations", Fault.UNAVAILABLE);
+        lab.gw.fault("/catalog", Fault.UNAVAILABLE);
         LinkCheck c = lab.svc.confirmLink();
         assertEquals(LinkCheckOutcome.CONFIRMED, c.outcome(), "a presença confirmou o vínculo");
-        assertFalse(c.catalog().available(), "falha da consulta não é catálogo vazio");
+        assertEquals(RemoteCatalog.State.UNAVAILABLE, c.catalog().state(), "falha da consulta não é catálogo vazio");
         assertEquals(LinkCheckOutcome.SERVER_ERROR, c.catalog().problem());
     }
 

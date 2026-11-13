@@ -765,8 +765,12 @@ public final class PlatformService implements AutoCloseable {
         RATE_LIMITED,
         /** 5xx. */
         SERVER_ERROR,
-        /** Sem resposta (rede, TLS, tempo esgotado). */
+        /** Sem resposta da rede (conexão recusada, nome não resolvido, rede ausente). */
         UNREACHABLE,
+        /** PLATFORM-AGENT-CATALOGO-001: o canal seguro (TLS) foi recusado — certificado ou protocolo; não é falta de rede. */
+        TLS_FAILED,
+        /** PLATFORM-AGENT-CATALOGO-001: a Platform não respondeu dentro do prazo. */
+        TIMED_OUT,
         CONTRACT_REFUSED,
         /** O endereço configurado não é o do vínculo: nada é enviado. */
         DESTINATION_CHANGED,
@@ -778,29 +782,11 @@ public final class PlatformService implements AutoCloseable {
         BUSY
     }
 
-    /** Versão autorizada a ESTA máquina (o único "catálogo" que a credencial da máquina alcança; sem nomes nem números). */
-    public record AuthorizedVersion(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String fingerprint, String rule,
-                                    Instant validUntil) {}
-
-    /**
-     * Catálogo PARCIAL lido agora: só as versões com autorização local ativa para o Worker desta máquina. {@code available}
-     * falso = a consulta falhou ({@code problem}); nunca é "nenhum projeto".
-     */
-    public record Catalog(boolean available, LinkCheckOutcome problem, List<AuthorizedVersion> items) {
-        public Catalog {
-            items = List.copyOf(items);
-        }
-
-        static Catalog unavailable(LinkCheckOutcome why) {
-            return new Catalog(false, why, List.of());
-        }
-    }
-
     /**
      * Confirmação do vínculo. {@code serverTime}: a hora da Platform na confirmação (uma revogação feita depois só é vista na
      * próxima consulta). {@code link}: o vínculo consultado (também nas falhas, se houver um).
      */
-    public record LinkCheck(LinkCheckOutcome outcome, LinkRef link, Instant serverTime, Optional<Long> retryAfterSeconds, Catalog catalog) {
+    public record LinkCheck(LinkCheckOutcome outcome, LinkRef link, Instant serverTime, Optional<Long> retryAfterSeconds, RemoteCatalog catalog) {
         public boolean confirmed() {
             return outcome == LinkCheckOutcome.CONFIRMED;
         }
@@ -825,7 +811,7 @@ public final class PlatformService implements AutoCloseable {
      */
     public LinkCheck confirmLink() {
         return onTransport(this::confirmNow, () -> new LinkCheck(LinkCheckOutcome.BUSY, currentLink().orElse(null), null, Optional.empty(),
-                Catalog.unavailable(LinkCheckOutcome.BUSY)));
+                RemoteCatalog.unavailable(LinkCheckOutcome.BUSY, Optional.empty())));
     }
 
     private LinkCheck confirmNow() {
@@ -866,7 +852,7 @@ public final class PlatformService implements AutoCloseable {
         } catch (IOException e) {
             diagnostics.storageFailed(ErrorCode.PLT_STORAGE_FAILED);
         }
-        Catalog catalog;
+        // as autorizações continuam lidas aqui (a Execução local usa o mesmo cache); o catálogo é outra rota
         Result<MachineClient.Authorizations> a = client.authorizations(l.destination(), token.get());
         if (a instanceof Ok<MachineClient.Authorizations> az) {
             contact(now);
@@ -877,25 +863,122 @@ public final class PlatformService implements AutoCloseable {
             }
             authorizationsDue = false;
             nextAuthorizations = now.plus(AUTHORIZATIONS);
-            List<AuthorizedVersion> items = new ArrayList<>();
-            for (Authorization z : az.value().items()) {
-                // monitoramento não tem versão nem impressão; regra desconhecida não serve para comparar
-                if (z.automationVersionId() == null || z.fingerprint() == null || !PackageFingerprint.known(z.rule())) continue;
-                items.add(new AuthorizedVersion(z.authorizationId(), z.workspaceId(), z.automationId(), z.automationVersionId(), "sha256:" + z.fingerprint(), z.rule(),
-                        z.validUntil()));
-            }
-            catalog = new Catalog(true, null, items);
-        } else {
-            LinkCheckOutcome why = classify(a, now);
+        } else if (classify(a, now) == LinkCheckOutcome.CREDENTIAL_REFUSED) {
             // a credencial pode ter sido recusada entre as duas chamadas: então NÃO está confirmada
-            if (why == LinkCheckOutcome.CREDENTIAL_REFUSED) return failed(why, ref, Optional.empty());
-            catalog = Catalog.unavailable(why);
+            return failed(LinkCheckOutcome.CREDENTIAL_REFUSED, ref, Optional.empty());
+        }
+        RemoteCatalog catalog = readCatalog(l, token.get(), now);
+        if (catalog.state() == RemoteCatalog.State.UNAVAILABLE && catalog.problem() == LinkCheckOutcome.CREDENTIAL_REFUSED) {
+            return failed(LinkCheckOutcome.CREDENTIAL_REFUSED, ref, Optional.empty());
         }
         return new LinkCheck(LinkCheckOutcome.CONFIRMED, ref, ok.value().serverTime(), Optional.empty(), catalog);
     }
 
+    /** Teto de páginas por consulta (100 automações por página): acima disso o catálogo fica PARCIAL, nunca "completo". */
+    static final int CATALOG_MAX_PAGES = 10;
+
+    /**
+     * PLATFORM-AGENT-CATALOGO-001: lê o catálogo da máquina, página a página, na linha do transporte. Cada página precisa ser
+     * DESTE vínculo (organização, Agent e Worker); senão nada dela é aceito. 404 na primeira página = Platform sem a rota
+     * (API anterior): UNSUPPORTED, sem substituto silencioso. Falha depois da primeira página = PARCIAL.
+     */
+    private RemoteCatalog readCatalog(Link l, String token, Instant now) {
+        List<RemoteCatalog.Project> all = new ArrayList<>();
+        RemoteCatalog.Organization org = null;
+        Instant observed = null;
+        String cursor = null;
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (int page = 0; page < CATALOG_MAX_PAGES; page++) {
+            Result<MachineClient.CatalogPage> r = client.catalog(l.destination(), token, cursor);
+            if (!(r instanceof Ok<MachineClient.CatalogPage> ok)) {
+                if (page == 0 && r instanceof Refused<?> x && x.status() == 404) {
+                    contact(now);
+                    return RemoteCatalog.unsupported();
+                }
+                LinkCheckOutcome why = classify(r, now);
+                Optional<Long> retry = r instanceof Refused<?> x ? x.retryAfterSeconds() : Optional.empty();
+                if (page == 0 || why == LinkCheckOutcome.CREDENTIAL_REFUSED) return RemoteCatalog.unavailable(why, retry);
+                return new RemoteCatalog(RemoteCatalog.State.PARTIAL, why, retry, org, all, observed);
+            }
+            contact(now);
+            MachineClient.CatalogPage pg = ok.value();
+            if (!pg.organization().id().equals(l.organizationId()) || !pg.agentId().equals(l.agentId()) || !pg.workerId().equals(l.workerId())) {
+                // resposta de outro vínculo: nada dela é aceito
+                return page == 0 ? RemoteCatalog.unavailable(LinkCheckOutcome.INVALID_RESPONSE, Optional.empty())
+                        : new RemoteCatalog(RemoteCatalog.State.PARTIAL, LinkCheckOutcome.INVALID_RESPONSE, Optional.empty(), org, all, observed);
+            }
+            if (org == null) {
+                org = pg.organization();
+                observed = pg.observedAt();
+            }
+            for (RemoteCatalog.Project p : pg.items()) if (seen.add(p.automationId())) all.add(p);
+            if (pg.nextCursor() == null) return new RemoteCatalog(RemoteCatalog.State.COMPLETE, null, Optional.empty(), org, all, observed);
+            cursor = pg.nextCursor();
+        }
+        return new RemoteCatalog(RemoteCatalog.State.PARTIAL, null, Optional.empty(), org, all, observed);
+    }
+
+    /** Resultado da revalidação de uma escolha do catálogo antes de concluir. */
+    public enum SelectionOutcome {
+        /** Ainda visível a esta máquina agora. */
+        VISIBLE,
+        /** A Platform respondeu que não é visível agora (revogada, vencida, retirada, ou nunca foi): não se conclui. */
+        NOT_VISIBLE,
+        /** A Platform conectada não tem o catálogo. */
+        UNSUPPORTED,
+        /** Não deu para saber ({@code problem}): não se conclui. */
+        FAILED
+    }
+
+    public record SelectionCheck(SelectionOutcome outcome, LinkRef link, RemoteCatalog.Project project, Instant observedAt, LinkCheckOutcome problem,
+                                 Optional<Long> retryAfterSeconds) {}
+
+    /**
+     * Revalida ONLINE que a automação escolhida continua visível a ESTA máquina (consulta direta do catálogo). Chamar fora da
+     * EDT. Nada é criado na Platform. Qualquer falha é FAILED (não "não existe").
+     */
+    public SelectionCheck checkSelection(UUID automationId) {
+        return onTransport(() -> {
+            try {
+                return selectionNow(automationId);
+            } finally {
+                publish();
+            }
+        }, () -> new SelectionCheck(SelectionOutcome.FAILED, currentLink().orElse(null), null, null, LinkCheckOutcome.BUSY, Optional.empty()));
+    }
+
+    private SelectionCheck selectionNow(UUID automationId) {
+        Optional<LinkRef> cur = currentLink();
+        if (cur.isEmpty()) return new SelectionCheck(SelectionOutcome.FAILED, null, null, null, LinkCheckOutcome.NOT_PAIRED, Optional.empty());
+        Link l = vault.link().orElseThrow();
+        LinkRef ref = ref(l);
+        if (contractRefused) return new SelectionCheck(SelectionOutcome.FAILED, ref, null, null, LinkCheckOutcome.CONTRACT_REFUSED, Optional.empty());
+        Optional<Destination> cfg = Destination.parse(configuredUrl.get());
+        if (cfg.isEmpty() || !cfg.get().equals(l.destination())) {
+            return new SelectionCheck(SelectionOutcome.FAILED, ref, null, null, LinkCheckOutcome.DESTINATION_CHANGED, Optional.empty());
+        }
+        Optional<String> token = vault.token();
+        if (token.isEmpty()) return new SelectionCheck(SelectionOutcome.FAILED, ref, null, null, LinkCheckOutcome.LOCAL_FAILURE, Optional.empty());
+        Instant now = clock.instant();
+        Result<MachineClient.CatalogOne> r = client.catalogAutomation(l.destination(), token.get(), automationId);
+        if (r instanceof Ok<MachineClient.CatalogOne> ok) {
+            contact(now);
+            MachineClient.CatalogOne one = ok.value();
+            if (!one.organization().id().equals(l.organizationId()) || !one.agentId().equals(l.agentId()) || !one.workerId().equals(l.workerId())) {
+                return new SelectionCheck(SelectionOutcome.FAILED, ref, null, null, LinkCheckOutcome.INVALID_RESPONSE, Optional.empty());
+            }
+            return new SelectionCheck(SelectionOutcome.VISIBLE, ref, one.item(), one.observedAt(), null, Optional.empty());
+        }
+        if (r instanceof Refused<?> x && x.status() == 404) {
+            contact(now);
+            return new SelectionCheck(SelectionOutcome.NOT_VISIBLE, ref, null, null, null, Optional.empty());
+        }
+        LinkCheckOutcome why = classify(r, now);
+        return new SelectionCheck(SelectionOutcome.FAILED, ref, null, null, why, r instanceof Refused<?> x ? x.retryAfterSeconds() : Optional.empty());
+    }
+
     private static LinkCheck failed(LinkCheckOutcome why, LinkRef ref, Optional<Long> retry) {
-        return new LinkCheck(why, ref, null, retry, Catalog.unavailable(why));
+        return new LinkCheck(why, ref, null, retry, RemoteCatalog.unavailable(why, retry));
     }
 
     /** Classifica uma falha e aplica o efeito de sempre no canal (credencial recusada, espera por falha). */
@@ -929,6 +1012,13 @@ public final class PlatformService implements AutoCloseable {
             return LinkCheckOutcome.INVALID_RESPONSE;
         }
         failure(ErrorCode.PLT_UNREACHABLE, now);
+        if (r instanceof NoResponse<?> nr) {
+            return switch (nr.kind()) {
+                case TLS -> LinkCheckOutcome.TLS_FAILED;
+                case TIMEOUT -> LinkCheckOutcome.TIMED_OUT;
+                case NETWORK -> LinkCheckOutcome.UNREACHABLE;
+            };
+        }
         return LinkCheckOutcome.UNREACHABLE;
     }
 

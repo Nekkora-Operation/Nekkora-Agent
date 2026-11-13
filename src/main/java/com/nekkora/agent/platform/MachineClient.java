@@ -36,8 +36,36 @@ final class MachineClient {
     /** Status de sucesso com corpo fora do contrato: nada é aceito dele. */
     record Malformed<T>(int status) implements Result<T> {}
 
-    /** Sem resposta (rede, TLS, tempo, limite): o resultado no servidor é desconhecido. */
-    record NoResponse<T>() implements Result<T> {}
+    /**
+     * Sem resposta: o resultado no servidor é desconhecido. {@code kind} (PLATFORM-AGENT-CATALOGO-001): TLS (certificado ou
+     * protocolo recusado), TIMEOUT (tempo esgotado) ou NETWORK (conexão recusada, nome, rede) — para não chamar tudo de "offline".
+     */
+    record NoResponse<T>(NoResponseKind kind) implements Result<T> {
+        NoResponse() {
+            this(NoResponseKind.NETWORK);
+        }
+    }
+
+    enum NoResponseKind { NETWORK, TLS, TIMEOUT }
+
+    static NoResponseKind kindOf(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof javax.net.ssl.SSLException || t instanceof java.security.cert.CertificateException) return NoResponseKind.TLS;
+            if (t instanceof java.net.http.HttpTimeoutException || t instanceof java.io.InterruptedIOException) return NoResponseKind.TIMEOUT; // inclui o tempo esgotado do soquete
+            if (t.getCause() == t) break;
+        }
+        return NoResponseKind.NETWORK;
+    }
+
+    /** PLATFORM-AGENT-CATALOGO-001: uma página do catálogo da máquina (só metadados; validados aqui, conferidos com o vínculo por quem chama). */
+    record CatalogPage(Instant observedAt, RemoteCatalog.Organization organization, UUID agentId, UUID workerId, List<RemoteCatalog.Project> items,
+                       String nextCursor) {}
+
+    /** Consulta direta de uma automação do catálogo. */
+    record CatalogOne(Instant observedAt, RemoteCatalog.Organization organization, UUID agentId, UUID workerId, RemoteCatalog.Project item) {}
+
+    static final int CATALOG_PAGE = 100;
+    private static final java.util.regex.Pattern CURSOR = java.util.regex.Pattern.compile("[A-Za-z0-9_-]{1,400}");
 
     record Presence(Instant serverTime, Instant credentialExpiresAt) {}
 
@@ -141,6 +169,82 @@ final class MachineClient {
             }
             return new Authorizations(ok, rejected);
         });
+    }
+
+    /** Uma página do catálogo ({@code cursor} nulo = a primeira). Cursor fora do formato: nenhuma chamada. */
+    Result<CatalogPage> catalog(Destination d, String token, String cursor) {
+        if (cursor != null && !CURSOR.matcher(cursor).matches()) return new Malformed<>(0);
+        String path = "/agent/api/v1/catalog?limit=" + CATALOG_PAGE + (cursor == null ? "" : "&cursor=" + cursor);
+        return call(d, "GET", path, token, null, j -> {
+            Head h = head(j);
+            List<?> items = Json.list(j, "items");
+            // nextCursor: ausente ou null JSON (marcador do leitor) = fim; texto fora do formato = resposta fora do contrato
+            String next = Json.text(j, "nextCursor");
+            boolean nextIsNull = !j.containsKey("nextCursor") || j.get("nextCursor") == com.nekkora.agent.exec.JsonReader.NULL;
+            if (h == null || items == null || items.size() > CATALOG_PAGE || !nextIsNull && (next == null || !CURSOR.matcher(next).matches())) return null;
+            List<RemoteCatalog.Project> ok = new ArrayList<>();
+            for (Object o : items) {
+                RemoteCatalog.Project p = project(Json.object(o));
+                if (p == null) return null; // um item fora do contrato invalida a página: nada é aceito pela metade
+                ok.add(p);
+            }
+            return new CatalogPage(h.observedAt(), h.organization(), h.agentId(), h.workerId(), ok, nextIsNull ? null : next);
+        });
+    }
+
+    Result<CatalogOne> catalogAutomation(Destination d, String token, UUID automationId) {
+        return call(d, "GET", "/agent/api/v1/catalog/automations/" + automationId, token, null, j -> {
+            Head h = head(j);
+            RemoteCatalog.Project p = project(Json.object(j.get("item")));
+            if (h == null || p == null || !p.automationId().equals(automationId)) return null;
+            return new CatalogOne(h.observedAt(), h.organization(), h.agentId(), h.workerId(), p);
+        });
+    }
+
+    private record Head(Instant observedAt, RemoteCatalog.Organization organization, UUID agentId, UUID workerId) {}
+
+    private static Head head(Map<String, Object> j) {
+        if (!"1.0".equals(Json.text(j, "catalogVersion")) || !"WORKER_AUTHORIZED_SUBSET".equals(Json.text(j, "coverage"))) return null;
+        Instant at = Json.instant(j, "observedAt");
+        Map<String, Object> o = Json.object(j.get("organization"));
+        Map<String, Object> m = Json.object(j.get("machine"));
+        if (at == null || o == null || m == null) return null;
+        UUID org = Json.uuid(o, "organizationId");
+        String name = Json.text(o, "displayName");
+        UUID agent = Json.uuid(m, "agentId");
+        UUID worker = Json.uuid(m, "workerId");
+        if (org == null || name == null || name.isBlank() || name.length() > 200 || agent == null || worker == null) return null;
+        return new Head(at, new RemoteCatalog.Organization(org, name.strip()), agent, worker);
+    }
+
+    private static RemoteCatalog.Project project(Map<String, Object> m) {
+        if (m == null) return null;
+        UUID ws = Json.uuid(m, "workspaceId");
+        UUID auto = Json.uuid(m, "automationId");
+        String wsName = Json.text(m, "workspaceName");
+        String name = Json.text(m, "automationName");
+        List<?> vs = Json.list(m, "versions");
+        Boolean truncated = Json.bool(m, "versionsTruncated");
+        if (ws == null || auto == null || wsName == null || name == null || wsName.length() > 200 || name.length() > 200 || vs == null || vs.size() > 20
+                || truncated == null) return null;
+        List<RemoteCatalog.Version> out = new ArrayList<>();
+        for (Object o : vs) {
+            Map<String, Object> v = Json.object(o);
+            if (v == null) return null;
+            UUID id = Json.uuid(v, "automationVersionId");
+            Long n = Json.number(v, "versionNumber");
+            Instant published = Json.instant(v, "publishedAt");
+            String kind = Json.text(v, "sourceKind");
+            String rule = Json.text(v, "packageFingerprintRule");
+            String fp = Json.text(v, "packageFingerprint");
+            String pkgName = Json.text(v, "packageName");
+            String pkgVersion = Json.text(v, "packageVersion");
+            if (id == null || n == null || n < 1 || n > Integer.MAX_VALUE || published == null || !("STUDIO_PACKAGE".equals(kind) || "EXTERNAL_PACKAGE".equals(kind))
+                    || !PackageFingerprint.known(rule) || fp == null || !fp.matches("[0-9a-f]{64}") || pkgName != null && pkgName.length() > 80
+                    || pkgVersion != null && pkgVersion.length() > 40) return null;
+            out.add(new RemoteCatalog.Version(id, n.intValue(), published, kind, rule, "sha256:" + fp, pkgName, pkgVersion));
+        }
+        return new RemoteCatalog.Project(ws, wsName.strip(), auto, name.strip(), out, truncated);
     }
 
     Result<PendingRequests> runRequests(Destination d, String token) {
@@ -276,7 +380,7 @@ final class MachineClient {
         try {
             res = http.send(new HttpTransport.Request(method, d.resolve(path), h, body == null ? null : body.getBytes(StandardCharsets.UTF_8)));
         } catch (IOException | RuntimeException e) {
-            return new NoResponse<>();
+            return new NoResponse<>(kindOf(e));
         }
         Map<String, Object> json = null;
         try {

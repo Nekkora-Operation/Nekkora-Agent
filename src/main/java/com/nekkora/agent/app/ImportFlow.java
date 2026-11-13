@@ -7,16 +7,21 @@ import com.nekkora.agent.pack.PackagePlan;
 import com.nekkora.agent.pack.Packager;
 import com.nekkora.agent.pack.ProjectImporter;
 import com.nekkora.agent.pack.SafeZip;
-import com.nekkora.agent.platform.PlatformService.AuthorizedVersion;
 import com.nekkora.agent.platform.PlatformService.LinkCheck;
 import com.nekkora.agent.platform.PlatformService.LinkCheckOutcome;
 import com.nekkora.agent.platform.PlatformService.LinkRef;
+import com.nekkora.agent.platform.PlatformService.SelectionCheck;
+import com.nekkora.agent.platform.PlatformService.SelectionOutcome;
+import com.nekkora.agent.platform.RemoteCatalog;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -31,8 +36,13 @@ import java.util.function.Consumer;
  *   <li>O estado fica preso ao vínculo confirmado ({@link LinkRef}: origem, organização, Agent — novo a cada pareamento — e
  *       Worker) e a uma GERAÇÃO local: mudar o vínculo, desvincular, cancelar ou recomeçar invalida tudo o que estava em
  *       andamento; uma resposta atrasada de uma geração anterior é descartada e nunca habilita nada.</li>
- *   <li>Nada é criado na Platform: as únicas chamadas são a presença e a leitura das autorizações da máquina. Gerar o pacote
- *       não reserva versão, não cria rascunho, não publica e não executa nada.</li>
+ *   <li>Nada é criado na Platform: as chamadas são a presença, a leitura das autorizações e do CATÁLOGO da máquina
+ *       (PLATFORM-AGENT-CATALOGO-001) e a revalidação da automação escolhida. Gerar o pacote não reserva versão, não cria
+ *       rascunho, não publica e não executa nada.</li>
+ *   <li>O catálogo é o subconjunto autorizado ao Worker desta máquina: nunca prova que um projeto não existe. Projeto
+ *       existente é escolhido pelo identificador (nunca pelo nome do ZIP nem por nome igual); "novo" só conclui com o catálogo
+ *       lido por inteiro na conclusão; projeto existente só conclui se a Platform confirmar, na conclusão, que ele continua
+ *       visível a esta máquina. Versão sugerida é sempre sugestão, sem reserva.</li>
  * </ul>
  * Limite honesto: uma revogação feita na Platform DEPOIS da última confirmação só é vista na próxima consulta; a Platform
  * confere de novo cada autorização quando uma execução é registrada.
@@ -41,11 +51,14 @@ public final class ImportFlow {
 
     /** O vínculo, visto pelo assistente. */
     public interface Link {
-        /** Confirmação online (fora da EDT). */
+        /** Confirmação online (fora da EDT), com o catálogo da máquina. */
         LinkCheck confirm();
 
         /** O vínculo atual, sem rede. */
         Optional<LinkRef> current();
+
+        /** Revalidação online da automação escolhida (fora da EDT). */
+        SelectionCheck selection(UUID automationId);
     }
 
     public enum Stage {
@@ -72,14 +85,33 @@ public final class ImportFlow {
     /** Projeto novo (preparação local; não cria nada na Platform) ou existente (escolhido pelo identificador estável). */
     public enum ProjectMode { NEW, EXISTING }
 
-    /** Uma automação do catálogo parcial: as versões autorizadas a ESTA máquina (sem nome: o contrato não traz). */
-    public record CatalogProject(UUID automationId, UUID workspaceId, List<AuthorizedVersion> versions) {}
+    /** Comparação do pacote preparado com as versões visíveis do projeto escolhido. */
+    public enum Comparison {
+        /** Idêntico (mesma impressão, pela regra completa) a uma versão visível. */
+        IDENTICAL,
+        /** Diferente de todas as versões visíveis comparáveis. */
+        DIFFERENT,
+        /** Não deu para comparar (escolhas incompletas, versões sem versão declarada, catálogo não lido). */
+        UNAVAILABLE,
+        /** Não se aplica (projeto novo). */
+        NOT_APPLICABLE
+    }
 
     /**
-     * Sugestão de versão declarada. {@code version} vazio = sem sugestão (a pessoa informa). {@code reuse}: pacote local de MESMO
-     * conteúdo (reutilizar em vez de gerar outra versão). {@code authorized}: o pacote seria idêntico a uma versão autorizada.
+     * Sugestão de versão declarada. {@code version} vazio = sem sugestão (a pessoa informa). Sempre SUGESTÃO: nada é reservado.
+     * {@code reuse}: pacote gerado nesta máquina com o mesmo conteúdo. {@code identical}: versão visível na Platform idêntica ao
+     * pacote preparado (com a versão declarada dela). {@code warnings}: o que a pessoa precisa conferir.
      */
-    public record Suggestion(Optional<String> version, String text, Optional<PackageHistory.Entry> reuse, Optional<AuthorizedVersion> authorized) {}
+    public record Suggestion(Optional<String> version, String text, Optional<PackageHistory.Entry> reuse, Optional<RemoteCatalog.Version> identical,
+                             Comparison comparison, List<String> warnings) {
+        public Suggestion {
+            warnings = List.copyOf(warnings);
+        }
+
+        static Suggestion none(String text) {
+            return new Suggestion(Optional.empty(), text, Optional.empty(), Optional.empty(), Comparison.UNAVAILABLE, List.of());
+        }
+    }
 
     /** O que a tela mostra. */
     public record View(Stage stage, LinkCheck check, ImportedProject project, ImportProblem problem, Packager.Built built, String note, long generation) {}
@@ -95,6 +127,7 @@ public final class ImportFlow {
     private volatile View view;
     private volatile LinkRef session;
     private volatile boolean opCancelled;
+    private volatile boolean refreshing;
 
     public ImportFlow(Link link, ProjectImporter importer, PackageHistory history, Clock clock, Executor background, Executor deliver, Consumer<View> listener) {
         this.link = link;
@@ -191,6 +224,37 @@ public final class ImportFlow {
                 });
                 return;
             }
+            // PLATFORM-AGENT-CATALOGO-001: a escolha do projeto vale só se a Platform a confirmar AGORA
+            String blocked = null;
+            RemoteCatalog cat = again.catalog();
+            if (cat.state() == RemoteCatalog.State.UNSUPPORTED) {
+                blocked = UNSUPPORTED;
+            } else if (mode == ProjectMode.EXISTING) {
+                if (automationId == null) {
+                    blocked = "Escolha o projeto existente na lista.";
+                } else {
+                    SelectionCheck sel = link.selection(automationId);
+                    if (sel.outcome() == SelectionOutcome.VISIBLE && s.equals(sel.link())) {
+                        blocked = null;
+                    } else if (sel.link() != null && !s.equals(sel.link())) {
+                        deliver(g, this::invalidate);
+                        return;
+                    } else {
+                        blocked = selectionBlocked(sel);
+                    }
+                }
+            } else if (!cat.complete()) {
+                blocked = "O catálogo da Platform não foi lido por inteiro agora" + why(cat) + ". Sem ele, o assistente não conclui um projeto como novo: falha "
+                        + "de rede, página faltante ou falta de permissão não indicam que o projeto não existe. Tente de novo.";
+            }
+            if (blocked != null) {
+                String b = blocked;
+                deliver(g, () -> {
+                    if (!linkStillSame()) invalidate();
+                    else publish(new View(Stage.CONFIGURE, again, p, null, null, b, g));
+                });
+                return;
+            }
             Packager.Built built = null;
             ImportProblem problem = null;
             try {
@@ -237,65 +301,221 @@ public final class ImportFlow {
 
     // ------------------------------------------------------------------ sugestões (sem rede)
 
-    /** As automações do catálogo parcial (versões autorizadas a esta máquina), agrupadas pelo identificador. */
-    public List<CatalogProject> catalog() {
+    /**
+     * Consulta a Platform de novo (vínculo e catálogo) sem descartar o ZIP lido. Uma consulta por vez: pedir de novo enquanto
+     * uma está em andamento não cria outra.
+     */
+    public void refreshCatalog() {
         View v = view;
-        if (v.check() == null || !v.check().catalog().available()) return List.of();
-        Map<UUID, List<AuthorizedVersion>> by = new LinkedHashMap<>();
-        for (AuthorizedVersion a : v.check().catalog().items()) by.computeIfAbsent(a.automationId(), k -> new ArrayList<>()).add(a);
-        List<CatalogProject> out = new ArrayList<>();
-        by.forEach((k, list) -> out.add(new CatalogProject(k, list.get(0).workspaceId(), List.copyOf(list))));
+        if (session == null || refreshing || !List.of(Stage.READY, Stage.CONFIGURE, Stage.DONE).contains(v.stage())) return;
+        if (!linkStillSame()) {
+            invalidate();
+            return;
+        }
+        refreshing = true;
+        long g = next();
+        LinkRef s = session;
+        background.execute(() -> {
+            LinkCheck c;
+            try {
+                c = link.confirm();
+            } finally {
+                refreshing = false;
+            }
+            LinkCheck checked = c;
+            deliver(g, () -> {
+                View now = view;
+                boolean changed = checked.link() != null && !s.equals(checked.link());
+                if (changed || !linkStillSame()) {
+                    invalidate();
+                    return;
+                }
+                publish(new View(now.stage(), checked, now.project(), now.problem(), now.built(), null, g));
+            });
+        });
+    }
+
+    /** O catálogo lido (completo ou parcial), por workspace e nome; vazio se não foi lido. */
+    public List<RemoteCatalog.Project> catalog() {
+        View v = view;
+        // sem sessão (invalidado, fechado, antes da confirmação): nada do vínculo anterior fica escolhível
+        if (session == null || v.check() == null || !v.check().confirmed() || !v.check().catalog().readable()) return List.of();
+        List<RemoteCatalog.Project> out = new ArrayList<>(v.check().catalog().projects());
+        out.sort(Comparator.comparing((RemoteCatalog.Project p) -> p.workspaceName().toLowerCase(Locale.ROOT))
+                .thenComparing(p -> p.automationName().toLowerCase(Locale.ROOT)).thenComparing(p -> p.automationId().toString()));
         return out;
     }
 
     /**
-     * Sugestão da versão declarada. Regras: projeto declarado novo, catálogo lido e nenhum pacote local com esse nome → 1.0.0;
-     * projeto com pacotes gerados nesta máquina → o terceiro número + 1 da maior; conteúdo igual a um pacote local → reutilizar
-     * (sem versão nova); conteúdo igual a uma versão autorizada → dizer isso. Falha de consulta nunca vira "1.0.0".
+     * Sugestão da versão declarada (PLATFORM-AGENT-CATALOGO-001). Projeto existente: a partir das versões VISÍVEIS a esta
+     * máquina na Platform (fato remoto; o histórico local não prevalece), com a comparação pela regra completa da impressão
+     * (a impressão inclui a versão: compara-se o pacote preparado COM a versão declarada de cada versão visível). Projeto novo:
+     * "Pacote inicial 1.0.0" só com o catálogo lido por inteiro, sem afirmar que o nome está livre. Sempre sugestão, sem reserva.
      */
     public Suggestion suggest(ProjectMode mode, String name, UUID automationId, PackagePlan draft) {
         View v = view;
         LinkRef s = session;
-        if (s == null || v.project() == null) return new Suggestion(Optional.empty(), "Sem sugestão: o vínculo não está confirmado.", Optional.empty(), Optional.empty());
-        Optional<PackageHistory.Entry> reuse = Optional.empty();
-        Optional<AuthorizedVersion> authorized = Optional.empty();
+        if (s == null || v.project() == null || v.check() == null) return Suggestion.none("Sem sugestão: o vínculo não está confirmado.");
+        RemoteCatalog cat = v.check().catalog();
+        List<String> warnings = new ArrayList<>();
+        Packager.Preview preview = null;
         if (draft != null) {
             try {
-                Packager.Preview pv = Packager.preview(v.project(), draft);
-                reuse = history.sameContent(s.origin(), s.organizationId(), pv.contentIdentity());
-                authorized = v.check().catalog().items().stream().filter(a -> a.fingerprint().equals(pv.fingerprint()))
-                        .filter(a -> mode != ProjectMode.EXISTING || a.automationId().equals(automationId)).findFirst();
+                preview = Packager.preview(v.project(), draft);
             } catch (ImportProblem e) {
-                // escolhas incompletas: só a sugestão de número
+                // escolhas incompletas: sem comparação
             }
         }
-        boolean catalogOk = v.check() != null && v.check().catalog().available();
-        Optional<AuthorizedVersion> auth = authorized;
-        if (reuse.isPresent()) {
-            return new Suggestion(Optional.empty(), "O mesmo conteúdo já foi empacotado nesta máquina como versão " + reuse.get().version()
-                    + ". Reutilize esse pacote em vez de gerar uma versão nova.", reuse, authorized);
+        Optional<PackageHistory.Entry> reuse = preview == null ? Optional.empty() : history.sameContent(s.origin(), s.organizationId(), preview.contentIdentity());
+        reuse.ifPresent(r -> warnings.add("O mesmo conteúdo já foi empacotado nesta máquina como versão " + r.version() + " (" + r.zip().getFileName()
+                + "). Se for o mesmo pacote, reutilize-o."));
+        if (cat.state() == RemoteCatalog.State.UNSUPPORTED) return new Suggestion(Optional.empty(), UNSUPPORTED, reuse, Optional.empty(), Comparison.UNAVAILABLE, warnings);
+        if (mode == ProjectMode.EXISTING) return existing(s, cat, automationId, draft, v.project(), reuse, warnings);
+        return fresh(s, cat, name, reuse, warnings);
+    }
+
+    private Suggestion existing(LinkRef s, RemoteCatalog cat, UUID automationId, PackagePlan draft, ImportedProject project,
+                                Optional<PackageHistory.Entry> reuse, List<String> warnings) {
+        if (automationId == null) return new Suggestion(Optional.empty(), "Escolha o projeto na lista.", reuse, Optional.empty(), Comparison.UNAVAILABLE, warnings);
+        Optional<RemoteCatalog.Project> op = cat.project(automationId);
+        if (op.isEmpty()) {
+            return new Suggestion(Optional.empty(), "Este projeto não está no catálogo lido agora. Consulte a Platform de novo.", reuse, Optional.empty(),
+                    Comparison.UNAVAILABLE, warnings);
         }
-        if (mode == ProjectMode.EXISTING) {
-            if (automationId == null) return new Suggestion(Optional.empty(), "Escolha a automação pelo identificador.", reuse, authorized);
-            Optional<String> next = history.nextVersion(s.origin(), s.organizationId(), PackageHistory.automationKey(automationId));
-            return next.map(n -> new Suggestion(Optional.of(n), "Sugestão local " + n + ": a próxima depois da maior versão gerada NESTA máquina para esta automação. "
-                    + "A Platform não informa as versões desta automação à máquina; nada foi reservado nela.", Optional.<PackageHistory.Entry>empty(), auth))
-                    .orElse(new Suggestion(Optional.empty(), "Sem sugestão: a credencial desta máquina não consegue consultar as versões desta automação na "
-                            + "Platform e esta máquina ainda não gerou pacotes para ela. Informe a versão declarada no pacote.", Optional.empty(), authorized));
+        RemoteCatalog.Project pr = op.get();
+        String when = at(cat.observedAt());
+        List<RemoteCatalog.Version> versions = pr.versions();
+        if (versions.isEmpty()) {
+            return new Suggestion(Optional.empty(), "Nenhuma versão publicada deste projeto está autorizada a esta máquina (consulta " + when + "). Informe a "
+                    + "versão declarada no pacote; nada foi reservado.", reuse, Optional.empty(), Comparison.UNAVAILABLE, warnings);
         }
-        if (!catalogOk) {
-            return new Suggestion(Optional.empty(), "Sem sugestão: a consulta à Platform não foi concluída, então não dá para tratar o projeto como novo. "
-                    + "Informe a versão ou tente a consulta de novo.", Optional.empty(), authorized);
+        // comparação pela regra completa: o pacote preparado COM a versão declarada de cada versão visível
+        Comparison comparison = Comparison.UNAVAILABLE;
+        Optional<RemoteCatalog.Version> identical = Optional.empty();
+        if (draft != null) {
+            boolean comparable = false;
+            for (RemoteCatalog.Version rv : versions) {
+                if (!com.nekkora.agent.exec.ExecutionPackage.EXTERNAL_RULE.equals(rv.rule()) || RemoteCatalog.semver(rv.packageVersion()).isEmpty()) continue;
+                try {
+                    Packager.Preview pv = Packager.preview(project, withVersion(draft, rv.packageVersion()));
+                    comparable = true;
+                    if (pv.fingerprint().equals(rv.fingerprint())) {
+                        identical = Optional.of(rv);
+                        break;
+                    }
+                } catch (ImportProblem e) {
+                    break; // escolhas incompletas: não dá para comparar nenhuma
+                }
+            }
+            comparison = identical.isPresent() ? Comparison.IDENTICAL : comparable ? Comparison.DIFFERENT : Comparison.UNAVAILABLE;
         }
-        if (name == null || name.isBlank()) return new Suggestion(Optional.empty(), "Informe o nome do projeto.", Optional.empty(), authorized);
+        if (identical.isPresent()) {
+            RemoteCatalog.Version rv = identical.get();
+            return new Suggestion(Optional.of(rv.packageVersion()), "Igual à versão nº " + rv.versionNumber() + " da Platform (versão declarada " + rv.packageVersion()
+                    + ", consulta " + when + "): mesmo conteúdo e mesma identificação. Use " + rv.packageVersion() + " para manter a mesma identidade; não é "
+                    + "preciso uma versão nova.", reuse, identical, comparison, warnings);
+        }
+        if (draft != null && RemoteCatalog.semver(draft.version()).isPresent()) {
+            versions.stream().filter(rv -> draft.version().equals(rv.packageVersion())).findFirst().ifPresent(rv -> warnings.add("A versão declarada "
+                    + draft.version() + " já existe na Platform (nº " + rv.versionNumber() + ") com outro conteúdo ou identificação. Use outra versão."));
+        }
+        if (pr.versionsTruncated()) warnings.add("A Platform mostrou só as versões mais recentes deste projeto visíveis a esta máquina.");
+        Optional<RemoteCatalog.Version> top = RemoteCatalog.highestDeclared(versions);
+        String compared = switch (comparison) {
+            case DIFFERENT -> " O pacote preparado é diferente de todas as versões visíveis.";
+            case UNAVAILABLE -> draft == null ? "" : " Complete a entrada, o Python e as dependências para comparar com as versões da Platform.";
+            default -> "";
+        };
+        if (top.isEmpty()) {
+            RemoteCatalog.Version latest = versions.get(0);
+            return new Suggestion(Optional.empty(), "As versões visíveis deste projeto não informam versão declarada no formato MAIOR.MENOR.CORREÇÃO (por exemplo, "
+                    + "pacote do Studio). O número da Platform (nº " + latest.versionNumber() + ") não é convertido em versão do pacote: informe a versão "
+                    + "declarada." + compared, reuse, Optional.empty(), comparison, warnings);
+        }
+        RemoteCatalog.Version hi = top.get();
+        Optional<String> next = RemoteCatalog.nextPatch(hi.packageVersion());
+        localAhead(s, automationId, hi.packageVersion()).ifPresent(w -> warnings.add(w));
+        String text = next.map(n -> "Sugestão " + n + ", sem reserva: a próxima depois de " + hi.packageVersion() + ", a maior versão declarada entre as "
+                + "visíveis a esta máquina (nº " + hi.versionNumber() + ", consulta " + when + "). Pode haver versão mais recente na Platform não autorizada a "
+                + "esta máquina; uma publicação futura confere a disponibilidade.").orElse("A maior versão visível (" + hi.packageVersion() + ") não tem próxima "
+                + "correção no formato do pacote: informe a versão declarada.");
+        return new Suggestion(next, text + compared, reuse, Optional.empty(), comparison, warnings);
+    }
+
+    /** Uma versão gerada NESTA máquina acima da maior visível: avisada, nunca usada no lugar do fato remoto. */
+    private Optional<String> localAhead(LinkRef s, UUID automationId, String remoteHighest) {
+        return history.forProject(s.origin(), s.organizationId(), PackageHistory.automationKey(automationId)).stream().map(PackageHistory.Entry::version)
+                .filter(x -> RemoteCatalog.semver(x).isPresent()).max(RemoteCatalog.SEMVER_ORDER)
+                .filter(x -> RemoteCatalog.SEMVER_ORDER.compare(x, remoteHighest) > 0)
+                .map(x -> "Esta máquina já gerou localmente a versão " + x + " para este projeto, acima da maior visível na Platform. A sugestão segue a Platform; "
+                        + "confira se aquele pacote foi publicado.");
+    }
+
+    private Suggestion fresh(LinkRef s, RemoteCatalog cat, String name, Optional<PackageHistory.Entry> reuse, List<String> warnings) {
+        if (!cat.complete()) {
+            return new Suggestion(Optional.empty(), "Sem sugestão: o catálogo da Platform não foi lido por inteiro" + why(cat) + ". Falha de consulta, página "
+                    + "faltante ou falta de permissão não indicam que o projeto é novo.", reuse, Optional.empty(), Comparison.NOT_APPLICABLE, warnings);
+        }
+        if (name == null || name.isBlank()) {
+            return new Suggestion(Optional.empty(), "Informe o nome do projeto.", reuse, Optional.empty(), Comparison.NOT_APPLICABLE, warnings);
+        }
+        String key = name.strip().toLowerCase(Locale.ROOT);
+        cat.projects().stream().filter(pr -> pr.automationName().strip().toLowerCase(Locale.ROOT).equals(key)).forEach(pr -> warnings.add("Há um projeto "
+                + "com o nome “" + pr.automationName() + "” no catálogo (workspace “" + pr.workspaceName() + "”). Se for o mesmo, escolha “Usar projeto existente”: o "
+                + "Agent não escolhe pelo nome."));
         List<PackageHistory.Entry> same = history.forProject(s.origin(), s.organizationId(), PackageHistory.localKey(name));
         if (!same.isEmpty()) {
             Optional<String> next = history.nextVersion(s.origin(), s.organizationId(), PackageHistory.localKey(name));
             return new Suggestion(next, "Esta máquina já gerou um pacote com este nome para esta organização (versão " + same.get(0).version() + "). Nome igual não "
-                    + "prova que é o mesmo projeto: confira. " + next.map(n -> "Sugestão local: " + n + ".").orElse(""), Optional.empty(), authorized);
+                    + "prova que é o mesmo projeto: confira. " + next.map(n -> "Sugestão local " + n + ", sem reserva.").orElse(""), reuse, Optional.empty(),
+                    Comparison.NOT_APPLICABLE, warnings);
         }
-        return new Suggestion(Optional.of("1.0.0"), "Sugestão local 1.0.0 para um projeto novo. A Platform não lista projetos para esta máquina, então ela não "
-                + "confirmou que o projeto é novo; nada foi reservado nem publicado.", Optional.empty(), authorized);
+        return new Suggestion(Optional.of("1.0.0"), INITIAL + " Isto não confirma que o nome está livre nem que não exista projeto com esse nome na "
+                + "Platform: o catálogo só mostra o que está autorizado a esta máquina. Nada foi reservado.", reuse, Optional.empty(), Comparison.NOT_APPLICABLE,
+                warnings);
+    }
+
+    public static final String INITIAL = "Pacote inicial 1.0.0 — projeto ainda não cadastrado por este assistente.";
+    public static final String UNSUPPORTED = "A Platform conectada não oferece o catálogo à máquina (versão anterior da Platform). Sem ele, o assistente não "
+            + "lista projetos, não sugere versão e não conclui o pacote; o histórico desta máquina não substitui a Platform. Atualize a Platform.";
+
+    static PackagePlan withVersion(PackagePlan d, String version) {
+        return new PackagePlan(d.name(), version, d.entry(), d.python(), d.dependencies(), d.dependenciesConfirmed(), d.includeData(), d.exclude(), d.rebuild());
+    }
+
+    static String at(Instant t) {
+        return t == null ? "sem hora" : "às " + DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(t);
+    }
+
+    /** O motivo, entre parênteses, de o catálogo não estar completo (para a tela). */
+    public static String whyText(RemoteCatalog c) {
+        return why(c);
+    }
+
+    static String why(RemoteCatalog c) {
+        if (c.problem() == null) return c.state() == RemoteCatalog.State.PARTIAL ? " (lista longa demais para uma consulta)" : "";
+        return switch (c.problem()) {
+            case UNREACHABLE, BUSY -> " (sem conexão)";
+            case TLS_FAILED -> " (conexão segura recusada)";
+            case TIMED_OUT -> " (a Platform não respondeu a tempo)";
+            case FORBIDDEN -> " (a Platform negou a consulta a esta máquina)";
+            case RATE_LIMITED -> " (limite de consultas" + c.retryAfterSeconds().map(x -> "; tente em " + x + " s").orElse("") + ")";
+            case SERVER_ERROR -> " (erro no servidor da Platform)";
+            case INVALID_RESPONSE -> " (resposta fora do contrato)";
+            default -> "";
+        };
+    }
+
+    static String selectionBlocked(SelectionCheck sel) {
+        return switch (sel.outcome()) {
+            case NOT_VISIBLE -> "O projeto escolhido não está mais acessível a esta máquina na Platform (autorização revogada, vencida ou retirada). Nada foi "
+                    + "gerado. Consulte a Platform de novo e escolha outro projeto.";
+            case UNSUPPORTED -> UNSUPPORTED;
+            case VISIBLE -> "A confirmação do projeto não é deste vínculo. Nada foi gerado.";
+            case FAILED -> "Não deu para confirmar com a Platform que o projeto escolhido continua acessível a esta máquina"
+                    + why(new RemoteCatalog(RemoteCatalog.State.UNAVAILABLE, sel.problem(), sel.retryAfterSeconds(), null, List.of(), null))
+                    + ". Nada foi gerado; tente de novo.";
+        };
     }
 
     // ------------------------------------------------------------------ apoio
