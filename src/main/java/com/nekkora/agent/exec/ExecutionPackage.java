@@ -240,8 +240,8 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
         return name.toLowerCase(java.util.Locale.ROOT).replace('_', '-').replace('.', '-');
     }
 
-    /** Nunca no pacote externo: ambiente virtual, cache, controle de versão, credenciais. */
-    static boolean forbidden(String rel) {
+    /** Nunca no pacote externo: ambiente virtual, cache, controle de versão, credenciais. AGENT-PACOTES-001: a mesma regra no assistente. */
+    public static boolean forbidden(String rel) {
         for (String seg : rel.split("/")) {
             String l = seg.toLowerCase(java.util.Locale.ROOT);
             if (List.of(".venv", "venv", "env", "__pycache__", ".git", ".hg", ".svn", ".idea", ".vscode", "node_modules").contains(l) || l.startsWith(".env")
@@ -251,6 +251,16 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
             }
         }
         return false;
+    }
+
+    /** AGENT-PACOTES-001: {@code python} no formato do descritor externo (o mesmo que {@link #inspect} aceita). */
+    public static boolean validPythonRequirement(String requirement) {
+        return requirement != null && EXTERNAL_PYTHON_REQ.matcher(requirement).matches();
+    }
+
+    /** AGENT-PACOTES-001: dependência no formato do descritor externo ({@code nome==versão}, extras opcionais). */
+    public static boolean validDependency(String dependency) {
+        return dependency != null && EXTERNAL_DEP.matcher(dependency).matches();
     }
 
     /** {@code python} do descritor ({@code >=3.10,<3.14}, {@code ==3.12.*}, {@code ~=3.11}) atende à versão {@code major.minor}? */
@@ -309,6 +319,11 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
      * gravado CRLF). Conteúdo que não é UTF-8 válido entra em bytes.
      */
     static String hash(byte[] data) {
+        return fileHash(data);
+    }
+
+    /** AGENT-PACOTES-001: o mesmo hash, público para o empacotador do assistente (uma única regra). */
+    public static String fileHash(byte[] data) {
         byte[] bytes = data;
         try {
             String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
@@ -323,12 +338,24 @@ public record ExecutionPackage(Kind kind, Path dir, String name, Mode mode, Map<
     /** Impressão digital: tipo + descritor + cada arquivo e hash (ordem fixa). Qualquer arquivo mudado a muda. */
     static String fingerprint(Kind kind, Path dir, Map<String, String> files, String descriptor) throws ExecRefused {
         // a primeira linha é a regra: o pacote externo tem a sua (external-python-fingerprint/1); a /1 do Studio não muda
-        StringBuilder b = new StringBuilder(ruleOf(kind)).append('\n').append(kind).append('\n');
         try {
-            b.append(descriptor).append('\t').append(hash(Files.readAllBytes(dir.resolve(descriptor)))).append('\n');
+            return canonical(kind, descriptor, hash(Files.readAllBytes(dir.resolve(descriptor))), files);
         } catch (IOException e) {
             throw new ExecRefused(ErrorCode.EXEC_PACKAGE_INVALID);
         }
+    }
+
+    /**
+     * AGENT-PACOTES-001: a impressão do pacote externo a partir dos BYTES do descritor e dos hashes listados — a MESMA conta de
+     * {@link #fingerprint}, para o assistente calcular antes de gravar (e conferir depois, pela pasta).
+     */
+    public static String externalFingerprint(byte[] descriptor, Map<String, String> files) {
+        return canonical(Kind.EXTERNAL_PYTHON, EXTERNAL_DESCRIPTOR, hash(descriptor), files);
+    }
+
+    private static String canonical(Kind kind, String descriptor, String descriptorHash, Map<String, String> files) {
+        StringBuilder b = new StringBuilder(ruleOf(kind)).append('\n').append(kind).append('\n');
+        b.append(descriptor).append('\t').append(descriptorHash).append('\n');
         new TreeMap<>(files).forEach((k, v) -> b.append(k).append('\t').append(v).append('\n'));
         return "sha256:" + HexFormat.of().formatHex(sha256(b.toString().getBytes(StandardCharsets.UTF_8)));
     }
