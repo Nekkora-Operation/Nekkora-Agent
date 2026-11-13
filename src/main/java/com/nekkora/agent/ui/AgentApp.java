@@ -88,6 +88,8 @@ public final class AgentApp {
     private com.nekkora.agent.app.ImportFlow importFlow;
     private ImportDialog importDialog;
     private com.nekkora.agent.app.ImportFlow.Stage loggedImportStage;
+    /** T03: ZIP que a pessoa pediu para preparar a partir do assistente (abre a execução local depois que ele fecha). */
+    private java.nio.file.Path pendingPrepare;
     private final AtomicBoolean exiting = new AtomicBoolean();
     private MainWindow window;
     private TrayController tray;
@@ -578,6 +580,9 @@ public final class AgentApp {
         importFlow.cancel();
         importFlow = null;
         importDialog = null;
+        java.nio.file.Path prepare = pendingPrepare;
+        pendingPrepare = null;
+        if (prepare != null && !exiting.get()) openExecution(prepare);
     }
 
     /** Só códigos no log: estado, formato, motivo. Nunca nome de arquivo, projeto, organização ou caminho. */
@@ -656,6 +661,13 @@ public final class AgentApp {
             public java.util.List<com.nekkora.agent.app.ImportFlow.CatalogProject> catalog() {
                 return importFlow == null ? java.util.List.of() : importFlow.catalog();
             }
+
+            @Override
+            public void prepare(java.nio.file.Path zip) {
+                // a janela de execução abre quando o assistente fecha (uma janela de cada vez); nada é aprovado nem iniciado aqui
+                pendingPrepare = zip;
+                if (importDialog != null) importDialog.dispose();
+            }
         };
     }
 
@@ -670,11 +682,17 @@ public final class AgentApp {
     // ----- execução local (DESKTOP-001) -----
 
     void openExecution() {
+        openExecution(null);
+    }
+
+    /** T03: {@code zip} não nulo = o pacote em ZIP já vem escolhido (vindo do assistente); a aprovação continua com a pessoa. */
+    void openExecution(java.nio.file.Path zip) {
         if (exiting.get() || bringActiveDialogToFront()) return;
         execDialog = new ExecutionDialog(window, executionActions(), activityData());
         activeDialog = execDialog;
         refreshSession();
         renderExecution();
+        if (zip != null) selectPackageZip(zip);
         execDialog.showDialog();
         activeDialog = null;
         execDialog = null;
@@ -770,6 +788,11 @@ public final class AgentApp {
             }
 
             @Override
+            public void choosePackageZip() {
+                NekkoraFileDialogs.openFile(execDialog, "Pacote da automação (.zip)", "Pacote compactado (ZIP)", "zip").ifPresent(AgentApp.this::selectPackageZip);
+            }
+
+            @Override
             public void approve() {
                 ExecutionPackage pk = setup.pkg();
                 if (pk == null) return;
@@ -851,16 +874,56 @@ public final class AgentApp {
     void selectPackage(Path dir) {
         busy(() -> {
             try {
-                ExecutionPackage pk = ExecutionPackage.inspect(dir);
-                ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
-                // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
-                chosenAuthorization = PlatformService.preselected(ctx.platform().authorizationsFor(pk.fingerprint())).orElse(null);
-                return setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
+                return packageChosen(ExecutionPackage.inspect(dir));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
                 return setup.withPackage(null, e.code(), false);
             }
         });
+    }
+
+    /**
+     * AGENT-PACOTES-001 T03: pacote em ZIP. O Agent lê o ZIP com o leitor seguro, confere pelo validador real e o prepara em
+     * {@code <dados>/pacotes-zip/<impressão>} (nada é executado; não entra na estante dos pedidos da Platform). Daí em diante é
+     * igual à pasta: aprovação pela impressão, Python, saída e início explícito.
+     */
+    void selectPackageZip(Path zip) {
+        busy(() -> {
+            try {
+                com.nekkora.agent.pack.ZipStager stager = new com.nekkora.agent.pack.ZipStager(com.nekkora.agent.pack.ZipStager.defaultRoot(ctx.dataDir().root()));
+                return packageChosen(stager.stage(zip, com.nekkora.agent.pack.SafeZip.Cancel.NEVER));
+            } catch (ExecRefused e) {
+                ctx.log().warn(LogEvent.EXEC_PACKAGE_INSPECTED, e.code());
+                return setup.withPackage(null, e.code(), false);
+            } catch (com.nekkora.agent.pack.ImportProblem e) {
+                ctx.log().warn(LogEvent.IMPORT_REFUSED, Field.of("code", e.code().code()));
+                SwingUtilities.invokeLater(() -> toast(Severity.ERROR, "Pacote não aceito", e.message()));
+                return setup.withPackage(null, ErrorCode.EXEC_PACKAGE_UNSAFE, false);
+            }
+        });
+    }
+
+    private ExecutionSetup packageChosen(ExecutionPackage pk) {
+        ctx.log().info(LogEvent.EXEC_PACKAGE_INSPECTED, Field.of("kind", pk.kind()), Field.of("mode", pk.mode()));
+        // AGENT-PLATFORM-001: só uma autorização válida para ESTA impressão = pré-escolhida; mais de uma = a pessoa escolhe
+        chosenAuthorization = PlatformService.preselected(ctx.platform().authorizationsFor(pk.fingerprint())).orElse(null);
+        ExecutionSetup next = setup.withPackage(pk, null, ctx.execution().approvals().approved(pk));
+        return withDependencies(next);
+    }
+
+    /**
+     * T03: pacote Python externo com Python já escolhido: confere as dependências declaradas ANTES do início (só lê os metadados
+     * instalados; nada do projeto roda), para o diagnóstico aparecer na preparação e nada começar.
+     */
+    private ExecutionSetup withDependencies(ExecutionSetup s) {
+        if (s.pkg() == null || s.python() == null || s.pythonProblem() != null || s.pkg().kind() != ExecutionPackage.Kind.EXTERNAL_PYTHON) return s;
+        try {
+            PythonRuntime.requireDependencies(s.python().python(), s.pkg());
+            return s;
+        } catch (ExecRefused e) {
+            ctx.log().warn(LogEvent.EXEC_PYTHON_CHECKED, e.code());
+            return s.withEnvironmentProblem(e.code());
+        }
     }
 
     /** Aprovação já confirmada pela pessoa (o diálogo de confirmação fica em {@code approve}). */
@@ -884,7 +947,7 @@ public final class AgentApp {
             try {
                 PythonRuntime.Probe probe = PythonRuntime.probe(py, ctx.dataDir().root().resolve("execucao").resolve("sonda"));
                 ctx.log().info(LogEvent.EXEC_PYTHON_CHECKED, Field.of("python", probe.pythonVersion()), Field.of("framework", probe.framework().orElse("none")));
-                return setup.withPython(probe, null);
+                return withDependencies(setup.withPython(probe, null));
             } catch (ExecRefused e) {
                 ctx.log().warn(LogEvent.EXEC_PYTHON_CHECKED, e.code());
                 return setup.withPython(null, e.code());

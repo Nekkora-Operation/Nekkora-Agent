@@ -38,6 +38,9 @@ final class ExecutionDialog extends FittedDialog {
     interface Actions {
         void choosePackage();
 
+        /** AGENT-PACOTES-001 T03: pacote em ZIP, preparado pelo Agent (sem a pessoa extrair). */
+        default void choosePackageZip() {}
+
         void approve();
 
         void choosePython();
@@ -71,7 +74,11 @@ final class ExecutionDialog extends FittedDialog {
     static final String TITLE = "Execução local";
 
     private final NekkoraStack body = NekkoraStack.vertical(Spacing.SPACE_6).align(NekkoraStack.Align.STRETCH);
-    private final NekkoraButton pkg = NekkoraButton.secondary("Escolher pacote…");
+    // AGENT-PACOTES-001 T03: o ZIP é o caminho principal; a pasta continua disponível, identificada como pasta
+    static final String ZIP_LABEL = "Escolher pacote (.zip)…";
+    static final String FOLDER_LABEL = "Escolher pasta do pacote…";
+    private final NekkoraButton pkgZip = NekkoraButton.secondary(ZIP_LABEL);
+    private final NekkoraButton pkg = NekkoraButton.ghost(FOLDER_LABEL);
     private final NekkoraButton approve = NekkoraButton.secondary("Aprovar este pacote…");
     private final NekkoraButton python = NekkoraButton.secondary("Escolher Python…");
     private final NekkoraButton input = NekkoraButton.secondary("Escolher entrada…");
@@ -101,6 +108,10 @@ final class ExecutionDialog extends FittedDialog {
         });
         setDialogSize(Size.LARGE);
         pkg.addActionListener(e -> actions.choosePackage());
+        pkgZip.addActionListener(e -> actions.choosePackageZip());
+        pkgZip.setMnemonic(KeyEvent.VK_Z);
+        pkgZip.getAccessibleContext().setAccessibleDescription("Pacote em arquivo ZIP: o Agent confere e prepara sem você extrair nada");
+        pkg.getAccessibleContext().setAccessibleDescription("Pacote já extraído numa pasta (forma anterior)");
         approve.addActionListener(e -> actions.approve());
         python.addActionListener(e -> actions.choosePython());
         input.addActionListener(e -> actions.chooseInput());
@@ -112,7 +123,7 @@ final class ExecutionDialog extends FittedDialog {
         approve.getAccessibleContext().setAccessibleDescription("Mostra o que será executado e pede a sua confirmação");
 
         NekkoraStack rowA = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
-        rowA.addAll(pkg, approve);
+        rowA.addAll(pkgZip, pkg, approve);
         NekkoraStack rowB = NekkoraStack.horizontal(Spacing.SPACE_4).align(NekkoraStack.Align.CENTER);
         rowB.addAll(python, input, output);
         NekkoraStack buttons = NekkoraStack.vertical(Spacing.SPACE_4).align(NekkoraStack.Align.STRETCH);
@@ -195,6 +206,10 @@ final class ExecutionDialog extends FittedDialog {
         }
         NekkoraStack setup = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
         setup.add(kv);
+        if (p != null && p.kind() == ExecutionPackage.Kind.EXTERNAL_PYTHON) {
+            // AGENT-PACOTES-001 T03: comportamento REAL da saída (sem prometer redirecionar qualquer script)
+            setup.add(new NekkoraParagraph(ExecutionSetup.EXTERNAL_OUTPUT_LABEL, TextTone.SECONDARY));
+        }
         List<ErrorCode> missing = s.missing();
         if (!missing.isEmpty() && !running) {
             StringBuilder b = new StringBuilder();
@@ -246,6 +261,7 @@ final class ExecutionDialog extends FittedDialog {
 
         boolean idle = !running && !busy;
         pkg.setEnabled(idle);
+        pkgZip.setEnabled(idle);
         approve.setEnabled(idle && p != null && !s.approved());
         python.setEnabled(idle);
         input.setEnabled(idle && p != null && p.needsInput());
@@ -310,6 +326,10 @@ final class ExecutionDialog extends FittedDialog {
 
     NekkoraButton packageButton() {
         return pkg;
+    }
+
+    NekkoraButton packageZipButton() {
+        return pkgZip;
     }
 
     NekkoraButton approveButton() {
