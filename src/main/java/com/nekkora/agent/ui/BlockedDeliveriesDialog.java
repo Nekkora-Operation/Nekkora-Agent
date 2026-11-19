@@ -24,6 +24,11 @@ final class BlockedDeliveriesDialog extends FittedDialog {
     static final String TITLE = "Envios parados";
 
     static final String RETRY = "Tentar registrar de novo";
+    static final String HERE = "Neste computador: a automação executou. O desfecho dela está em Atividade.";
+
+    static String onPlatform(com.nekkora.agent.core.ErrorCode code) {
+        return "Na Platform: não registrada e não monitorada, porque " + PlatformText.licenseReason(code) + " (" + code.code() + ").";
+    }
 
     BlockedDeliveriesDialog(Component parent, List<PlatformStatus.Blocked> blocked, Consumer<ExecutionId> abandon) {
         this(parent, blocked, abandon, id -> { });
@@ -32,23 +37,24 @@ final class BlockedDeliveriesDialog extends FittedDialog {
     BlockedDeliveriesDialog(Component parent, List<PlatformStatus.Blocked> blocked, Consumer<ExecutionId> abandon, Consumer<ExecutionId> retry) {
         super(parent, TITLE);
         setDescription("Cada envio abaixo parou e não é repetido em laço. Nada foi apagado do histórico local.");
-        setDialogSize(Size.MEDIUM);
+        // com a explicação da recusa por licença e o botão, o tamanho médio cortava o botão (visto na janela real)
+        setDialogSize(blocked.stream().anyMatch(b -> PlatformService.notRegisteredByLicense(b.code())) ? Size.LARGE : Size.MEDIUM);
         NekkoraStack list = NekkoraStack.vertical(Spacing.SPACE_5).align(NekkoraStack.Align.STRETCH);
         if (blocked.isEmpty()) list.add(new NekkoraParagraph("Nenhum envio parado.", TextTone.SECONDARY));
         for (PlatformStatus.Blocked b : blocked) {
             NekkoraKeyValueView kv = new NekkoraKeyValueView();
             kv.addMono("Execução", b.executionId().value());
-            kv.add("Motivo", b.code() == null ? "—" : PlatformText.problem(b.code()));
-            if (b.sequence() != null) kv.add("Evento", String.valueOf(b.sequence()));
             boolean byLicense = PlatformService.notRegisteredByLicense(b.code());
-            if (byLicense) {
-                // a execução aconteceu; o que parou foi o registro na Platform. As duas coisas ficam ditas, separadas
-                kv.add("Neste computador", "A automação executou. O desfecho dela está em Atividade.");
-                kv.add("Na Platform", "Não registrada e não monitorada: " + PlatformText.licenseReason(b.code()) + ".");
-            }
+            // na recusa por licença o motivo vai em parágrafos, que quebram em linhas: na tabela de chave e valor ele era cortado
+            // com reticências (visto na janela real), e o motivo é justamente o que a pessoa precisa ler inteiro
+            if (!byLicense) kv.add("Motivo", b.code() == null ? "—" : PlatformText.problem(b.code()));
+            if (b.sequence() != null) kv.add("Evento", String.valueOf(b.sequence()));
             NekkoraStack content = NekkoraStack.vertical(Spacing.SPACE_4).align(NekkoraStack.Align.STRETCH);
             content.add(kv);
             if (byLicense) {
+                // a execução aconteceu; o que parou foi o registro na Platform. As duas coisas ficam ditas, separadas
+                content.add(new NekkoraParagraph(HERE));
+                content.add(new NekkoraParagraph(onPlatform(b.code())));
                 content.add(new NekkoraParagraph(PlatformText.NOT_REGISTERED_KEPT, TextTone.SECONDARY));
                 NekkoraButton again = NekkoraButton.secondary(RETRY);
                 again.getAccessibleContext().setAccessibleDescription("Pede à Platform, de novo, o registro desta execução; nada é apagado se ela recusar");
