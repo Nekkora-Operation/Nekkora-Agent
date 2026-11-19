@@ -339,7 +339,7 @@ public final class AgentApp {
                 return;
             }
             ctx.platform().abandonBlocked(id);
-        });
+        }, id -> ctx.platform().retryRegistration(id));
         activeDialog = d;
         d.showDialog();
         activeDialog = null;

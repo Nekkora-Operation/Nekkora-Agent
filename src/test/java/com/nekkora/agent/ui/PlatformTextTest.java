@@ -65,4 +65,26 @@ class PlatformTextTest {
         assertTrue(PlatformText.problem(ErrorCode.PLT_ROTATION_CODE_FOR_PAIRING).startsWith("Este é um código de renovação de credencial, que só serve para uma "
                 + "máquina já pareada. Para parear, gere um código de pareamento na Platform (Workers → Vincular Agent)."));
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("LICENCIAMENTO: recusa do registro por licença - a tela diz que executou neste computador e que não foi registrada, com o motivo")
+    void notRegisteredByLicense() {
+        for (ErrorCode c : new ErrorCode[] {ErrorCode.PLT_LICENSE_REQUIRED, ErrorCode.PLT_LICENSE_EXPIRED, ErrorCode.PLT_RUN_NOT_COVERED}) {
+            com.nekkora.agent.platform.DeliveryView v = new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED,
+                    0, 0, 0, c, null, false);
+            String text = PlatformText.delivery(v);
+            assertTrue(text.startsWith("Executou neste computador · não registrada na Platform: "), text);
+            assertTrue(!text.contains("Envio parado"), text);
+            assertTrue(c.description().contains("aconteceu neste computador") && c.description().contains("não está monitorada na Platform"), c.description());
+            // não é falha da execução
+            org.junit.jupiter.api.Assertions.assertNotEquals(PlatformText.deliveryStatus(new com.nekkora.agent.platform.DeliveryView(
+                    com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0, ErrorCode.PLT_AUTHORIZATION_REFUSED, null, false)), PlatformText.deliveryStatus(v));
+        }
+        assertTrue(PlatformText.delivery(new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0,
+                ErrorCode.PLT_LICENSE_EXPIRED, null, false)).endsWith("a licença da automação venceu"));
+        assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("nada foi apagado nem descartado"));
+        // a recusa de autorização de antes continua como era
+        assertTrue(PlatformText.delivery(new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0,
+                ErrorCode.PLT_AUTHORIZATION_REFUSED, null, false)).startsWith("Envio parado: "));
+    }
 }

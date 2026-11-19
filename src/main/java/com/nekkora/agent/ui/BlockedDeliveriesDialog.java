@@ -1,6 +1,7 @@
 package com.nekkora.agent.ui;
 
 import com.nekkora.agent.exec.ExecutionId;
+import com.nekkora.agent.platform.PlatformService;
 import com.nekkora.agent.platform.PlatformStatus;
 import com.nekkora.tokens.Spacing;
 import com.nekkora.ui.button.NekkoraButton;
@@ -22,7 +23,13 @@ import java.util.function.Consumer;
 final class BlockedDeliveriesDialog extends FittedDialog {
     static final String TITLE = "Envios parados";
 
+    static final String RETRY = "Tentar registrar de novo";
+
     BlockedDeliveriesDialog(Component parent, List<PlatformStatus.Blocked> blocked, Consumer<ExecutionId> abandon) {
+        this(parent, blocked, abandon, id -> { });
+    }
+
+    BlockedDeliveriesDialog(Component parent, List<PlatformStatus.Blocked> blocked, Consumer<ExecutionId> abandon, Consumer<ExecutionId> retry) {
         super(parent, TITLE);
         setDescription("Cada envio abaixo parou e não é repetido em laço. Nada foi apagado do histórico local.");
         setDialogSize(Size.MEDIUM);
@@ -33,8 +40,24 @@ final class BlockedDeliveriesDialog extends FittedDialog {
             kv.addMono("Execução", b.executionId().value());
             kv.add("Motivo", b.code() == null ? "—" : PlatformText.problem(b.code()));
             if (b.sequence() != null) kv.add("Evento", String.valueOf(b.sequence()));
+            boolean byLicense = PlatformService.notRegisteredByLicense(b.code());
+            if (byLicense) {
+                // a execução aconteceu; o que parou foi o registro na Platform. As duas coisas ficam ditas, separadas
+                kv.add("Neste computador", "A automação executou. O desfecho dela está em Atividade.");
+                kv.add("Na Platform", "Não registrada e não monitorada: " + PlatformText.licenseReason(b.code()) + ".");
+            }
             NekkoraStack content = NekkoraStack.vertical(Spacing.SPACE_4).align(NekkoraStack.Align.STRETCH);
             content.add(kv);
+            if (byLicense) {
+                content.add(new NekkoraParagraph(PlatformText.NOT_REGISTERED_KEPT, TextTone.SECONDARY));
+                NekkoraButton again = NekkoraButton.secondary(RETRY);
+                again.getAccessibleContext().setAccessibleDescription("Pede à Platform, de novo, o registro desta execução; nada é apagado se ela recusar");
+                again.addActionListener(e -> {
+                    again.setEnabled(false);
+                    retry.accept(b.executionId());
+                });
+                content.add(again);
+            }
             if (b.sequence() != null) {
                 NekkoraButton give = NekkoraButton.secondary("Desistir e declarar perda…");
                 give.getAccessibleContext().setAccessibleDescription("Declara à Platform que este número não será entregue; a decisão é definitiva");

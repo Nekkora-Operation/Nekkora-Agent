@@ -305,6 +305,59 @@ class PlatformDeliveryTest {
     }
 
     @Test
+    @DisplayName("LICENCIAMENTO: registro recusado por licença - o motivo fica visível, a execução local não é afetada, nada é descartado e a pessoa pode tentar de novo")
+    void registrationRefusedByLicense() throws Exception {
+        Lab lab = ready();
+        UUID auth = authorization(lab);
+        ExecutionId id = lab.execution(ExecutionState.SUCCEEDED, lab.clock.instant());
+        lab.events(id, 1, 3);
+        lab.append(id, List.of(lab.closing(id, 4)));
+        lab.link(id, auth);
+        lab.gw.fault("/runs", FakeGateway.Fault.LICENSE_EXPIRED);
+        lab.tick(1);
+        // o envio para com o motivo PRÓPRIO (não como recusa genérica de autorização), e a tela separa as duas coisas
+        DeliveryView v = lab.svc.delivery(id);
+        assertEquals(DeliveryView.State.BLOCKED, v.state());
+        assertEquals(ErrorCode.PLT_LICENSE_EXPIRED, v.blocked());
+        assertTrue(PlatformService.notRegisteredByLicense(v.blocked()));
+        assertEquals(ExecutionState.SUCCEEDED, lab.runs.record(id).orElseThrow().state(), "a execução local aconteceu e não é afetada");
+        assertTrue(lab.svc.retains(id), "nada é descartado: os eventos continuam protegidos nesta máquina");
+        assertEquals(null, lab.gw.run(id.value()), "a Platform não registrou");
+        long posts = lab.gw.count("POST", "/runs");
+        // não repete em laço: sem o pedido da pessoa, nenhuma nova tentativa
+        lab.tick(3);
+        assertEquals(posts, lab.gw.count("POST", "/runs"));
+        assertEquals(ErrorCode.PLT_LICENSE_EXPIRED, lab.svc.delivery(id).blocked());
+        // desistir e declarar perda NÃO se aplica (não há evento recusado); tentar de novo, sim
+        assertFalse(lab.svc.abandonBlocked(id).accepted());
+        // ainda sem cobertura: a nova tentativa para de novo, com o motivo de agora
+        lab.gw.fault("/runs", FakeGateway.Fault.LICENSE_REQUIRED);
+        assertTrue(lab.svc.retryRegistration(id).accepted());
+        lab.tick(1);
+        assertEquals(ErrorCode.PLT_LICENSE_REQUIRED, lab.svc.delivery(id).blocked());
+        assertTrue(lab.svc.retains(id));
+        // licença renovada (ou execução coberta no início): a Platform aceita o registro tardio e os eventos são entregues
+        assertTrue(lab.svc.retryRegistration(id).accepted());
+        lab.settle();
+        assertNotNull(lab.gw.run(id.value()), "registrada depois");
+        assertEquals(DeliveryView.State.DELIVERED, lab.svc.delivery(id).state());
+        assertEquals(4, lab.svc.delivery(id).settledThrough());
+        // tentar de novo só vale para o registro recusado por licença
+        assertFalse(lab.svc.retryRegistration(id).accepted());
+    }
+
+    @Test
+    @DisplayName("LICENCIAMENTO: cada motivo da Platform vira um código próprio; 403 sem motivo de licença continua recusa de autorização")
+    void licenseReasons() {
+        assertEquals(ErrorCode.PLT_LICENSE_REQUIRED, PlatformService.licenseRefusal("license_required").orElseThrow());
+        assertEquals(ErrorCode.PLT_LICENSE_EXPIRED, PlatformService.licenseRefusal("license_expired").orElseThrow());
+        assertEquals(ErrorCode.PLT_RUN_NOT_COVERED, PlatformService.licenseRefusal("run_not_covered").orElseThrow());
+        assertTrue(PlatformService.licenseRefusal(null).isEmpty());
+        assertTrue(PlatformService.licenseRefusal("outro_motivo").isEmpty());
+        assertTrue(!PlatformService.notRegisteredByLicense(ErrorCode.PLT_AUTHORIZATION_REFUSED));
+    }
+
+    @Test
     @DisplayName("D9: isolamento: autorização que deixou de ser do Worker é recusada (403) e só esta entrega para; vínculo novo não envia o do anterior")
     void isolation() throws Exception {
         Lab lab = ready();

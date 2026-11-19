@@ -108,6 +108,14 @@ public enum ErrorCode {
             + "depois dela."),
     PLT_UNLINK_UNSUPPORTED("AGT-PLT-034", "Esta Platform ainda não aceita o desvínculo pela máquina: a máquina foi desvinculada só aqui. Peça a "
             + "revogação do vínculo em Workers para liberar o Worker."),
+    // PLATFORM-LICENCIAMENTO-001: a Platform recusou REGISTRAR a execução por licença. A automação executou nesta máquina; o que
+    // não aconteceu foi o registro (e, com ele, o monitoramento) na Platform. Nada local é apagado.
+    PLT_LICENSE_REQUIRED("AGT-PLT-035", "A Platform não registrou esta execução: a automação não tem licença na organização. A execução "
+            + "aconteceu neste computador e não está monitorada na Platform."),
+    PLT_LICENSE_EXPIRED("AGT-PLT-036", "A Platform não registrou esta execução: a licença da automação venceu. A execução aconteceu neste "
+            + "computador e não está monitorada na Platform."),
+    PLT_RUN_NOT_COVERED("AGT-PLT-037", "A Platform não registrou esta execução: no início dela não havia licença nem autorização que a "
+            + "cobrisse. A execução aconteceu neste computador e não está monitorada na Platform."),
     // AGENT-PYTHON-001: Python externo (monitorado pelo lançador ou pacote externo). Código 0 não é sucesso de negócio.
     EXT_EXIT_ZERO_NO_SIGNAL("AGT-EXT-001", "O processo terminou com código 0, sem erro sinalizado; o sucesso de negócio não foi sinalizado pelo script."),
     EXT_EXIT_NONZERO("AGT-EXT-002", "O processo terminou com código de saída diferente de zero."),

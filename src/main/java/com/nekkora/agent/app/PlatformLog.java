@@ -109,7 +109,15 @@ final class PlatformLog implements PlatformService.Diagnostics {
 
     @Override
     public void blocked(ExecutionId id, ErrorCode why, Long sequence) {
-        log.warn(LogEvent.PLATFORM_DELIVERY_BLOCKED, why, Field.of("execution", id.value()), Field.of("sequence", sequence == null ? "none" : sequence));
+        // executou localmente x não registrada na Platform: as duas coisas ficam no registro, separadas (PLATFORM-LICENCIAMENTO-001)
+        boolean byLicense = com.nekkora.agent.platform.PlatformService.notRegisteredByLicense(why);
+        log.warn(LogEvent.PLATFORM_DELIVERY_BLOCKED, why, Field.of("execution", id.value()), Field.of("sequence", sequence == null ? "none" : sequence),
+                Field.of("ranLocally", true), Field.of("registeredOnPlatform", !byLicense && sequence != null ? "yes" : byLicense ? "no" : "unknown"));
+    }
+
+    @Override
+    public void registrationRetried(ExecutionId id) {
+        log.info(LogEvent.PLATFORM_DELIVERY_BLOCKED, Field.of("execution", id.value()), Field.of("retry", "registration"));
     }
 
     @Override
