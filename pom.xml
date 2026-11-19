@@ -113,6 +113,9 @@
           </execution>
         </executions>
         <configuration>
+          <!-- Git nativo: a leitura embutida do plugin, num worktree, devolvia o commit do checkout principal (visto no
+               VERSOES.txt de um pacote gerado num worktree). O Git nativo le o commit da pasta de trabalho usada na compilacao. -->
+          <useNativeGit>true</useNativeGit>
           <failOnNoGitDirectory>false</failOnNoGitDirectory>
           <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
           <generateGitPropertiesFile>false</generateGitPropertiesFile>
