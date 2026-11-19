@@ -77,7 +77,7 @@ foreach ($l in Get-Content -Encoding UTF8 'target\classes\com\nekkora\agent\agen
     if ($l -match '^([^=]+)=(.*)$') { $props[$Matches[1]] = $Matches[2] }
 }
 if ($props['commit'] -ne $commit) {
-    throw "o JAR foi identificado com o commit $($props['commit']), mas a pasta de trabalho esta em $commit: pacote recusado"
+    throw "o JAR foi identificado com o commit $($props['commit']), mas a pasta de trabalho esta em $($commit) - pacote recusado"
 }
 $version = $props['version']
 $pkg = Join-Path $root 'target\package'
