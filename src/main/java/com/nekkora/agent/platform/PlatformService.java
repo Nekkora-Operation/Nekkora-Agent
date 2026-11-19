@@ -1050,9 +1050,9 @@ public final class PlatformService implements AutoCloseable {
 
     /**
      * PLATFORM-LICENCIAMENTO-001: a pessoa pede para tentar REGISTRAR de novo uma execução que a Platform recusou por licença.
-     * Nada foi descartado: os eventos continuam nesta máquina. A Platform aceita o registro tardio quando a execução estava
-     * coberta no início (licença renovada, ou autorização que valia naquele instante); se continuar sem cobertura, o envio
-     * para de novo com o motivo. Só vale para a recusa do REGISTRO por licença; aplicado na próxima rodada.
+     * Nada foi descartado: os eventos continuam nesta máquina. A Platform só aceita o registro tardio de uma execução
+     * que estava coberta QUANDO COMEÇOU; renovar a licença depois não cobre o que rodou sem ela. Se continuar sem cobertura, o
+     * envio para de novo com o motivo. Só vale para a recusa do REGISTRO por licença; aplicado na próxima rodada.
      */
     public Action retryRegistration(ExecutionId id) {
         Optional<Delivery> d = Optional.ofNullable(known.get(id));

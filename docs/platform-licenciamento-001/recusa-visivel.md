@@ -15,9 +15,9 @@ sem ação possível. Para a pessoa, o envio sumia.
   Platform: <motivo>". Não aparece como falha: a execução aconteceu. O aviso da janela principal e o diálogo "Envios parados"
   dizem as duas coisas em linhas separadas.
 - **Nada é descartado.** Os eventos e o registro local continuam guardados e protegidos, como antes.
-- **Tentar registrar de novo.** O diálogo oferece o botão para essa recusa. A Platform aceita o registro tardio quando a
-  execução estava coberta no início (licença renovada, ou autorização que valia naquele instante). Se continuar sem cobertura,
-  o envio para de novo, com o motivo de agora. Não há repetição em laço: só a pedido da pessoa.
+- **Tentar registrar de novo.** O diálogo oferece o botão para essa recusa. A Platform só aceita o registro tardio de uma
+  execução que estava coberta **quando começou**. Renovar a licença depois vale para as próximas execuções, não para a que rodou
+  sem ela, e o texto do diálogo diz isso. Se continuar sem cobertura, o envio para de novo, com o motivo de agora. Não há repetição em laço: só a pedido da pessoa.
 - **Registro em log.** `PLATFORM_DELIVERY_BLOCKED` ganha `ranLocally` e `registeredOnPlatform`.
 
 O formato do arquivo de entregas não muda (`blockedCode` já guardava o código).

@@ -83,6 +83,8 @@ class PlatformTextTest {
         assertTrue(PlatformText.delivery(new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0,
                 ErrorCode.PLT_LICENSE_EXPIRED, null, false)).endsWith("a licença da automação venceu"));
         assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("nada foi apagado nem descartado"));
+        // não promete que renovar a licença registra o que rodou sem ela
+        assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("renovar a licença depois vale para as próximas execuções, não para esta"));
         // a recusa de autorização de antes continua como era
         assertTrue(PlatformText.delivery(new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0,
                 ErrorCode.PLT_AUTHORIZATION_REFUSED, null, false)).startsWith("Envio parado: "));

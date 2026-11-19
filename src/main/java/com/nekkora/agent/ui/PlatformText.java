@@ -215,8 +215,8 @@ final class PlatformText {
 
     static final String NOT_REGISTERED_PREFIX = "Executou neste computador · não registrada na Platform: ";
     static final String NOT_REGISTERED_KEPT = "O que a execução fez e os registros dela continuam guardados neste computador: nada foi apagado nem "
-            + "descartado. Se a licença for renovada, ou se a execução estava coberta quando começou, a Platform aceita o registro depois: use "
-            + "\"Tentar registrar de novo\".";
+            + "descartado. A Platform só registra uma execução que estava coberta por licença quando começou: renovar a licença depois vale "
+            + "para as próximas execuções, não para esta. \"Tentar registrar de novo\" consulta a Platform outra vez.";
 
     /** O motivo, em poucas palavras, de a Platform não ter registrado a execução. */
     static String licenseReason(ErrorCode c) {

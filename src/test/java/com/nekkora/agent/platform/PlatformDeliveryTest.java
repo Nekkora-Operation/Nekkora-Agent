@@ -336,7 +336,7 @@ class PlatformDeliveryTest {
         lab.tick(1);
         assertEquals(ErrorCode.PLT_LICENSE_REQUIRED, lab.svc.delivery(id).blocked());
         assertTrue(lab.svc.retains(id));
-        // licença renovada (ou execução coberta no início): a Platform aceita o registro tardio e os eventos são entregues
+        // a Platform passa a aceitar o registro (a execução estava coberta no início): os eventos são entregues
         assertTrue(lab.svc.retryRegistration(id).accepted());
         lab.settle();
         assertNotNull(lab.gw.run(id.value()), "registrada depois");
