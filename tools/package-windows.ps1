@@ -60,13 +60,24 @@ $jbin = Join-Path $javaHome 'bin'
 foreach ($t in 'jlink.exe', 'jpackage.exe', 'jdeps.exe') { if (-not (Test-Path (Join-Path $jbin $t))) { throw "JDK sem $t em $jbin" } }
 
 Write-Host "[1/7] Construção (mvnw clean verify)"
-$mvnArgs = '-B -q clean verify'
-if ($SkipTests) { $mvnArgs = '-B -q -DskipTests clean verify' }
+# O commit DESTA pasta de trabalho (clone ou worktree), lido aqui com o proprio Git e nao pelo plugin do Maven: num worktree o
+# plugin le o checkout principal, e o pacote saia identificado com o commit errado.
+$commit = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') { throw 'git rev-parse HEAD falhou: o pacote nao pode ser identificado' }
+$dirty = if ([bool](& git status --porcelain --untracked-files=no)) { 'true' } else { 'false' }
+$env:TZ = 'UTC'
+$commitTime = (& git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD).Trim()
+$buildId = "-Dagent.build.commit=$commit -Dagent.build.commitShort=$($commit.Substring(0, 12)) -Dagent.build.dirty=$dirty -Dagent.build.commitTime=$commitTime"
+$mvnArgs = "-B -q $buildId clean verify"
+if ($SkipTests) { $mvnArgs = "-B -q -DskipTests $buildId clean verify" }
 Invoke-Checked 'mvnw' { cmd.exe /d /c ".\mvnw.cmd $mvnArgs" }
 
 $props = @{}
 foreach ($l in Get-Content -Encoding UTF8 'target\classes\com\nekkora\agent\agent-build.properties') {
     if ($l -match '^([^=]+)=(.*)$') { $props[$Matches[1]] = $Matches[2] }
+}
+if ($props['commit'] -ne $commit) {
+    throw "o JAR foi identificado com o commit $($props['commit']), mas a pasta de trabalho esta em $($commit) - pacote recusado"
 }
 $version = $props['version']
 $pkg = Join-Path $root 'target\package'

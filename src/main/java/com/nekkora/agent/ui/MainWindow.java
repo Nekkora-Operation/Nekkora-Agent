@@ -2,6 +2,7 @@ package com.nekkora.agent.ui;
 
 import com.nekkora.agent.core.IntegrationStatus;
 import com.nekkora.agent.core.MainViewModel;
+import com.nekkora.agent.platform.PlatformService;
 import com.nekkora.agent.platform.PlatformStatus;
 import com.nekkora.tokens.Spacing;
 import com.nekkora.ui.NekkoraFrame;
@@ -264,6 +265,12 @@ final class MainWindow extends NekkoraFrame {
             // T13: a conclusão pode chegar depois (conexão de volta, Agent reaberto): o card diz como terminou nesta sessão
             platformNotice.add(new NekkoraInlineAlert(st.unlink().concluded() == PlatformStatus.RemoteOutcome.UNSUPPORTED ? Severity.WARNING : Severity.SUCCESS,
                     "Desvínculo concluído", PlatformText.remoteOutcome(st.unlink().concluded())), BorderLayout.CENTER);
+        } else if (!st.blocked().isEmpty() && st.blocked().stream().allMatch(b -> PlatformService.notRegisteredByLicense(b.code()))) {
+            // PLATFORM-LICENCIAMENTO-001: a execução aconteceu aqui; a Platform não a registrou por licença. Não é "decisão para continuar"
+            platformNotice.add(new NekkoraInlineAlert(Severity.WARNING, "Execução não registrada na Platform", st.blocked().size()
+                    + (st.blocked().size() == 1 ? " execução aconteceu neste computador e não foi registrada" : " execuções aconteceram neste computador e "
+                            + "não foram registradas") + " na Platform, por licença. Nada foi apagado. Veja o motivo em \"Envios parados\"."),
+                    BorderLayout.CENTER);
         } else if (!st.blocked().isEmpty()) {
             platformNotice.add(new NekkoraInlineAlert(Severity.WARNING, "Envio parado", st.blocked().size() + (st.blocked().size() == 1 ? " execução precisa"
                     : " execuções precisam") + " de decisão para continuar o envio. A automação não é afetada."), BorderLayout.CENTER);

@@ -109,6 +109,9 @@ public final class PlatformService implements AutoCloseable {
 
         default void blocked(ExecutionId id, ErrorCode why, Long sequence) {}
 
+        /** PLATFORM-LICENCIAMENTO-001: a pessoa pediu para tentar de novo o registro recusado por licença. */
+        default void registrationRetried(ExecutionId id) {}
+
         default void delivered(ExecutionId id, long settledThrough) {}
 
         default void lossDeclared(ExecutionId id, long count) {}
@@ -170,6 +173,8 @@ public final class PlatformService implements AutoCloseable {
     private final Backoff redeemBackoff;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final ConcurrentLinkedQueue<ExecutionId> abandonRequests = new ConcurrentLinkedQueue<>();
+    /** PLATFORM-LICENCIAMENTO-001: execuções cujo REGISTRO a pessoa pediu para tentar de novo (recusa por licença). */
+    private final ConcurrentLinkedQueue<ExecutionId> retryRequests = new ConcurrentLinkedQueue<>();
     /** Execuções cuja cópia local não pode ser apagada pela retenção (entrega pendente do vínculo atual). */
     private final Set<ExecutionId> protectedRuns = ConcurrentHashMap.newKeySet();
     private final Map<ExecutionId, Long> lastSequence = new ConcurrentHashMap<>();
@@ -558,6 +563,7 @@ public final class PlatformService implements AutoCloseable {
             }
         }
         abandonRequests.clear();
+        retryRequests.clear();
         unlinkBackoff.succeeded();
         problem = partial;
         diagnostics.unlinkRequested(left.size(), observed);
@@ -690,6 +696,7 @@ public final class PlatformService implements AutoCloseable {
         // memória da identidade anterior
         withoutLinkRequest.clear();
         abandonRequests.clear();
+        retryRequests.clear();
         authorizationsDue = true;
         nextHeartbeat = Instant.MIN;
         nextAuthorizations = Instant.MIN;
@@ -1041,6 +1048,22 @@ public final class PlatformService implements AutoCloseable {
         return Action.ok();
     }
 
+    /**
+     * PLATFORM-LICENCIAMENTO-001: a pessoa pede para tentar REGISTRAR de novo uma execução que a Platform recusou por licença.
+     * Nada foi descartado: os eventos continuam nesta máquina. A Platform só aceita o registro tardio de uma execução
+     * que estava coberta QUANDO COMEÇOU; renovar a licença depois não cobre o que rodou sem ela. Se continuar sem cobertura, o
+     * envio para de novo com o motivo. Só vale para a recusa do REGISTRO por licença; aplicado na próxima rodada.
+     */
+    public Action retryRegistration(ExecutionId id) {
+        Optional<Delivery> d = Optional.ofNullable(known.get(id));
+        if (d.isEmpty() || !d.get().blocked() || d.get().runId() != null || !notRegisteredByLicense(code(d.get().blockedCode()))) {
+            return Action.refused(ErrorCode.PLT_PAYLOAD_INVALID);
+        }
+        retryRequests.add(id);
+        wake();
+        return Action.ok();
+    }
+
     // ------------------------------------------------------------------------------------------- autorização e vínculo da execução
 
     /**
@@ -1383,6 +1406,7 @@ public final class PlatformService implements AutoCloseable {
         try {
             Instant now = clock.instant();
             applyAbandons(now);
+            applyRetries(now);
             housekeeping(now);
             // T13: com desvínculo pendente, só a operação de desvínculo sai (nada de presença, pedidos ou entregas do vínculo)
             if (unlinkUnreadable) return;
@@ -1698,6 +1722,16 @@ public final class PlatformService implements AutoCloseable {
     }
 
     /** Desistência pedida pela pessoa: o número (ou a lacuna) bloqueado vira faixa declarada e a entrega segue. */
+    /** Solta, para a rodada tentar de novo, o registro que a Platform recusou por licença. Nada é apagado nem reenviado em laço. */
+    private void applyRetries(Instant now) {
+        ExecutionId id;
+        while ((id = retryRequests.poll()) != null) {
+            Optional<Delivery> o = Optional.ofNullable(known.get(id));
+            if (o.isEmpty() || !o.get().blocked() || o.get().runId() != null || !notRegisteredByLicense(code(o.get().blockedCode()))) continue;
+            if (save(o.get().unblock(now), false)) diagnostics.registrationRetried(id);
+        }
+    }
+
     private void applyAbandons(Instant now) {
         ExecutionId id;
         while ((id = abandonRequests.poll()) != null) {
@@ -1761,13 +1795,32 @@ public final class PlatformService implements AutoCloseable {
         return false;
     }
 
+    /**
+     * PLATFORM-LICENCIAMENTO-001: o motivo que a Platform deu ao recusar por licença (403 com {@code reason}). O envio para com o
+     * motivo PRÓPRIO, que a tela mostra: nunca como uma recusa de autorização genérica. A automação já executou nesta máquina.
+     */
+    static Optional<ErrorCode> licenseRefusal(String reason) {
+        if (reason == null) return Optional.empty();
+        return switch (reason) {
+            case "license_required" -> Optional.of(ErrorCode.PLT_LICENSE_REQUIRED);
+            case "license_expired" -> Optional.of(ErrorCode.PLT_LICENSE_EXPIRED);
+            case "run_not_covered" -> Optional.of(ErrorCode.PLT_RUN_NOT_COVERED);
+            default -> Optional.empty();
+        };
+    }
+
+    /** O envio parou porque a Platform não registrou a execução por licença (a execução local aconteceu; o que falta é o registro). */
+    public static boolean notRegisteredByLicense(ErrorCode c) {
+        return c == ErrorCode.PLT_LICENSE_REQUIRED || c == ErrorCode.PLT_LICENSE_EXPIRED || c == ErrorCode.PLT_RUN_NOT_COVERED;
+    }
+
     /** Falha de uma chamada de entrega: recusas definitivas param SÓ esta execução; as de comunicação, a rodada. */
     private boolean runFailure(Result<?> r, Delivery d, Instant now) {
         if (r instanceof Refused<?> ref && ref.status() != 401 && ref.status() != 429 && ref.status() < 500
                 && !(ref.status() == 400 && "unsupported_contract".equals(ref.error()))) {
             contact(now);
             ErrorCode why = switch (ref.status()) {
-                case 403 -> ErrorCode.PLT_AUTHORIZATION_REFUSED;
+                case 403 -> licenseRefusal(ref.reason()).orElse(ErrorCode.PLT_AUTHORIZATION_REFUSED);
                 case 409 -> ErrorCode.PLT_REGISTRATION_CONFLICT;
                 default -> ErrorCode.PLT_PAYLOAD_INVALID;
             };

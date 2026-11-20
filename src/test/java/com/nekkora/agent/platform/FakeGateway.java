@@ -45,7 +45,9 @@ final class FakeGateway implements HttpTransport {
             "error_code", "counts", "correlation");
 
     /** Falha injetada (sempre identificada como tal nas evidências). */
-    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT, FORBIDDEN, TLS, TIMEOUT }
+    enum Fault { DROP_BEFORE, DROP_AFTER_COMMIT, UNAVAILABLE, RATE_LIMITED, MALFORMED, REDIRECT, FORBIDDEN, TLS, TIMEOUT,
+        /** PLATFORM-LICENCIAMENTO-001: a Platform recusa por licença (403 com o motivo). */
+        LICENSE_REQUIRED, LICENSE_EXPIRED, RUN_NOT_COVERED }
 
     static final class Enrollment {
         UUID org, id, worker, agentForRotation;
@@ -291,6 +293,10 @@ final class FakeGateway implements HttpTransport {
         if (f == Fault.MALFORMED) return new Response(200, Optional.empty(), "{\"oops\":true}".getBytes(StandardCharsets.UTF_8));
         if (f == Fault.REDIRECT) return new Response(302, Optional.empty(), new byte[0]);
         if (f == Fault.FORBIDDEN) return err(403, "forbidden", null); // AGENT-PACOTES-001: permissão negada (não é rede nem revogação)
+        if (f == Fault.LICENSE_REQUIRED || f == Fault.LICENSE_EXPIRED || f == Fault.RUN_NOT_COVERED) {
+            return new Response(403, Optional.empty(), ("{\"error\":\"forbidden\",\"reason\":\"" + f.name().toLowerCase(java.util.Locale.ROOT) + "\"}")
+                    .getBytes(StandardCharsets.UTF_8));
+        }
         if (f == Fault.TLS) throw new javax.net.ssl.SSLHandshakeException("certificado recusado (falha injetada)");
         if (f == Fault.TIMEOUT) throw new java.net.http.HttpTimeoutException("tempo esgotado (falha injetada)");
         String contract = r.headers().get("Nekkora-Agent-Contract");

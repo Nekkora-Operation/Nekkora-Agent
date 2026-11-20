@@ -25,6 +25,14 @@
     <!-- Mesma versão usada nos testes da Extensão. -->
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <agent.main>com.nekkora.agent.AgentMain</agent.main>
+    <!-- Identificacao do build gravada no JAR (agent-build.properties). Por padrao vem do plugin git-commit-id. ATENCAO: num
+         worktree o plugin le o checkout PRINCIPAL (visto num pacote gerado num worktree, que saiu com o commit errado). Por
+         isso o empacotamento (tools/package-windows.ps1) le o commit da pasta de trabalho com o proprio Git, passa estes valores
+         por -D e CONFERE o resultado: o pacote nunca sai com um commit que nao e o da pasta em que foi compilado. -->
+    <agent.build.commit>${git.commit.id}</agent.build.commit>
+    <agent.build.commitShort>${git.commit.id.abbrev}</agent.build.commitShort>
+    <agent.build.dirty>${git.dirty}</agent.build.dirty>
+    <agent.build.commitTime>${git.commit.time}</agent.build.commitTime>
     <!-- Os testes de desktop real rodam só no perfil "desktop" (janela, bandeja e Robot). -->
     <agent.test.excludedGroups>desktop</agent.test.excludedGroups>
     <agent.test.headless>true</agent.test.headless>

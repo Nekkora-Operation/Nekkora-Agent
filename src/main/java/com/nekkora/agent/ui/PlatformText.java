@@ -213,6 +213,26 @@ final class PlatformText {
         return c == null ? null : c.description() + " (" + c.code() + ")";
     }
 
+    static final String NOT_REGISTERED_PREFIX = "Executou neste computador · não registrada na Platform: ";
+    static final String NOT_REGISTERED_KEPT = "O que a execução fez e os registros dela continuam guardados neste computador: nada foi apagado nem "
+            + "descartado. O motivo se refere ao momento em que esta execução começou, não à situação da licença hoje: a "
+            + "Platform só registra uma execução que estava coberta por licença quando começou, e renovar a licença depois vale "
+            + "para as próximas execuções, não para esta. \"Tentar registrar de novo\" consulta a Platform outra vez.";
+
+    /**
+     * O motivo, em poucas palavras, de a Platform não ter registrado a execução. É o motivo ESPECÍFICO que o servidor devolveu, e
+     * fala da execução NO MOMENTO EM QUE ELA COMEÇOU: a licença pode ter sido renovada depois, e a recusa desta execução continua
+     * (a Platform não registra retroativamente). Por isso o texto não descreve a situação da licença hoje.
+     */
+    static String licenseReason(ErrorCode c) {
+        return switch (c) {
+            case PLT_LICENSE_REQUIRED -> "a automação não tinha licença na organização quando esta execução começou";
+            case PLT_LICENSE_EXPIRED -> "a licença da automação estava vencida quando esta execução começou";
+            case PLT_RUN_NOT_COVERED -> "no início dela não havia licença nem autorização que a cobrisse";
+            default -> c.description();
+        };
+    }
+
     /** Envio de UMA execução, separado do desfecho dela. */
     static String delivery(DeliveryView v) {
         return switch (v.state()) {
@@ -221,8 +241,11 @@ final class PlatformText {
             case PENDING -> "Envio pendente · confirmados " + v.settledThrough() + " eventos";
             case DELIVERED -> "Envio concluído · " + v.settledThrough() + " eventos confirmados"
                     + (v.declared() > 0 ? " · histórico incompleto (" + v.declared() + " perdidos localmente)" : "");
-            case BLOCKED -> "Envio parado: " + (v.blocked() == null ? "decisão necessária" : v.blocked().description())
-                    + (v.blockedSequence() == null ? "" : " (evento " + v.blockedSequence() + ")");
+            // PLATFORM-LICENCIAMENTO-001: recusa por licença - a execução ACONTECEU nesta máquina; o que não aconteceu foi o registro
+            case BLOCKED -> PlatformService.notRegisteredByLicense(v.blocked())
+                    ? NOT_REGISTERED_PREFIX + licenseReason(v.blocked())
+                    : "Envio parado: " + (v.blocked() == null ? "decisão necessária" : v.blocked().description())
+                            + (v.blockedSequence() == null ? "" : " (evento " + v.blockedSequence() + ")");
             case OTHER_LINK -> "De um vínculo anterior desta máquina: não é enviada pelo atual";
             case UNLINKED_UNDELIVERED -> "Não entregue (vínculo removido): guardada nesta máquina e nunca enviada por outro vínculo · confirmados "
                     + v.settledThrough() + " eventos";
@@ -235,7 +258,8 @@ final class PlatformText {
             case UNLINKED_UNDELIVERED -> Status.WARNING;
             case WAITING_REGISTRATION, PENDING -> Status.PENDING;
             case DELIVERED -> v.declared() > 0 || v.reportConflict() ? Status.WARNING : Status.SUCCESS;
-            case BLOCKED -> Status.FAILED;
+            // não é falha da execução: ela aconteceu; o que falta é o registro na Platform
+            case BLOCKED -> PlatformService.notRegisteredByLicense(v.blocked()) ? Status.WARNING : Status.FAILED;
         };
     }
 
