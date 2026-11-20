@@ -81,7 +81,13 @@ class PlatformTextTest {
                     com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0, ErrorCode.PLT_AUTHORIZATION_REFUSED, null, false)), PlatformText.deliveryStatus(v));
         }
         assertTrue(PlatformText.delivery(new com.nekkora.agent.platform.DeliveryView(com.nekkora.agent.platform.DeliveryView.State.BLOCKED, 0, 0, 0,
-                ErrorCode.PLT_LICENSE_EXPIRED, null, false)).endsWith("a licença da automação venceu"));
+                ErrorCode.PLT_LICENSE_EXPIRED, null, false)).endsWith("a licença da automação estava vencida quando esta execução começou"));
+        // cada motivo do servidor continua com o seu texto e o seu código; nenhum descreve a licença "hoje"
+        assertTrue(PlatformText.licenseReason(ErrorCode.PLT_LICENSE_REQUIRED).endsWith("quando esta execução começou"));
+        assertTrue(PlatformText.licenseReason(ErrorCode.PLT_RUN_NOT_COVERED).startsWith("no início dela"));
+        org.junit.jupiter.api.Assertions.assertEquals(3, java.util.stream.Stream.of(ErrorCode.PLT_LICENSE_REQUIRED, ErrorCode.PLT_LICENSE_EXPIRED,
+                ErrorCode.PLT_RUN_NOT_COVERED).map(PlatformText::licenseReason).distinct().count());
+        assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("não à situação da licença hoje"));
         assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("nada foi apagado nem descartado"));
         // não promete que renovar a licença registra o que rodou sem ela
         assertTrue(PlatformText.NOT_REGISTERED_KEPT.contains("renovar a licença depois vale para as próximas execuções, não para esta"));

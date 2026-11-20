@@ -215,14 +215,19 @@ final class PlatformText {
 
     static final String NOT_REGISTERED_PREFIX = "Executou neste computador · não registrada na Platform: ";
     static final String NOT_REGISTERED_KEPT = "O que a execução fez e os registros dela continuam guardados neste computador: nada foi apagado nem "
-            + "descartado. A Platform só registra uma execução que estava coberta por licença quando começou: renovar a licença depois vale "
+            + "descartado. O motivo se refere ao momento em que esta execução começou, não à situação da licença hoje: a "
+            + "Platform só registra uma execução que estava coberta por licença quando começou, e renovar a licença depois vale "
             + "para as próximas execuções, não para esta. \"Tentar registrar de novo\" consulta a Platform outra vez.";
 
-    /** O motivo, em poucas palavras, de a Platform não ter registrado a execução. */
+    /**
+     * O motivo, em poucas palavras, de a Platform não ter registrado a execução. É o motivo ESPECÍFICO que o servidor devolveu, e
+     * fala da execução NO MOMENTO EM QUE ELA COMEÇOU: a licença pode ter sido renovada depois, e a recusa desta execução continua
+     * (a Platform não registra retroativamente). Por isso o texto não descreve a situação da licença hoje.
+     */
     static String licenseReason(ErrorCode c) {
         return switch (c) {
-            case PLT_LICENSE_REQUIRED -> "a automação não tem licença na organização";
-            case PLT_LICENSE_EXPIRED -> "a licença da automação venceu";
+            case PLT_LICENSE_REQUIRED -> "a automação não tinha licença na organização quando esta execução começou";
+            case PLT_LICENSE_EXPIRED -> "a licença da automação estava vencida quando esta execução começou";
             case PLT_RUN_NOT_COVERED -> "no início dela não havia licença nem autorização que a cobrisse";
             default -> c.description();
         };

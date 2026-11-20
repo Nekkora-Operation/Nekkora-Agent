@@ -110,9 +110,9 @@ public enum ErrorCode {
             + "revogação do vínculo em Workers para liberar o Worker."),
     // PLATFORM-LICENCIAMENTO-001: a Platform recusou REGISTRAR a execução por licença. A automação executou nesta máquina; o que
     // não aconteceu foi o registro (e, com ele, o monitoramento) na Platform. Nada local é apagado.
-    PLT_LICENSE_REQUIRED("AGT-PLT-035", "A Platform não registrou esta execução: a automação não tem licença na organização. A execução "
+    PLT_LICENSE_REQUIRED("AGT-PLT-035", "A Platform não registrou esta execução: a automação não tinha licença na organização quando ela começou. A execução "
             + "aconteceu neste computador e não está monitorada na Platform."),
-    PLT_LICENSE_EXPIRED("AGT-PLT-036", "A Platform não registrou esta execução: a licença da automação venceu. A execução aconteceu neste "
+    PLT_LICENSE_EXPIRED("AGT-PLT-036", "A Platform não registrou esta execução: a licença da automação estava vencida quando ela começou. A execução aconteceu neste "
             + "computador e não está monitorada na Platform."),
     PLT_RUN_NOT_COVERED("AGT-PLT-037", "A Platform não registrou esta execução: no início dela não havia licença nem autorização que a "
             + "cobrisse. A execução aconteceu neste computador e não está monitorada na Platform."),

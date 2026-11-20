@@ -18,6 +18,9 @@ sem ação possível. Para a pessoa, o envio sumia.
 - **Tentar registrar de novo.** O diálogo oferece o botão para essa recusa. A Platform só aceita o registro tardio de uma
   execução que estava coberta **quando começou**. Renovar a licença depois vale para as próximas execuções, não para a que rodou
   sem ela, e o texto do diálogo diz isso. Se continuar sem cobertura, o envio para de novo, com o motivo de agora. Não há repetição em laço: só a pedido da pessoa.
+- **O motivo fala do início da execução, não da licença hoje.** O código e o motivo específico do servidor são mantidos
+  (`AGT-PLT-035`, `036`, `037`); o texto diz, por exemplo, "a licença da automação estava vencida quando esta execução começou".
+  Assim, depois de uma renovação, a execução antiga recusada não aparece como se a licença ainda estivesse vencida.
 - **Registro em log.** `PLATFORM_DELIVERY_BLOCKED` ganha `ranLocally` e `registeredOnPlatform`.
 
 O formato do arquivo de entregas não muda (`blockedCode` já guardava o código).
