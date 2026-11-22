@@ -50,7 +50,7 @@ trap {
     exit 2
 }
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if (-not $Zip) { $Zip = Join-Path $root 'target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip' }
+if (-not $Zip) { $Zip = (Get-ChildItem (Join-Path $root 'target\dist') -Filter 'nekkora-agent-*-windows-x64-*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName }
 if (-not $Out) { $Out = Join-Path ([IO.Path]::GetTempPath()) ("nekkora-fisica-g2-a13-" + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 Import-Module (Join-Path $PSScriptRoot 'NkHomolog.psm1') -Force
 $wincap = Join-Path $PSScriptRoot 'wincap.ps1'

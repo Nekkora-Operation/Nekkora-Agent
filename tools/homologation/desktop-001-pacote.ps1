@@ -22,7 +22,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-if (-not $Zip) { $Zip = Join-Path $root 'target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip' }
+if (-not $Zip) { $Zip = (Get-ChildItem (Join-Path $root 'target\dist') -Filter 'nekkora-agent-*-windows-x64-*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName }
 Import-Module (Join-Path $PSScriptRoot 'NkHomolog.psm1') -Force
 $wincap = Join-Path $PSScriptRoot 'wincap.ps1'
 New-Item -ItemType Directory -Force $Out | Out-Null

@@ -34,7 +34,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 3.0
 # PowerShell 5.1: $PSScriptRoot não existe nos valores padrão de param()
-if (-not $Zip) { $Zip = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip' }
+if (-not $Zip) { $Zip = (Get-ChildItem (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target\dist') -Filter 'nekkora-agent-*-windows-x64-*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName }
 Import-Module (Join-Path $PSScriptRoot 'NkHomolog.psm1') -Force
 $wincap = Join-Path $PSScriptRoot 'wincap.ps1'
 
