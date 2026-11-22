@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Gera a distribuição Windows de laboratório do Nekkora Agent (imagem de aplicativo + runtime Java incluído).
+  Gera a distribuição Windows do Nekkora Agent (imagem de aplicativo + runtime Java incluído).
 
 .DESCRIPTION
   1. Confere a preparação do design system (.design-system/design-system.lock.properties).
@@ -11,7 +11,7 @@
   6. Copia avisos e licenças, LEIA-ME e a lista de versões/dependências com SHA-256.
   7. Compacta em ZIP e grava o SHA-256 do ZIP (-NoZip: só a pasta, com o SHA-256 de cada arquivo em VERSOES.txt).
 
-  Saída: target\dist\nekkora-agent-<versão>-windows-x64-lab.zip (+ .sha256) e target\dist\Nekkora Agent\ (pasta).
+  Saída: target\dist\nekkora-agent-<versão>-windows-x64-<commit7>.zip (+ .sha256) e target\dist\Nekkora Agent\ (pasta).
   O pacote NÃO é assinado digitalmente e não é instalador de produção.
 #>
 [CmdletBinding()]
@@ -122,7 +122,7 @@ $console = Join-Path $pkg 'nekkora-console.properties'
 [System.IO.File]::WriteAllLines($console, [string[]]@('main-class=com.nekkora.agent.AgentMain', 'win-console=true',
     'description=Nekkora Agent - comandos de console'), (New-Object System.Text.UTF8Encoding $false))
 Invoke-Checked 'jpackage' { & (Join-Path $jbin 'jpackage.exe') --type app-image --name 'Nekkora Agent' --app-version $version `
-        --vendor 'Nekkora' --description 'Nekkora Agent (laboratório)' --copyright 'Nekkora' `
+        --vendor 'Nekkora' --description 'Nekkora Agent' --copyright 'Nekkora' `
         --icon (Join-Path $pkg 'nekkora-agent.ico') --input (Join-Path $pkg 'input') --main-jar 'nekkora-agent.jar' `
         --main-class 'com.nekkora.agent.AgentMain' --runtime-image $runtime --dest $image `
         --java-options '-Djava.util.prefs.PreferencesFactory=com.nekkora.agent.storage.IsolatedPreferencesFactory' `
@@ -152,7 +152,7 @@ foreach ($f in 'Inter', 'JetBrainsMono', 'Sora') { Export-Entry $ui.FullName "co
 # o runtime já traz runtime\legal\ (OpenJDK, GPLv2 com Classpath Exception) gerado pelo jlink
 
 $release = Get-Content (Join-Path $runtime 'release') | Where-Object { $_ -match '^(JAVA_VERSION|JAVA_RUNTIME_VERSION|IMPLEMENTOR|OS_ARCH|MODULES)=' }
-$lines = @("Nekkora Agent $version - distribuição de laboratório (Windows x64, sem assinatura digital)",
+$lines = @("Nekkora Agent $version (Windows x64, sem assinatura digital)",
     "commit: $($props['commit'])$(if ($props['dirty'] -eq 'true') { ' (com alterações locais)' })",
     "data do commit: $($props['commitTime'])",
     "gerado em: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))",
@@ -184,7 +184,8 @@ if ($NoZip) {
     exit 0
 }
 Write-Host "[7/7] ZIP e SHA-256"
-$zipName = "nekkora-agent-$version-windows-x64-lab.zip"
+# LICENCIAMENTO-002: o nome leva o commit (7) e, com alteracoes locais, o aviso; nao usa mais o sufixo -lab
+$zipName = "nekkora-agent-$version-windows-x64-$($commit.Substring(0, 7))$(if ($dirty -eq 'true') { '-alteracoes-locais' }).zip"
 $zip = Join-Path $dist $zipName
 Copy-Item -Recurse $app (Join-Path $dist 'Nekkora Agent')
 [System.IO.Compression.ZipFile]::CreateFromDirectory($app, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)

@@ -6,7 +6,7 @@
 
   <groupId>com.nekkora</groupId>
   <artifactId>nekkora-agent</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <packaging>jar</packaging>
   <name>Nekkora Agent</name>
   <description>Aplicativo desktop do Nekkora Agent (AGENT-001): janela compacta, bandeja, instância única, configuração local e diagnóstico.</description>

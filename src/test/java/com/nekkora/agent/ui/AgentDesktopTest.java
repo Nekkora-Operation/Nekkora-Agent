@@ -100,7 +100,7 @@ class AgentDesktopTest {
         assertEquals("Nekkora Agent", h.edt(w::getTitle));
         List<String> t = h.edt(() -> texts(w.getRootPane()));
         // T06: o botão de pareamento passou a dizer o que faz ("Parear com a Platform…"), separado de renovar e desvincular
-        for (String expected : List.of("LAB-AGENT-01", "0.1.0", "Não pareado", MainWindow.PAIR_LABEL,
+        for (String expected : List.of("LAB-AGENT-01", "0.2.0", "Não pareado", MainWindow.PAIR_LABEL,
                 "Não verificada", "Indisponível nesta versão", "Execução pela Platform", "Execução local")) {
             assertTrue(t.stream().anyMatch(s -> s.contains(expected)), "falta '" + expected + "' em " + t);
         }

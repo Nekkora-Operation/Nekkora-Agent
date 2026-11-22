@@ -1,12 +1,17 @@
-NEKKORA AGENT - DISTRIBUIÇÃO DE LABORATÓRIO (Windows x64)
-==========================================================
+NEKKORA AGENT (Windows x64)
+===========================
 
-Esta é uma versão de laboratório para homologação. Não é instalador, não tem assinatura digital
-e não está pronta para produção.
+Pacote ZIP, sem instalador e sem assinatura digital. A versão e o commit estão em VERSOES.txt.
 
 O que esta versão faz
-- Mostra o estado desta máquina e da integração (ainda indisponível: sem pareamento, sem conexão
-  com a Platform, sem verificação de licença e sem execução de automações).
+- Pareia este computador com a sua organização na Platform, com o código gerado em Máquinas.
+- Recebe as autorizações de execução e de monitoramento das automações e executa no computador.
+- Guarda os registros e os entrega à Platform; sem conexão, entrega quando a conexão voltar.
+- Mostra quando a Platform recusou o registro por falta de licença: a execução aconteceu aqui,
+  mas não foi registrada lá. Renovar a licença depois vale para as próximas execuções, não para
+  uma execução que começou sem licença.
+- Limite: autorizações já recebidas valem sem conexão até a validade; a Platform não interrompe
+  na hora uma execução offline já autorizada.
 - Fica na bandeja do sistema; fechar a janela não encerra o Agent. Para encerrar, use "Sair".
 - Guarda preferências locais (tema e atalhos) e gera diagnóstico local, sem envio automático.
 
@@ -19,6 +24,10 @@ Como abrir
 Onde ficam os dados
 - %LOCALAPPDATA%\Nekkora\Agent\
     config\agent-config.json   preferências (tema, endereço da Platform, executável do Studio)
+    plataforma\                vínculo com a Platform (o segredo fica protegido pelo Windows) e
+                               plataforma\entregas\, registros aguardando entrega
+    execucoes\                 registros das execuções neste computador
+    pacotes\, pacotes-zip\     automações recebidas ou importadas
     logs\agent*.log            logs técnicos (até 4 arquivos de 256 KiB; sem caminhos, endereços ou nomes)
     agent.lock                 trava de instância única (pode existir mesmo com o Agent fechado)
 - Os dados do Nekkora Studio e da extensão ficam em outras pastas e não são alterados.

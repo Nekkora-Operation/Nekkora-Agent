@@ -3,9 +3,14 @@
 Aplicativo desktop do Nekkora Agent para Windows: janela compacta com a identidade Nekkora, ícone na
 bandeja do sistema, instância única por usuário, configuração local e diagnóstico.
 
-**Estado desta versão (0.1.0, laboratório):** o Agent ainda **não** pareia com a Platform, não se
-conecta, não verifica licença e não executa automações. A interface diz isso explicitamente
-("Não pareado", "Sem conexão com a Platform", "Não verificada", "Execução indisponível nesta versão").
+**Estado desta versão (0.2.0):** o Agent pareia com a Platform por código, recebe as autorizações de execução e de
+monitoramento das automações, executa no computador, guarda os registros e os entrega à Platform (também mais tarde, se
+estava sem conexão), importa projetos em `.zip` e lista o catálogo. Quando a Platform recusa o registro por falta de
+licença, o Agent mostra "Executou neste computador · não registrada na Platform" com o motivo (AGT-PLT-035/036/037;
+[`docs/platform-licenciamento-001/recusa-visivel.md`](docs/platform-licenciamento-001/recusa-visivel.md)).
+
+**Limite:** as autorizações já recebidas valem sem conexão até a validade. A Platform não consegue impedir na hora uma
+execução offline já autorizada; ela recusa o registro de uma execução que começou sem cobertura.
 
 - Decisões de projeto: [`docs/agent-001/decisoes.md`](docs/agent-001/decisoes.md)
 - Matriz de homologação A01–A15: [`docs/agent-001/matriz-homologacao.md`](docs/agent-001/matriz-homologacao.md)
@@ -52,13 +57,15 @@ $env:NEKKORA_AGENT_DATA_DIR = "$env:TEMP\nekkora-agent-dev"
 java -jar target\nekkora-agent.jar
 ```
 
-## 3. Gerar a distribuição de laboratório
+## 3. Gerar a distribuição
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\package-windows.ps1
 ```
 
-Gera `target\dist\nekkora-agent-0.1.0-windows-x64-lab.zip`, o `.sha256` e `VERSOES.txt`. O ZIP contém
+Gera `target\dist\nekkora-agent-<versão>-windows-x64-<commit7>.zip` (com `-alteracoes-locais` se a pasta
+tiver alterações), o `.sha256` e `VERSOES.txt`. Versão e commit vão para o JAR (`agent-build.properties`) a partir do
+Git da pasta de trabalho, e o script recusa o pacote se o JAR divergir. O ZIP contém
 `Nekkora Agent\Nekkora Agent.exe` com runtime Java próprio (jlink), `LEIA-ME.txt`, `VERSOES.txt` e
 `legal\`. Não precisa de Java instalado nem do checkout do Studio. **Não é assinado digitalmente e não é
 instalador de produção.**
